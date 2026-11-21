@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"0199a214-0d4e-7d31-9b4c-6d1f0e2a9c77"}
+{"type":"turn.started"}
+{"type":"error","message":"Reconnecting... 1/5 (stream disconnected before completion: error sending request for url (https://api.openai.com/v1/responses))"}
+{"type":"turn.failed","error":{"message":"unexpected status 401 Unauthorized: Incorrect API key provided: sk-proj-****"}}

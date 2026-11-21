@@ -206,3 +206,31 @@ Volatile fields (`timestamp`, `responseId`, `request_id`, `thinkingSignature`,
 content blocks) differ between captures. The handshake test (`burrow-988b`)
 canonicalizes these before comparing — the fixture bytes themselves are not
 byte-stable across regenerations.
+
+# Codex `exec --json` traces (namphuongtran/warren#17)
+
+`codex-v0.171.0-*.jsonl` feed the Codex parser golden test
+(`../jsonl-codex.test.ts`). Each `.canonical.jsonl` is the parser output for
+its fixture, with the run pinned to `provider: openai`, `model: gpt-5.3-codex`.
+Re-bless after an intentional mapping change:
+
+```bash
+WARREN_UPDATE_CODEX_GOLDEN=1 bun test src/runtime/adapters/parsers/jsonl-codex.test.ts
+```
+
+**Provenance.** These two fixtures were written by hand from the `ThreadEvent`
+and `ThreadItem` definitions in `codex-rs/exec/src/exec_events.rs` at Codex
+0.171.0. They are not captured from a live run. Replace them with real
+captures when a host with Codex and an OpenAI credential is available:
+
+```bash
+mkdir -p ws && cd ws && git init -q && echo alpha > a.txt
+echo 'List the files, add notes.md, commit it, then say done.' \
+  | codex exec --json --skip-git-repo-check --dangerously-bypass-approvals-and-sandbox \
+      --model gpt-5.3-codex - > ../codex-v0.171.0-tools.jsonl
+```
+
+| File | Covers |
+|------|--------|
+| `codex-v0.171.0-tools.jsonl` | thread/turn lifecycle · reasoning · shell start/complete · todo_list · file_change · MCP call · web_search · a non-fatal error item · agent_message · `turn.completed` usage |
+| `codex-v0.171.0-auth-failure.jsonl` | a reconnect `error` notice then `turn.failed` with a 401 |

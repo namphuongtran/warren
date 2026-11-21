@@ -264,6 +264,7 @@ const BUILTIN_AGENT_ROLES: Readonly<Record<string, string>> = {
 	bugwatch: "Bug triage agent — investigates open bug seeds and produces a seeds fix plan per bug.",
 	"claude-code":
 		"General-purpose coding agent on the claude-code harness; dispatchable on a fresh install.",
+	codex: "General-purpose coding agent on OpenAI's Codex CLI harness; needs an OpenAI credential.",
 	healer:
 		"Closed-loop repair agent — diagnoses production alerts and opens a fresh fix branch + PR.",
 	nightwatch:

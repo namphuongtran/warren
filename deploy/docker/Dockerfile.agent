@@ -13,7 +13,7 @@
 # `burrow serve`, and NO bubblewrap/uidmap — the pod boundary replaces all of
 # that (design k8s-migration.md §2.2). It bakes the agent toolchain (design §4.3):
 # bun, real Node, python3+uv (warren-fabb), the coding-agent CLIs (claude-code,
-# pi, sapling), and the os-eco data-plane CLIs (canopy/seeds/mulch/plot) the
+# pi, codex, sapling), and the os-eco data-plane CLIs (canopy/seeds/mulch/plot) the
 # agent shells out to during a run.
 #
 # Build context is the repo root:
@@ -86,7 +86,8 @@ RUN bun install -g \
     @os-eco/sapling-cli@0.3.2 \
     @os-eco/plot-cli@0.4.0 \
     @anthropic-ai/claude-code@2.1.330 \
-    @earendil-works/pi-coding-agent@0.84.2
+    @earendil-works/pi-coding-agent@0.84.2 \
+    @openai/codex@0.171.0
 
 # claude-code's postinstall (download the platform-native `claude` binary) is
 # skipped by `bun install -g`; run it explicitly so /usr/local/bin/claude exists
@@ -97,6 +98,11 @@ RUN bun run /usr/local/install/global/node_modules/@anthropic-ai/claude-code/ins
 # bun directly (parity with the control-plane image, warren-a82b).
 RUN sed -i '1s|^#!/usr/bin/env node|#!/usr/bin/env bun|' \
         /usr/local/install/global/node_modules/@earendil-works/pi-coding-agent/dist/cli.js
+
+# Codex (namphuongtran/warren#17): bin/codex.js runs under real Node and execs the native binary
+# from its @openai/codex-linux-<arch> optional dependency. Fail the build here,
+# not at the first codex run, if that binary did not land.
+RUN codex --version
 
 WORKDIR /app
 

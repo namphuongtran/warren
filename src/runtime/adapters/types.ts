@@ -101,7 +101,7 @@ export interface AgentRuntimeAdapter {
 	 * `./parsers/` and are pinned byte-for-byte by the golden RPC fixtures
 	 * under `./parsers/__golden__/`.
 	 */
-	parseEvents?(line: string): AdapterRuntimeEvent[];
+	parseEvents?(line: string, ctx?: AdapterParseContext): AdapterRuntimeEvent[];
 
 	/**
 	 * Fold pending steering messages into the spawn's stdin payload
@@ -153,6 +153,31 @@ export interface AgentRuntimeAdapter {
 	extractMetadata?(
 		ctx: AdapterExtractMetadataContext,
 	): Promise<Record<string, unknown> | undefined>;
+
+	/**
+	 * Host-env names forwarded into the sandbox for this harness (namphuongtran/warren#17). The
+	 * local profile builder (`../local/profile.ts`) reads this before its
+	 * legacy per-runtime table, so a new harness declares its env here rather
+	 * than growing a runtime branch there.
+	 */
+	envPassthrough?(frontmatter: Record<string, unknown> | undefined): readonly string[];
+
+	/**
+	 * Bare-name binaries the sandbox must resolve for this harness's argv
+	 * (namphuongtran/warren#17); the profile builder mounts and PATH-prepends their dirs.
+	 * Optional, like `commitExcludes`, because claude-code and pi still answer
+	 * from the profile builder's legacy table and test doubles spawn nothing.
+	 */
+	readonly cliBinaries?: readonly string[];
+
+	/**
+	 * Host-side credential hand-off into the run's private `$HOME` (namphuongtran/warren#17),
+	 * called by the local/Docker spawn prep before the agent starts. Reads the
+	 * host's login and copies it in; it must never write to the host.
+	 * `hasEnv` answers whether the run already carries a named credential, so
+	 * an env-provided API key wins over copying a stored session.
+	 */
+	forwardHostCredentials?(ctx: AdapterCredentialContext): Promise<void>;
 
 	/**
 	 * Dispatch-time check (namphuongtran/warren#7): the resolved provider/model this harness
@@ -286,6 +311,20 @@ export interface AdapterPrepareContext {
 	readonly workspacePath: string;
 	/** Per-run frontmatter (see {@link AgentFrontmatter}); carries the mulch arm. */
 	readonly frontmatter?: AgentFrontmatter;
+}
+
+/** Input to `parseEvents`: the run facts a stateless line parser may need. */
+export interface AdapterParseContext {
+	/** Per-run frontmatter; Codex prices its usage with the pinned model. */
+	readonly frontmatter?: AgentFrontmatter;
+}
+
+/** Input to `forwardHostCredentials`. */
+export interface AdapterCredentialContext {
+	/** The run's private, writable `$HOME` on the host. */
+	readonly homePath: string;
+	/** True when the run already carries a non-blank value for `name`. */
+	readonly hasEnv: (name: string) => boolean;
 }
 
 /** Input to `extractMetadata`. */

@@ -1,6 +1,6 @@
 {
 	"source": "src/registry/builtins/index.ts (BUILTIN_AGENTS)",
-	"count": 7,
+	"count": 8,
 	"agents": [
 		{
 			"name": "bugwatch",
@@ -9,6 +9,10 @@
 		{
 			"name": "claude-code",
 			"role": "General-purpose coding agent on the claude-code harness; dispatchable on a fresh install."
+		},
+		{
+			"name": "codex",
+			"role": "General-purpose coding agent on OpenAI's Codex CLI harness; needs an OpenAI credential."
 		},
 		{
 			"name": "healer",

@@ -12,6 +12,7 @@
  *
  *   WARREN_MODEL_OPUS            / WARREN_MODEL_OPUS_PROVIDER
  *   WARREN_MODEL_SONNET          / WARREN_MODEL_SONNET_PROVIDER
+ *   WARREN_MODEL_CODEX           / WARREN_MODEL_CODEX_PROVIDER
  *
  * Resolution happens at module load — set the env before warren boots and
  * the seed path (`seedBuiltinAgents`) freezes the resolved values onto
@@ -28,6 +29,12 @@ export interface ModelTier {
 export interface ModelTiers {
 	readonly opus: ModelTier;
 	readonly sonnet: ModelTier;
+	/**
+	 * The Codex harness (namphuongtran/warren#17) speaks only the OpenAI API. The default is
+	 * the Codex model on OpenAI's price list, so the spend cap can price it
+	 * (`src/runtime/adapters/codex-pricing.ts`).
+	 */
+	readonly codex: ModelTier;
 }
 
 function pick(value: string | undefined, fallback: string): string {
@@ -46,6 +53,10 @@ export function resolveModelTiers(
 		sonnet: {
 			provider: pick(env.WARREN_MODEL_SONNET_PROVIDER, "anthropic"),
 			model: pick(env.WARREN_MODEL_SONNET, "claude-sonnet-5-5"),
+		},
+		codex: {
+			provider: pick(env.WARREN_MODEL_CODEX_PROVIDER, "openai"),
+			model: pick(env.WARREN_MODEL_CODEX, "gpt-5.3-codex"),
 		},
 	};
 }

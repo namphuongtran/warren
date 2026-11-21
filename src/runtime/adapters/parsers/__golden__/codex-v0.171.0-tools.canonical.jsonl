@@ -1,0 +1,18 @@
+{"kind":"state_change","stream":"system","payload":{"type":"thread.started","thread_id":"0199a213-81c0-7800-8aa1-bbab2a035a53"}}
+{"kind":"state_change","stream":"system","payload":{"type":"turn.started"}}
+{"kind":"thinking","stream":"stdout","payload":{"text":"**Inspecting the workspace**\n\nI'll list the files before writing notes."}}
+{"kind":"tool_use","stream":"stdout","payload":{"type":"tool_use","id":"item_1","name":"shell","input":{"command":"bash -lc ls"}}}
+{"kind":"tool_result","stream":"stdout","payload":{"type":"tool_result","tool_use_id":"item_1","name":"shell","is_error":false,"content":"a.txt\nb.txt\n","exit_code":0,"status":"completed"}}
+{"kind":"telemetry","stream":"system","payload":{"type":"item.started","item":{"id":"item_2","type":"todo_list","items":[{"text":"List files","completed":true},{"text":"Write notes.md","completed":false}]}}}
+{"kind":"tool_use","stream":"stdout","payload":{"type":"tool_use","id":"item_3","name":"apply_patch","input":{"changes":[{"path":"/workspace/notes.md","kind":"add"},{"path":"/workspace/a.txt","kind":"update"}]}}}
+{"kind":"tool_result","stream":"stdout","payload":{"type":"tool_result","tool_use_id":"item_3","name":"apply_patch","is_error":false,"content":"add /workspace/notes.md\nupdate /workspace/a.txt","status":"completed"}}
+{"kind":"tool_use","stream":"stdout","payload":{"type":"tool_use","id":"item_4","name":"mcp__docs__search","input":{"q":"bun test"}}}
+{"kind":"tool_result","stream":"stdout","payload":{"type":"tool_result","tool_use_id":"item_4","name":"mcp__docs__search","is_error":false,"content":[{"type":"text","text":"bun test runs every *.test.ts file"}],"status":"completed"}}
+{"kind":"tool_use","stream":"stdout","payload":{"type":"tool_use","id":"item_5","name":"web_search","input":{"query":"bun test coverage flag"}}}
+{"kind":"tool_result","stream":"stdout","payload":{"type":"tool_result","tool_use_id":"item_5","name":"web_search","is_error":false,"content":null}}
+{"kind":"tool_use","stream":"stdout","payload":{"type":"tool_use","id":"item_6","name":"shell","input":{"command":"bash -lc 'git add -A && git commit -m \"docs: add notes\"'"}}}
+{"kind":"tool_result","stream":"stdout","payload":{"type":"tool_result","tool_use_id":"item_6","name":"shell","is_error":false,"content":"[warren/run_x 1a2b3c4] docs: add notes\n 2 files changed, 3 insertions(+)\n","exit_code":0,"status":"completed"}}
+{"kind":"telemetry","stream":"system","payload":{"type":"item.completed","item":{"id":"item_2","type":"todo_list","items":[{"text":"List files","completed":true},{"text":"Write notes.md","completed":true}]}}}
+{"kind":"state_change","stream":"system","payload":{"type":"codex.item_error","id":"item_7","message":"command output truncated to 10 KiB","error_class":"other"}}
+{"kind":"text","stream":"stdout","payload":{"text":"Added notes.md and committed it."}}
+{"kind":"state_change","stream":"system","payload":{"type":"result","subtype":"success","is_error":false,"stopReason":"end_turn","model":"gpt-5.3-codex","provider":"openai","usage":{"input_tokens":315,"cache_read_input_tokens":24448,"output_tokens":122},"total_cost_usd":0.00653765,"codex":{"type":"turn.completed","usage":{"input_tokens":24763,"cached_input_tokens":24448,"output_tokens":122,"reasoning_output_tokens":64}}}}

@@ -12,7 +12,7 @@
  * in". The rollup table that consumes it is warren-7746; this module
  * is only the pure, unit-tested extractor.
  *
- * {@link FILE_SHAPES} declares `claude-code` and `pi` only.
+ * {@link FILE_SHAPES} declares `claude-code`, `pi`, and `codex`.
  *
  * `src/core/` imports nothing outside itself (check:layers), so the
  * readers are dependency-free and structural.
@@ -117,12 +117,33 @@ const PI_FILE_SHAPE: FileShape = {
 };
 
 /**
+ * Codex edits files through one `apply_patch` call per `file_change` item; its
+ * parser (namphuongtran/warren#17) writes `input.changes: [{path, kind}]`, one entry per file.
+ * Codex reads files through shell commands, so reads never show up here.
+ */
+const CODEX_FILE_SHAPE: FileShape = {
+	runtime: "codex",
+	readPaths(payload) {
+		if (toStr(payload.name) !== "apply_patch") return [];
+		const changes = asRecord(payload.input)?.changes;
+		if (!Array.isArray(changes)) return [];
+		const out: string[] = [];
+		for (const change of changes) {
+			const path = toStr(asRecord(change)?.path);
+			if (path !== null) out.push(path);
+		}
+		return out;
+	},
+};
+
+/**
  * The file shapes, declared per runtime id. Keyed off
  * {@link KNOWN_RUNTIME_IDS} via `Partial<Record<RuntimeId, …>>`.
  */
 export const FILE_SHAPES: Readonly<Partial<Record<RuntimeId, FileShape>>> = {
 	"claude-code": CLAUDE_CODE_FILE_SHAPE,
 	pi: PI_FILE_SHAPE,
+	codex: CODEX_FILE_SHAPE,
 };
 
 /**

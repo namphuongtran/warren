@@ -40,17 +40,18 @@ commit by hand.
 | **Project** | A git repo registered with Warren | `prj_abc123` |
 | **Agent** | An agent definition: harness, prompt, model, limits | `claude-code`, `pi`, `planner` |
 | **Run** | One agent run on one project. You cannot rerun it. You create a new run. | `run_xyz` |
-| **Harness** | The agent process that Warren controls | Claude Code, Pi |
+| **Harness** | The agent process that Warren controls | Claude Code, Pi, Codex |
 | **Runtime** | Where the run executes | `local` (bwrap / sandbox-exec), `docker`, `k8s` |
 | **Plan-run** | A chain of issues that run in sequence. Each issue waits for the previous issue's PR to merge. | `warren plan run pl_xxx` |
 | **Trigger** | A run on a cron schedule | `.warren/triggers.yaml` |
 
-**7 built-in agents** load again at each boot:
+**8 built-in agents** load again at each boot:
 
 | Agent | Role |
 |---|---|
 | `claude-code` | General-purpose coding agent that runs on Claude Code |
 | `pi` | General-purpose coding agent that runs on Pi (works with many providers, for example OpenRouter) |
+| `codex` | General-purpose coding agent that runs on OpenAI's Codex CLI (OpenAI models only) |
 | `planner` | Writes plans and splits work into issues |
 | `pr-fixer` | Fixes PRs with red CI (the default role of ci-fixer) |
 | `healer` | Responds to production alerts (Sentry / Grafana) |

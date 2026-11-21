@@ -31,12 +31,14 @@ import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { KNOWN_PROVIDER_NAMES, PROVIDER_ENV_REGISTRY } from "../../core/providers.ts";
-import type { AcceptedRuntimeId } from "../../core/wire.ts";
+import { type AcceptedRuntimeId, isKnownRuntimeId } from "../../core/wire.ts";
 import { WARREN_SANDBOX_GIT_ENV } from "../../sandbox/git-preflight.ts";
 import type { PrivateGitScope } from "../../sandbox/git-scope.ts";
 import type { SandboxProfile } from "../../sandbox/types.ts";
 import { WORKSPACE_GITCONFIG_FILENAME } from "../../workspace/git/identity.ts";
 import type { MaterializedWorkspace } from "../../workspace/materialize.ts";
+import { adapterFor } from "../adapters/index.ts";
+import type { AgentRuntimeAdapter } from "../adapters/types.ts";
 import type { RunSpec } from "../contract.ts";
 import { privateGitDenyRoots } from "./paths.ts";
 
@@ -93,6 +95,10 @@ export function resolveEnvPassthrough(
 	runtimeId: AcceptedRuntimeId,
 	frontmatter: Record<string, unknown> | undefined,
 ): string[] {
+	// namphuongtran/warren#17: a harness that declares its env on the adapter answers here; the
+	// two branches below predate that hook (check:runtime-ids PENDING_ADAPTER).
+	const declared = adapterById(runtimeId)?.envPassthrough;
+	if (declared !== undefined) return [...declared(frontmatter)];
 	if (runtimeId === "claude-code") return [...CLAUDE_CODE_ENV_PASSTHROUGH];
 	if (runtimeId !== "pi") return [];
 	const provider =
@@ -117,6 +123,16 @@ const AGENT_BINARIES: Readonly<Record<string, readonly string[]>> = {
 	pi: ["pi"],
 };
 const COMMON_BINARIES: readonly string[] = ["git", "bun", "node"];
+
+/** The registered adapter for a runtime id, or `undefined` for an extension id. */
+function adapterById(runtimeId: AcceptedRuntimeId): AgentRuntimeAdapter | undefined {
+	return isKnownRuntimeId(runtimeId) ? adapterFor(runtimeId) : undefined;
+}
+
+/** The agent CLI names to probe: the legacy table first, then the adapter's declaration. */
+function agentBinaries(runtimeId: AcceptedRuntimeId): readonly string[] {
+	return AGENT_BINARIES[runtimeId] ?? adapterById(runtimeId)?.cliBinaries ?? [];
+}
 
 function isUnderSystemMounts(path: string): boolean {
 	return SYSTEM_RO_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`));
@@ -160,7 +176,7 @@ export function resolveToolchainPaths(
 	 */
 	hostBunInstall: string = defaultHostBunInstall(),
 ): string[] {
-	const names = [...(AGENT_BINARIES[runtimeId] ?? []), ...COMMON_BINARIES];
+	const names = [...agentBinaries(runtimeId), ...COMMON_BINARIES];
 	const dirs: string[] = [];
 	const seen = new Set<string>();
 	const add = (dir: string): void => {

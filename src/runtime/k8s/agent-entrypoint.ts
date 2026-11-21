@@ -326,7 +326,7 @@ export async function runAgent(
 		for await (const line of readLines(proc.stdout)) {
 			hold.onOutput(); // any output resets the idle watchdog
 			if (line.length === 0) continue;
-			const events = [...(runtime.parseEvents?.(line) ?? [])];
+			const events = [...(runtime.parseEvents?.(line, { frontmatter: ctx.frontmatter }) ?? [])];
 			for (const ev of events) {
 				out(formatEventLine(ev));
 				if (isTerminalEnvelope(ev)) sawTerminalEnvelope = true;

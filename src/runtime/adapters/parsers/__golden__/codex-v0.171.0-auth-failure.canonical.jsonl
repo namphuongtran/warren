@@ -1,0 +1,4 @@
+{"kind":"state_change","stream":"system","payload":{"type":"thread.started","thread_id":"0199a214-0d4e-7d31-9b4c-6d1f0e2a9c77"}}
+{"kind":"state_change","stream":"system","payload":{"type":"turn.started"}}
+{"kind":"state_change","stream":"system","payload":{"type":"error","message":"Reconnecting... 1/5 (stream disconnected before completion: error sending request for url (https://api.openai.com/v1/responses))","error_class":"other"}}
+{"kind":"state_change","stream":"system","payload":{"type":"result","subtype":"error","is_error":true,"stopReason":"error","errorMessage":"unexpected status 401 Unauthorized: Incorrect API key provided: sk-proj-****","error_class":"auth","model":"gpt-5.3-codex","provider":"openai","codex":{"type":"turn.failed","error":{"message":"unexpected status 401 Unauthorized: Incorrect API key provided: sk-proj-****"}}}}
