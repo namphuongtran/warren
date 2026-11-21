@@ -35,6 +35,7 @@ import type {
 	AdapterSpawnContext,
 	AgentFrontmatter,
 	AgentRuntimeAdapter,
+	IgnoredModelSelection,
 	SpawnCommand,
 	SteeringMessage,
 } from "./types.ts";
@@ -55,9 +56,29 @@ const CLAUDE_BIN = "claude";
 export function claudeModelArgs(frontmatter: AgentFrontmatter | undefined): string[] {
 	const model = frontmatter?.model?.trim();
 	if (model === undefined || model === "") return [];
-	const provider = frontmatter?.provider?.trim();
-	if (provider !== undefined && provider !== "" && provider !== "anthropic") return [];
+	if (claudeIgnoredModelSelection(frontmatter) !== undefined) return [];
 	return ["--model", model];
+}
+
+/**
+ * The selection {@link claudeModelArgs} leaves off, named for dispatch's
+ * warning event (namphuongtran/warren#7). Any non-Anthropic provider is dropped, model or
+ * not: the CLI talks to Anthropic regardless, on the account's default
+ * model when no `--model` rides the argv.
+ */
+export function claudeIgnoredModelSelection(
+	frontmatter: AgentFrontmatter | undefined,
+): IgnoredModelSelection | undefined {
+	const provider = frontmatter?.provider?.trim();
+	if (provider === undefined || provider === "" || provider === "anthropic") return undefined;
+	const model = frontmatter?.model?.trim();
+	return {
+		provider,
+		...(model !== undefined && model !== "" ? { model } : {}),
+		reason:
+			"Claude Code speaks only the Anthropic API, so it cannot use this provider; " +
+			"the run uses the logged-in account's default model instead",
+	};
 }
 
 export const CLAUDE_CODE_SETTINGS_PATH = ".claude/settings.local.json";
@@ -142,6 +163,8 @@ export const claudeCodeAdapter: AgentRuntimeAdapter = {
 	parseEvents(line: string): AdapterRuntimeEvent[] {
 		return parseJsonlClaude(line);
 	},
+
+	ignoredModelSelection: claudeIgnoredModelSelection,
 
 	encodeInboxMessage(messages: readonly SteeringMessage[]): { stdin: string } {
 		return { stdin: messages.map(claudeUserTurnFromMessage).join("\n") };

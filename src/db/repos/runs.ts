@@ -21,7 +21,7 @@ import {
 	type RunOutcomeFacts,
 	setOutcomeFacts as setOutcomeFactsBody,
 } from "./runs-outcome-facts.ts";
-import { setBranch, setPrState, setPrUrl } from "./runs-pr.ts";
+import { setBranch, setModel, setPrState, setPrUrl } from "./runs-pr.ts";
 import { type AttachPreviewInput, attachPreview } from "./runs-preview.ts";
 import {
 	aggregate,
@@ -405,6 +405,11 @@ export class RunsRepo {
 	/** Branch-fact write (warren-5255); body lives in runs-pr.ts. */
 	setBranch(id: string, branch: string): Promise<RunRow> {
 		return setBranch(this.adapter, id, branch);
+	}
+
+	/** Observed-model write (namphuongtran/warren#7); body lives in runs-pr.ts. */
+	setModel(id: string, model: string): Promise<void> {
+		return setModel(this.adapter, id, model);
 	}
 
 	setPrState(

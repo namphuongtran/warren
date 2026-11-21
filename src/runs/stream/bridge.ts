@@ -25,6 +25,7 @@ import {
 	persistObservedUsage,
 } from "./budget.ts";
 import { isPerDeltaNoiseEvent } from "./delta-noise.ts";
+import { recordObservedModel } from "./observed-model.ts";
 import { providerStreamSource } from "./provider-source.ts";
 import { seedResumeUsage } from "./resume-usage.ts";
 import { defaultRunStateProbe, runStatePoller } from "./run-state-poller.ts";
@@ -289,6 +290,8 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 
 			accumulatePiUsage(piUsage, event);
 			extractClaudeUsage(claudeUsage, event);
+			// namphuongtran/warren#7: the harness's init envelope names the model it really ran.
+			await recordObservedModel(repos, runId, event, input.logger);
 
 			// warren-a63d: enforce the spend cap as cumulative cost crosses it. On
 			// exceed the helper persists usage + emits `budget.exceeded` + cancels

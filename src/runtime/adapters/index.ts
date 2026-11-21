@@ -38,6 +38,7 @@ export type {
 	AdapterSpawnContext,
 	AgentFrontmatter,
 	AgentRuntimeAdapter,
+	IgnoredModelSelection,
 	PiFrontmatterOptions,
 	SpawnCommand,
 	SteeringMessage,
