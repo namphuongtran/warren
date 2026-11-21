@@ -23,6 +23,35 @@ export interface PrepareDeps {
 	readonly startProxy?: (opts: StartProxyOptions) => Promise<ProxyHandle>;
 	readonly registry?: { get(id: string): AgentRuntimeAdapter | undefined };
 	readonly now?: () => Date;
+	/** Seam for the host-credential copy into the run's $HOME (tests). */
+	readonly forwardCredentials?: (homePath: string) => Promise<void>;
+	/** Host env the passthrough names resolve against; defaults to `process.env`. */
+	readonly hostEnv?: Readonly<Record<string, string | undefined>>;
+}
+
+/**
+ * Env names that authenticate claude-code on their own. `CLAUDE_CODE_OAUTH_TOKEN`
+ * is the documented headless method for a subscription (`claude setup-token`);
+ * the two `ANTHROPIC_*` names are API-key and gateway auth.
+ */
+const CLAUDE_AUTH_ENV = ["CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY", "ANTHROPIC_AUTH_TOKEN"];
+
+/**
+ * True when the run will already carry a credential claude-code uses directly:
+ * set explicitly on the profile, or passed through from the host env (the
+ * claude-code allowlist forwards these names by reference, so the value lives
+ * only in `hostEnv`).
+ */
+export function hasClaudeAuthEnv(
+	profile: Pick<SandboxProfile, "setEnv" | "envPassthrough">,
+	hostEnv: Readonly<Record<string, string | undefined>> = process.env,
+): boolean {
+	const present = (value: string | undefined): boolean => (value?.trim() ?? "") !== "";
+	return CLAUDE_AUTH_ENV.some(
+		(name) =>
+			present(profile.setEnv[name]) ||
+			(profile.envPassthrough.includes(name) && present(hostEnv[name])),
+	);
 }
 
 function readSpecFrontmatter(
@@ -136,9 +165,13 @@ export async function prepareSpawn(
 		});
 	}
 	// warren-c865: with $HOME a real per-run directory, forward the host's
-	// claude OAuth blob into it so auth resolves via $HOME lookup.
-	if (spec.runtimeId === "claude-code") {
-		await forwardClaudeHostCredentials(record.homePath).catch(() => {});
+	// claude OAuth blob into it so auth resolves via $HOME lookup. Only as a
+	// fallback: when the env already authenticates the CLI, copying the
+	// interactive login's session (access + refresh token) into every run adds
+	// a stored secret and a second refresher of the same session for nothing.
+	if (spec.runtimeId === "claude-code" && !hasClaudeAuthEnv(profile, deps.hostEnv)) {
+		const forward = deps.forwardCredentials ?? forwardClaudeHostCredentials;
+		await forward(record.homePath).catch(() => {});
 	}
 
 	const useStdinHold = typeof runtime.shouldCloseStdinOnEvent === "function";
