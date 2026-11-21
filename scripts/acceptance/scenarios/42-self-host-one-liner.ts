@@ -116,7 +116,7 @@ async function buildImages(root: string): Promise<void> {
 	);
 	const agentCtx = join(root, "agent-image");
 	await mkdir(agentCtx, { recursive: true });
-	const shim = new URL("../lib/stub-agent/claude-code-path-shim.sh", import.meta.url).pathname;
+	const shim = join(import.meta.dir, "../lib/stub-agent/claude-code-path-shim.sh");
 	const shimTarget = join(agentCtx, "claude");
 	await writeFile(shimTarget, await readFile(shim, "utf8"), { mode: 0o755 });
 	await writeFile(

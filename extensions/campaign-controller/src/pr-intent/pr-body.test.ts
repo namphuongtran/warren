@@ -11,7 +11,7 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const ROOT = new URL("../..", import.meta.url).pathname;
+const ROOT = join(import.meta.dir, "..", "..");
 const SRC = join(ROOT, "src");
 const PROFILES = join(ROOT, "profiles");
 const GOLDEN_DIR = join(SRC, "pr-intent", "__golden__");

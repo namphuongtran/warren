@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { join } from "node:path";
 import {
 	CampaignControllerError,
 	EXTENSION_NAME,
@@ -22,7 +23,7 @@ describe("campaign-controller entrypoint", () => {
 		// read the entrypoint source back and prove no forbidden specifier is
 		// present. The repo-level layer guard walks the whole package; this
 		// keeps the proof standing inside the standalone test suite.
-		const indexSource = await Bun.file(new URL("./index.ts", import.meta.url).pathname).text();
+		const indexSource = await Bun.file(join(import.meta.dir, "index.ts")).text();
 		expect(indexSource.includes('"../../src/')).toBe(false);
 		expect(indexSource.includes("warren/src/")).toBe(false);
 		expect(indexSource.includes('from "../')).toBe(false);

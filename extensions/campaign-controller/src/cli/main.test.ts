@@ -12,7 +12,7 @@ import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-const MAIN = new URL("./main.ts", import.meta.url).pathname;
+const MAIN = join(import.meta.dir, "main.ts");
 
 async function spawnCli(
 	args: string[],

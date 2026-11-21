@@ -72,7 +72,7 @@ const RUN_DEADLINE_MS = 120_000;
 /** Install the PATH shim: `<dir>/claude` = the stub agent script, executable. */
 async function installClaudeShim(shimDir: string): Promise<void> {
 	await mkdir(shimDir, { recursive: true });
-	const source = new URL("../lib/stub-agent/claude-code-path-shim.sh", import.meta.url).pathname;
+	const source = join(import.meta.dir, "../lib/stub-agent/claude-code-path-shim.sh");
 	const target = join(shimDir, "claude");
 	await copyFile(source, target);
 	await chmod(target, 0o755);

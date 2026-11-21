@@ -157,7 +157,7 @@ async function buildShimBin(dir: string): Promise<void> {
 		shims.push(["bwrap", "./stub-agent/bwrap-shim.sh"]);
 	}
 	for (const [name, rel] of shims) {
-		const source = new URL(rel, import.meta.url).pathname;
+		const source = join(import.meta.dir, rel);
 		const target = join(dir, name);
 		await copyFile(source, target);
 		await chmod(target, 0o755);
