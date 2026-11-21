@@ -8,6 +8,7 @@
 import { CommanderError, InvalidArgumentError } from "commander";
 import { PLAN_RUN_STATES, type PlanRunState } from "../core/wire.ts";
 import { coerceCostCap } from "../runs/cost-cap.ts";
+import { MAX_DURATION_MINUTES_KEY, readMaxDurationMinutes } from "../runs/duration-limit.ts";
 import { EXIT_USAGE } from "./output.ts";
 import type { PlanRunOutput } from "./plan-run-renderer.ts";
 
@@ -38,6 +39,19 @@ export function parseMaxCostUsd(value: string): number {
 	const parsed = coerceCostCap(value);
 	if (parsed === null) {
 		throw new InvalidArgumentError("must be a positive number of USD");
+	}
+	return parsed;
+}
+
+/**
+ * Commander argParser for `--max-duration-minutes` (namphuongtran/warren#10).
+ * Delegates to the same reader the bridge enforces with, so a value the
+ * bridge would treat as "unlimited" fails the command loudly here instead.
+ */
+export function parseMaxDurationMinutes(value: string): number {
+	const parsed = readMaxDurationMinutes({ [MAX_DURATION_MINUTES_KEY]: value });
+	if (parsed === null) {
+		throw new InvalidArgumentError("must be a positive number of minutes");
 	}
 	return parsed;
 }

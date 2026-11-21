@@ -66,7 +66,7 @@ event). A malformed / non-positive value fails OPEN (no cap) so a budget
 typo never silently cancels every run. `config.yaml` and legacy
 `defaults.json` share the same
 schema — `{ defaultRole?, defaultBranch?, defaultPrompt?, defaultProvider?,
-defaultModel?, runBranchPrefix?, agentImage?, preview?, maxCostUsd?, pr? }` — all optional,
+defaultModel?, runBranchPrefix?, agentImage?, preview?, maxCostUsd?, maxDurationMinutes?, pr? }` — all optional,
 all strict. `maxCostUsd` on `config.yaml` is the project-wide default
 spend cap, the weakest source in the warren-a63d chain: an explicit
 dispatch override (a `POST /runs` `maxCostUsd` body field / `warren run
@@ -83,6 +83,15 @@ against that estimated number — it is a runaway brake on estimated usage,
 not a bill. A run whose anthropic credential is `CLAUDE_CODE_OAUTH_TOKEN`
 (no `ANTHROPIC_API_KEY`) is stamped `costBasis: subscription_estimate` at
 dispatch, and the UI renders its cost as an estimate; the cap is unchanged.
+`maxDurationMinutes` (namphuongtran/warren#10) is the project-wide default
+per-run wall-clock limit, and it follows the same chain: a `POST /runs`
+`maxDurationMinutes` body field / `warren run --max-duration-minutes` >
+the agent's own `frontmatter.maxDurationMinutes` > this default, with the
+same fail-open rule. Absent means unlimited. `withDurationLimit` in
+`src/runs/duration-limit.ts` implements the chain. The event bridge
+measures elapsed time from the run's `started_at`. When the limit passes,
+the bridge emits a `duration.exceeded` event and cancels the run. Reap
+then finalizes the run `failed` with `failureReason: duration_exceeded`.
 `runBranchPrefix` (warren-9993) overrides the prefix warren composes the
 burrow branch from (`${prefix}/${run.id}`); precedence project default >
 `WARREN_RUN_BRANCH_PREFIX` env > built-in `"warren"` (warren-2de0; the

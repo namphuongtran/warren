@@ -20,10 +20,11 @@
  */
 
 import type { Repos } from "../../db/repos/index.ts";
-import { isOverBudget } from "../cost-cap.ts";
+import { isOverBudget, resolveCostCapUsd } from "../cost-cap.ts";
 import type { RunEventBroker } from "../events.ts";
 import type { SessionStatsAccumulator } from "../usage-aggregate.ts";
 import { persistInStreamUsage } from "./stats.ts";
+import { appendSystemEvent } from "./system-event.ts";
 import type { BridgeLogger } from "./types.ts";
 
 /** Graceful-cancel seam the bridge plugs with its burrow client. */
@@ -62,7 +63,14 @@ export async function enforceBudgetCap(input: EnforceBudgetCapInput): Promise<bo
 	// Persist the spend that tripped the cap so cost_usd isn't left null.
 	await persistObservedUsage(input);
 
-	await emitBudgetEvent(input, observedCostUsd, capUsd);
+	await appendSystemEvent({
+		runId: input.runId,
+		kind: "budget.exceeded",
+		payload: { costUsd: observedCostUsd, capUsd },
+		repos: input.repos,
+		broker: input.broker,
+		...(input.logger !== undefined ? { logger: input.logger } : {}),
+	});
 
 	try {
 		await input.cancelBurrowRun(`spend cap exceeded: $${observedCostUsd} > $${capUsd}`);
@@ -100,26 +108,24 @@ export async function persistObservedUsage(
 	});
 }
 
-async function emitBudgetEvent(
-	input: EnforceBudgetCapInput,
-	observedCostUsd: number,
-	capUsd: number,
-): Promise<void> {
+/**
+ * Resolve the run's spend cap (warren-a63d) from its frozen
+ * `runs.rendered_agent_json`. Best-effort: a missing row or read error
+ * resolves to `null` (no cap) so a DB hiccup never blocks streaming.
+ */
+export async function resolveBridgeCostCap(
+	repos: Repos,
+	runId: string,
+	logger: BridgeLogger | undefined,
+): Promise<number | null> {
 	try {
-		const seq = ((await input.repos.events.maxSeqForRun(input.runId)) ?? 0) + 1;
-		const row = await input.repos.events.append({
-			runId: input.runId,
-			sandboxEventSeq: seq,
-			ts: new Date().toISOString(),
-			kind: "budget.exceeded",
-			stream: "system",
-			payload: { costUsd: observedCostUsd, capUsd },
-		});
-		input.broker.publish(input.runId, row);
+		const run = await repos.runs.require(runId);
+		return resolveCostCapUsd(run.renderedAgentJson);
 	} catch (err) {
-		input.logger?.error?.(
-			{ runId: input.runId, err: err instanceof Error ? err.message : String(err) },
-			"failed to emit budget.exceeded event",
+		logger?.warn?.(
+			{ runId, err: err instanceof Error ? err.message : String(err) },
+			"failed to resolve spend cap; proceeding without enforcement",
 		);
+		return null;
 	}
 }

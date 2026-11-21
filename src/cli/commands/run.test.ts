@@ -282,6 +282,17 @@ describe("runRun", () => {
 		expect(createCalls[0]?.maxCostUsd).toBe(3.5);
 	});
 
+	test("forwards --max-duration-minutes as the per-run wall-clock limit (namphuongtran/warren#10)", async () => {
+		const { context } = captureContext();
+		const createCalls: CreateRunInput[] = [];
+		await runRun(
+			context,
+			{ client: mockClient({ createCalls }) },
+			{ ...ARGS, maxDurationMinutes: 45 },
+		);
+		expect(createCalls[0]?.maxDurationMinutes).toBe(45);
+	});
+
 	test("forwards --seed as seedId on POST /runs (warren-ca2f)", async () => {
 		const { context } = captureContext();
 		const createCalls: CreateRunInput[] = [];

@@ -67,6 +67,7 @@ warren run [options] [agent] [project]
 | `--provider <name>` |  |  | per-run override of agent frontmatter.provider |
 | `--model <name>` |  |  | per-run override of agent frontmatter.model |
 | `--max-cost-usd <usd>` |  |  | per-run USD spend cap; wins over the agent's own and the project default |
+| `--max-duration-minutes <minutes>` |  |  | per-run wall-clock limit; wins over the agent's own and the project default |
 | `--seed <id>` |  |  | link the run to a seeds issue (POST /runs seedId) |
 | `--base-commit <sha>` |  |  | pin the workspace cut to a 40-hex commit SHA |
 | `--existing-branch <branch>` |  |  | run on an existing push-remote branch and push back to it; no PR |

@@ -14,6 +14,13 @@ describe("inheritedDispatchOverrides", () => {
 		});
 	});
 
+	test("inherits the parent's wall-clock limit (namphuongtran/warren#10)", () => {
+		expect(inheritedDispatchOverrides({ frontmatter: { maxDurationMinutes: 45 } })).toEqual({
+			maxDurationMinutesOverride: 45,
+		});
+		expect(inheritedDispatchOverrides({ frontmatter: { maxDurationMinutes: "x" } })).toEqual({});
+	});
+
 	test("fills only the slots the parent actually carried", () => {
 		expect(inheritedDispatchOverrides({ frontmatter: { model: "kimi-k3" } })).toEqual({
 			modelOverride: "kimi-k3",

@@ -192,9 +192,12 @@ function buildRetrySpawnInput(
 	// warren-0d80: provider and model come off the original's frozen
 	// frontmatter, so the retry runs on what the operator selected rather than
 	// on whatever the agent and project defaults resolve to now.
-	const inherited = inheritedDispatchOverrides(run.renderedAgentJson);
-	if (inherited.providerOverride !== undefined) draft.providerOverride = inherited.providerOverride;
-	if (inherited.modelOverride !== undefined) draft.modelOverride = inherited.modelOverride;
+	// The wall-clock limit (namphuongtran/warren#10) rides along too: the
+	// substrate lost the run, so the retry gets the full window again.
+	const { maxCostUsdOverride: _frozenCap, ...inherited } = inheritedDispatchOverrides(
+		run.renderedAgentJson,
+	);
+	Object.assign(draft, inherited);
 	// The cap is deliberately NOT taken from `inherited`. warren-4af7 gives
 	// this retry the original cap MINUS what the first attempt spent, and the
 	// full frozen cap would hand it a fresh budget.

@@ -10,11 +10,10 @@
  * `./index.ts` carries the full resume / claim / terminal-detection / recovery semantics.
  */
 
-import type { EventStream, RunTerminalState } from "../../db/schema.ts";
+import type { EventStream } from "../../db/schema.ts";
 import { EVENT_STREAMS } from "../../db/schema.ts";
 import type { RunHandle } from "../../runtime/contract.ts";
 import { RuntimeRunNotFoundError } from "../../runtime/errors.ts";
-import { resolveCostCapUsd } from "../cost-cap.ts";
 import { lifecycleBus } from "../lifecycle-bus.ts";
 import { accumulatePiUsage, extractClaudeUsage } from "../usage-aggregate.ts";
 import { appendOrDrop, newAppendGuard } from "./append-guard.ts";
@@ -23,8 +22,10 @@ import {
 	type EnforceBudgetCapInput,
 	enforceBudgetCap,
 	persistObservedUsage,
+	resolveBridgeCostCap,
 } from "./budget.ts";
 import { isPerDeltaNoiseEvent } from "./delta-noise.ts";
+import { bridgeDurationWatch, resolveDurationWatch } from "./duration-watch.ts";
 import { recordObservedModel } from "./observed-model.ts";
 import { providerStreamSource } from "./provider-source.ts";
 import { seedResumeUsage } from "./resume-usage.ts";
@@ -34,7 +35,6 @@ import { detectRuntimeTerminal, isPiAgentEnd } from "./terminal-detect.ts";
 import { recordToolCallRollup, resolveBridgeToolRuntime } from "./tool-call-rollup.ts";
 import { bridgeTurnMonitor, TurnMonitor, turnMonitorOptionsFromEnv } from "./turn-monitor.ts";
 import {
-	type BridgeLogger,
 	type BridgeRunStreamInput,
 	type BridgeRunStreamResult,
 	type BurrowTerminalSnapshot,
@@ -154,7 +154,7 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 	let dropped = 0;
 	let errored = false;
 	let claimed = false;
-	let terminalDetected: { outcome: RunTerminalState } | undefined;
+	let terminalDetected: BridgeRunStreamResult["terminalDetected"];
 	let sandboxRunMissing = false;
 	// pi cost tracking (warren-a7dc, warren-17a4). Two paths, both best-effort
 	// (failures leave the columns null): (1) in-stream extraction (default) —
@@ -187,6 +187,18 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 		statsPersisted = true;
 		terminalDetected = { outcome: "cancelled" };
 	}
+	// namphuongtran/warren#10: per-run wall-clock limit, checked per event and on a timer.
+	const durationWatch = bridgeDurationWatch({
+		watch: input.durationWatch ?? (await resolveDurationWatch(repos, runId, input.logger)),
+		runId,
+		sandboxRunId,
+		repos,
+		broker,
+		cancelBurrowRun,
+		ctrl,
+		persistUsage: () => persistObservedUsage(capInput),
+		...(input.logger !== undefined ? { logger: input.logger } : {}),
+	});
 
 	try {
 		for await (const event of terminalDetected === undefined ? source(ctrl.signal) : []) {
@@ -242,6 +254,7 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 				await turnWatch.trip(turnTrip);
 				break;
 			}
+			if (durationWatch.expiredAt(event)) break;
 			if (isPerDeltaNoiseEvent(event)) {
 				dropped += 1;
 				continue;
@@ -366,7 +379,7 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 				{ runId, sandboxRunId, written, skipped, err: err.message },
 				"run stream bridge: backend reports run not found (ghost run)",
 			);
-		} else if (turnWatch.tripped.value) {
+		} else if (turnWatch.tripped.value || durationWatch.tripped.value) {
 			// #1242: the turn monitor tripped (stall / degeneration / in-turn
 			// spend) and aborted the source — the trip IS the terminal, not an
 			// error, so don't flag `errored` (that would trip the reconnect loop).
@@ -402,6 +415,9 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 		}
 	} finally {
 		turnWatch.stop();
+		durationWatch.stop();
+		// #10: act on a wall-clock trip once, after the loop and before the broker closes.
+		if (terminalDetected === undefined) terminalDetected = await durationWatch.settle();
 		if (input.signal !== undefined) input.signal.removeEventListener("abort", onAbort);
 		ctrl.abort();
 		if (pollerTask !== null) await pollerTask;
@@ -465,26 +481,4 @@ function normalizeStream(value: unknown): EventStream | null {
 
 function toIsoString(ts: Date | string): string {
 	return ts instanceof Date ? ts.toISOString() : ts;
-}
-
-/**
- * Resolve the run's spend cap (warren-a63d) from its frozen
- * `runs.rendered_agent_json`. Best-effort: a missing row or read error
- * resolves to `null` (no cap) so a DB hiccup never blocks streaming.
- */
-async function resolveBridgeCostCap(
-	repos: BridgeRunStreamInput["repos"],
-	runId: string,
-	logger: BridgeLogger | undefined,
-): Promise<number | null> {
-	try {
-		const run = await repos.runs.require(runId);
-		return resolveCostCapUsd(run.renderedAgentJson);
-	} catch (err) {
-		logger?.warn?.(
-			{ runId, err: err instanceof Error ? err.message : String(err) },
-			"failed to resolve spend cap; proceeding without enforcement",
-		);
-		return null;
-	}
 }

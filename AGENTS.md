@@ -136,6 +136,9 @@ and `loadWarrenConfig()` surfaces it. Notable knobs:
   `warren run --max-cost-usd`, or a trigger entry's cap) > agent
   `frontmatter.maxCostUsd` > this default — applied only when the agent
   declares no cap (malformed agent values still fail open).
+- `maxDurationMinutes` sets the default per-run wall-clock limit
+  (namphuongtran/warren#10). It uses the `maxCostUsd` precedence chain.
+  See [docs/design/warren-config.md](docs/design/warren-config.md).
 - `pr.autoMerge` (warren-6c5a, plan pl-92a3) opts a project into warren-armed
   PR auto-merge, armed by the reap PR-open step behind the fail-closed policy.
   Absent means off and silent. Full contract and operator guide:

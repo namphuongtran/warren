@@ -124,23 +124,19 @@ export type CloneKind = (typeof CLONE_KINDS)[number];
  *     no-op: fresh-branch dispatches stay `succeeded` with `noChanges` on
  *     `reap.empty_push` / `reap.completed`; ref-dispatch (`ref` /
  *     `targetBranch`) reaps `failed`/`no_changes` instead (warren-ba08).
- *   - `no_changes` (warren-ba08): ref-dispatch zero-commit over a clean or
- *     bookkeeping-only tree — repair produced no new work. Distinct from
- *     `dropped_commit` (dirty non-bookkeeping tree). Fresh-branch no-ops
- *     keep the warren-89b0 succeeded+`noChanges`-flag shape.
- *   - `finalize_failed` (warren-495d) means reap's finalize did NOT
- *     complete its branch push before it timed out or failed — under K8s
- *     the in-pod finalize round-trip (git push → mirror deltas → POST the
- *     result) can time out (`WARREN_K8S_FINALIZE_TIMEOUT_MS`, default
- *     120s) or the pod can vanish / reach a terminal phase before it
- *     posts a result, yielding a structured FAILED `FinalizeResult` with
- *     `pushed:false`. Marking the run `failed` (instead of letting it
- *     masquerade as `succeeded`) keeps a run whose commits never reached
- *     origin from reporting success — and pairs with reap PRESERVING the
- *     workspace (skipping `terminate`) so the agent's commits stay
- *     recoverable instead of being silently destroyed. Distinct from
- *     `dropped_commit` (push succeeded but landed zero commits over a
- *     still-dirty tree): here the push itself never completed.
+ *   - `no_changes` (warren-ba08): ref-dispatch zero-commit over a clean or bookkeeping-only
+ *     tree — repair produced no new work. Distinct from `dropped_commit` (dirty
+ *     non-bookkeeping tree). Fresh-branch no-ops keep warren-89b0 succeeded+`noChanges`.
+ *   - `finalize_failed` (warren-495d) means reap's finalize did NOT complete its branch push before
+ *     it timed out or failed — under K8s the in-pod finalize round-trip (git push → mirror deltas →
+ *     POST the result) can time out (`WARREN_K8S_FINALIZE_TIMEOUT_MS`, default 120s) or the pod can
+ *     vanish / reach a terminal phase before it posts a result, yielding a structured FAILED
+ *     `FinalizeResult` with `pushed:false`. Marking the run `failed` (instead of letting it
+ *     masquerade as `succeeded`) keeps a run whose commits never reached origin from reporting
+ *     success — and pairs with reap PRESERVING the workspace (skipping `terminate`) so the agent's
+ *     commits stay recoverable instead of being silently destroyed. Distinct from `dropped_commit`
+ *     (push succeeded but landed zero commits over a still-dirty tree): here the push itself never
+ *     completed.
  *   - `push_rejected_policy` (warren-b68d) narrows `finalize_failed` to a push
  *     the REMOTE refused on policy grounds; see `../runtime/push-rejection.ts`.
  *   - `finalize_unposted` (warren-5ea1) means the K8s in-pod finalize
@@ -195,6 +191,8 @@ export type CloneKind = (typeof CLONE_KINDS)[number];
  *     signal, surfaced via the run-state probe's `terminalReason`.
  *   - `preempted` (warren-ea4b/a757): the pod's node was reclaimed or lost — GKE Spot,
  *     NotReady, deleted (K8s-only, retryable — the substrate lost the run, not the agent).
+ *   - `duration_exceeded` (namphuongtran/warren#10): the run outlived its `maxDurationMinutes`
+ *     limit (`duration.exceeded`). Distinct from `timed_out`, the watchdog's silence budget.
  *
  * Null on succeeded/cancelled rows.
  */
@@ -217,6 +215,7 @@ export const RUN_FAILURE_REASONS = [
 	"oom_killed",
 	"evicted",
 	"preempted",
+	"duration_exceeded",
 ] as const;
 export type RunFailureReason = (typeof RUN_FAILURE_REASONS)[number];
 

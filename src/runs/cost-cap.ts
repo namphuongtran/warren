@@ -91,10 +91,40 @@ export function resolveCapOverride(input: {
 	readonly frontmatter: Readonly<Record<string, unknown>>;
 	readonly projectDefaultUsd?: number;
 }): number | undefined {
-	if (input.overrideUsd !== undefined) return input.overrideUsd;
-	const declared = input.frontmatter[MAX_COST_USD_KEY];
+	return resolveFrontmatterLimitOverride(
+		input.frontmatter[MAX_COST_USD_KEY],
+		input.overrideUsd,
+		input.projectDefaultUsd,
+	);
+}
+
+/**
+ * The precedence shared by every frontmatter-folded per-run limit (this
+ * spend cap, the namphuongtran/warren#10 wall-clock limit): the explicit
+ * override wins; a declared agent value (even a malformed one) stays and
+ * folds nothing; otherwise the project default. `null` counts as undeclared.
+ */
+export function resolveFrontmatterLimitOverride(
+	declared: unknown,
+	override: number | undefined,
+	projectDefault: number | undefined,
+): number | undefined {
+	if (override !== undefined) return override;
 	if (declared !== undefined && declared !== null) return undefined;
-	return input.projectDefaultUsd;
+	return projectDefault;
+}
+
+/**
+ * The frontmatter bag frozen on a run's `rendered_agent_json`, or `null` when
+ * the row carries a malformed shape (read defensively: the column is `unknown`).
+ */
+export function frozenFrontmatter(renderedAgentJson: unknown): Record<string, unknown> | null {
+	if (renderedAgentJson === null || typeof renderedAgentJson !== "object") return null;
+	const frontmatter = (renderedAgentJson as Record<string, unknown>).frontmatter;
+	if (frontmatter === null || typeof frontmatter !== "object" || Array.isArray(frontmatter)) {
+		return null;
+	}
+	return frontmatter as Record<string, unknown>;
 }
 
 /**
@@ -104,12 +134,8 @@ export function resolveCapOverride(input: {
  * source of truth at bridge time. Returns `null` when no cap applies.
  */
 export function resolveCostCapUsd(renderedAgentJson: unknown): number | null {
-	if (renderedAgentJson === null || typeof renderedAgentJson !== "object") return null;
-	const frontmatter = (renderedAgentJson as Record<string, unknown>).frontmatter;
-	if (frontmatter === null || typeof frontmatter !== "object" || Array.isArray(frontmatter)) {
-		return null;
-	}
-	return readMaxCostUsd(frontmatter as Record<string, unknown>);
+	const frontmatter = frozenFrontmatter(renderedAgentJson);
+	return frontmatter === null ? null : readMaxCostUsd(frontmatter);
 }
 
 /**
