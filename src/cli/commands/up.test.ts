@@ -187,6 +187,23 @@ describe("runUp", () => {
 		expect(seenEnv?.WARREN_DATA_DIR).toBe("/data");
 	});
 
+	test("exports the defaulted data dir and runtime into the process env", async () => {
+		const { context } = captureContext();
+		const processEnv: Record<string, string | undefined> = {};
+		await runUp(context, happyDeps({ processEnv }), {});
+		// The runtime providers read process.env; without this the docker provider
+		// fell back to the built-in /data.
+		expect(processEnv.WARREN_DATA_DIR).toBe("/home/op/.warren/data");
+		expect(processEnv.WARREN_RUNTIME).toBe("local");
+	});
+
+	test("exports an explicit WARREN_DATA_DIR unchanged", async () => {
+		const { context } = captureContext({ WARREN_DATA_DIR: "/srv/warren" });
+		const processEnv: Record<string, string | undefined> = {};
+		await runUp(context, happyDeps({ processEnv }), {});
+		expect(processEnv.WARREN_DATA_DIR).toBe("/srv/warren");
+	});
+
 	test("exits 0 with compose guidance when only docker is available", async () => {
 		const { context, out } = captureContext();
 		const result = await runUp(
