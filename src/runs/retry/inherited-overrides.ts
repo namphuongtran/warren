@@ -17,12 +17,14 @@
 
 import { readProviderFrontmatter } from "../../registry/schema.ts";
 import { readMaxCostUsd } from "../cost-cap.ts";
+import { readMaxDurationMinutes } from "../duration-limit.ts";
 
 /** Override slots on `SpawnRunInput`, filled only where the parent had one. */
 export interface InheritedDispatchOverrides {
 	readonly providerOverride?: string;
 	readonly modelOverride?: string;
 	readonly maxCostUsdOverride?: number;
+	readonly maxDurationMinutesOverride?: number;
 }
 
 /**
@@ -38,10 +40,12 @@ export function inheritedDispatchOverrides(renderedAgentJson: unknown): Inherite
 	const frontmatter = readFrontmatter(renderedAgentJson);
 	const provider = readProviderFrontmatter(frontmatter);
 	const capUsd = readMaxCostUsd(frontmatter);
+	const durationMinutes = readMaxDurationMinutes(frontmatter);
 	return {
 		...(provider.provider !== undefined ? { providerOverride: provider.provider } : {}),
 		...(provider.model !== undefined ? { modelOverride: provider.model } : {}),
 		...(capUsd !== null ? { maxCostUsdOverride: capUsd } : {}),
+		...(durationMinutes !== null ? { maxDurationMinutesOverride: durationMinutes } : {}),
 	};
 }
 

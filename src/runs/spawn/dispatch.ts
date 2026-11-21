@@ -21,6 +21,7 @@ import { interactiveRuntimeOverride } from "../../warren-config/schema.ts";
 import { composeRunBranch, resolveRunBranchPrefix } from "../branch.ts";
 import { parseBurrowConfig } from "../burrow-config.ts";
 import { resolveCapOverride } from "../cost-cap.ts";
+import { withDurationLimit } from "../duration-limit.ts";
 import { lifecycleBus } from "../lifecycle-bus.ts";
 import { buildSeedFiles } from "../seed.ts";
 import { validateTargetBranch } from "../target-branch.ts";
@@ -154,12 +155,17 @@ async function dispatchRun(input: SpawnRunInput): Promise<SpawnRunResult> {
 			? { projectDefaultUsd: projectDefaults.maxCostUsd }
 			: {}),
 	});
+	// namphuongtran/warren#10: the wall-clock limit rides the same chain (duration-limit.ts).
+	const durationSources = {
+		overrideMinutes: input.maxDurationMinutesOverride,
+		projectDefaultMinutes: projectDefaults?.maxDurationMinutes,
+	};
 	// warren-cb46: gate tracker/mulch prompt fragments on the project's real
 	// capabilities before anything freezes the agent (prompt-capabilities.ts).
 	const agent = gateAgentPrompts(
 		withMulchArm(
 			withMaxCostUsdOverride(
-				withProviderOverrides(baseAgent, {
+				withProviderOverrides(withDurationLimit(baseAgent, durationSources), {
 					...(effectiveProvider !== undefined ? { providerOverride: effectiveProvider } : {}),
 					...(effectiveModel !== undefined ? { modelOverride: effectiveModel } : {}),
 				}),

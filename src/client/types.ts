@@ -251,6 +251,8 @@ export interface CreateRunInput {
 	rescueFromRunId?: string;
 	/** Per-run USD spend cap (warren-a63d): wins over the agent's own and the project default. */
 	maxCostUsd?: number;
+	/** Per-run wall-clock limit in minutes (namphuongtran/warren#10); same precedence as maxCostUsd. */
+	maxDurationMinutes?: number;
 	/** Mulch experiment arm: "on" installs mulch's Claude hooks, "off" injects no mulch. */
 	mulch?: "on" | "off";
 }

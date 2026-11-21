@@ -44,16 +44,15 @@ import {
 export const DEFAULT_PROBE_TIMEOUT_MS = 2_000;
 
 /**
- * Guard the per-run spend cap before JSON serialization (warren-a63d).
- * `JSON.stringify` turns `NaN` / `±Infinity` into `null`, which the
- * server reads as "field absent" — the dispatch would then succeed
- * silently UNCAPPED instead of failing the documented positive-finite
- * validation. Fail here with the same rule the server enforces.
+ * Guard a per-run limit (the warren-a63d spend cap, the #10 wall-clock limit)
+ * before JSON serialization. `JSON.stringify` turns `NaN` / `±Infinity` into
+ * `null`, which the server reads as "field absent" — the dispatch would then
+ * succeed silently UNLIMITED. Fail here with the rule the server enforces.
  */
-function assertValidMaxCostUsd(value: number | undefined): void {
+function assertPositiveFinite(field: string, value: number | undefined, unit: string): void {
 	if (value === undefined) return;
 	if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
-		throw new ValidationError("maxCostUsd must be a positive finite number of USD");
+		throw new ValidationError(`${field} must be a positive finite number of ${unit}`);
 	}
 }
 
@@ -214,7 +213,8 @@ export class WarrenClient {
 	}
 
 	async createRun(input: CreateRunInput): Promise<SpawnRunResponse> {
-		assertValidMaxCostUsd(input.maxCostUsd);
+		assertPositiveFinite("maxCostUsd", input.maxCostUsd, "USD");
+		assertPositiveFinite("maxDurationMinutes", input.maxDurationMinutes, "minutes");
 		return this.request<SpawnRunResponse>("/runs", {
 			method: "POST",
 			headers: { "content-type": "application/json" },
@@ -369,7 +369,7 @@ export class WarrenClient {
 	 * (idempotent resume contract).
 	 */
 	async createPlanRun(input: CreatePlanRunInput): Promise<CreatePlanRunResponse> {
-		assertValidMaxCostUsd(input.maxCostUsd);
+		assertPositiveFinite("maxCostUsd", input.maxCostUsd, "USD");
 		return this.request<CreatePlanRunResponse>("/plan-runs", {
 			method: "POST",
 			headers: { "content-type": "application/json" },

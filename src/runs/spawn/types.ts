@@ -114,6 +114,13 @@ export interface SpawnRunInput {
 	 */
 	readonly maxCostUsdOverride?: number;
 	/**
+	 * Per-dispatch wall-clock limit in minutes (namphuongtran/warren#10), from
+	 * `POST /runs` `maxDurationMinutes` or `warren run --max-duration-minutes`.
+	 * Folded onto `frontmatter.maxDurationMinutes` with the same precedence as
+	 * `maxCostUsdOverride` (`withDurationLimit`, src/runs/duration-limit.ts).
+	 */
+	readonly maxDurationMinutesOverride?: number;
+	/**
 	 * Mulch experiment arm (`src/runtime/adapters/mulch-arm.ts`), folded onto
 	 * `frontmatter.mulch`. Omitted = default behavior, unchanged.
 	 */

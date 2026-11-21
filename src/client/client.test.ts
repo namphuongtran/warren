@@ -90,6 +90,39 @@ describe("WarrenClient", () => {
 		});
 	});
 
+	test("rejects a non-positive or non-finite maxDurationMinutes before serialization (namphuongtran/warren#10)", async () => {
+		let fetched = false;
+		const stubFetch = stub(async () => {
+			fetched = true;
+			return jsonResponse(201, { run: { id: "r1" }, sandbox: { id: "b1" } });
+		});
+		const client = new WarrenClient({
+			config: { baseUrl: "https://warren.local" },
+			fetch: stubFetch,
+		});
+		const base = { agent: "claude-code", project: "p1", prompt: "hello" };
+		for (const bad of [Number.NaN, Number.POSITIVE_INFINITY, 0, -1]) {
+			expect(client.createRun({ ...base, maxDurationMinutes: bad })).rejects.toThrow(
+				/maxDurationMinutes must be a positive finite number/,
+			);
+		}
+		expect(fetched).toBe(false);
+	});
+
+	test("sends maxDurationMinutes on POST /runs (namphuongtran/warren#10)", async () => {
+		let observedBody = "";
+		const stubFetch = stub(async (_input, init) => {
+			observedBody = String(init?.body ?? "");
+			return jsonResponse(201, { run: { id: "r1" }, sandbox: { id: "b1" } });
+		});
+		const client = new WarrenClient({
+			config: { baseUrl: "https://warren.local" },
+			fetch: stubFetch,
+		});
+		await client.createRun({ agent: "a", project: "p", prompt: "x", maxDurationMinutes: 45 });
+		expect(JSON.parse(observedBody).maxDurationMinutes).toBe(45);
+	});
+
 	test("rejects a non-finite maxCostUsd before serialization (warren-a63d)", async () => {
 		// JSON.stringify turns NaN/Infinity into null, which the server reads
 		// as "no cap" — the SDK must fail loudly instead of dispatching uncapped.

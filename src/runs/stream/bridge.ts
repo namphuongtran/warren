@@ -10,7 +10,7 @@
  * `./index.ts` carries the full resume / claim / terminal-detection / recovery semantics.
  */
 
-import type { EventStream, RunTerminalState } from "../../db/schema.ts";
+import type { EventStream } from "../../db/schema.ts";
 import { EVENT_STREAMS } from "../../db/schema.ts";
 import type { RunHandle } from "../../runtime/contract.ts";
 import { RuntimeRunNotFoundError } from "../../runtime/errors.ts";
@@ -32,6 +32,7 @@ import {
 	warningSteer,
 } from "./budget-warning.ts";
 import { isPerDeltaNoiseEvent } from "./delta-noise.ts";
+import { bridgeDurationWatch, resolveDurationWatch } from "./duration-watch.ts";
 import { recordObservedModel } from "./observed-model.ts";
 import { providerStreamSource } from "./provider-source.ts";
 import { seedResumeUsage } from "./resume-usage.ts";
@@ -169,7 +170,7 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 	let dropped = 0;
 	let errored = false;
 	let claimed = false;
-	let terminalDetected: { outcome: RunTerminalState } | undefined;
+	let terminalDetected: BridgeRunStreamResult["terminalDetected"];
 	let sandboxRunMissing = false;
 	// pi cost tracking (warren-a7dc, warren-17a4). Two paths, both best-effort
 	// (failures leave the columns null): (1) in-stream extraction (default) —
@@ -209,6 +210,12 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 		statsPersisted = true;
 		terminalDetected = { outcome: "cancelled" };
 	}
+	// namphuongtran/warren#10: per-run wall-clock limit (at start, on a timer, per event).
+	const durationWatch = bridgeDurationWatch({
+		watch: input.durationWatch ?? (await resolveDurationWatch(repos, runId, input.logger)),
+		budget: capInput,
+		ctrl,
+	});
 
 	try {
 		for await (const event of terminalDetected === undefined ? source(ctrl.signal) : []) {
@@ -264,6 +271,7 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 				await turnWatch.trip(turnTrip);
 				break;
 			}
+			if (durationWatch.expiredAt(event)) break;
 			if (isPerDeltaNoiseEvent(event)) {
 				dropped += 1;
 				continue;
@@ -388,7 +396,7 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 				{ runId, sandboxRunId, written, skipped, err: err.message },
 				"run stream bridge: backend reports run not found (ghost run)",
 			);
-		} else if (turnWatch.tripped.value) {
+		} else if (turnWatch.tripped.value || durationWatch.tripped.value) {
 			// #1242: the turn monitor tripped (stall / degeneration / in-turn
 			// spend) and aborted the source — the trip IS the terminal, not an
 			// error, so don't flag `errored` (that would trip the reconnect loop).
@@ -424,6 +432,8 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 		}
 	} finally {
 		turnWatch.stop();
+		// #10: act on a wall-clock trip once, after the loop and before the broker closes.
+		terminalDetected = await durationWatch.finish(terminalDetected);
 		if (input.signal !== undefined) input.signal.removeEventListener("abort", onAbort);
 		ctrl.abort();
 		if (pollerTask !== null) await pollerTask;

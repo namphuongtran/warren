@@ -70,6 +70,7 @@ const RUN_FAILURE_REASON_LABELS: Readonly<Record<string, string>> = {
 	oom_killed: "Out of memory",
 	evicted: "Evicted",
 	preempted: "Preempted (Spot node reclaimed)",
+	duration_exceeded: "Wall-clock limit exceeded",
 } satisfies Record<RunFailureReason, string>;
 
 /** Prose for a run's `failureReason`. */

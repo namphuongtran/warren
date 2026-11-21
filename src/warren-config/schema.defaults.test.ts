@@ -62,6 +62,18 @@ describe("DefaultsConfigSchema", () => {
 		}
 	});
 
+	test("accepts a positive maxDurationMinutes project-wide wall-clock limit (namphuongtran/warren#10)", () => {
+		const parsed = DefaultsConfigSchema.safeParse({ maxDurationMinutes: 45 });
+		expect(parsed.success).toBe(true);
+		if (parsed.success) expect(parsed.data.maxDurationMinutes).toBe(45);
+	});
+
+	test("rejects a non-positive, non-finite, or string maxDurationMinutes", () => {
+		for (const bad of [0, -1, Number.POSITIVE_INFINITY, "45"]) {
+			expect(DefaultsConfigSchema.safeParse({ maxDurationMinutes: bad }).success).toBe(false);
+		}
+	});
+
 	test("rejects extra fields so typos surface loudly", () => {
 		const parsed = DefaultsConfigSchema.safeParse({ defaultRoll: "claude-code" });
 		expect(parsed.success).toBe(false);

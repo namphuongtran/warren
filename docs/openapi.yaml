@@ -1301,6 +1301,7 @@ components:
         - oom_killed
         - evicted
         - preempted
+        - duration_exceeded
     RunMode:
       type: string
       enum:
@@ -1510,6 +1511,7 @@ components:
             - oom_killed
             - evicted
             - preempted
+            - duration_exceeded
             - null
         createdAt:
           type:

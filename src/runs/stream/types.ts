@@ -13,6 +13,7 @@ import type { RunFailureReason, RunMode, RunTerminalState } from "../../db/schem
 import type { RuntimeProvider, TerminalReason } from "../../runtime/contract.ts";
 import type { RunEventBroker } from "../events.ts";
 import type { SteerRunFn } from "./budget-warning.ts";
+import type { DurationWatch } from "./duration-watch.ts";
 import type { TurnMonitor } from "./turn-monitor.ts";
 
 /**
@@ -221,6 +222,12 @@ export interface BridgeRunStreamInput {
 	 * stall / degeneration / in-turn-spend trips deterministically.
 	 */
 	readonly turnMonitor?: TurnMonitor;
+	/**
+	 * Wall-clock limit watch override (namphuongtran/warren#10, tests). Default:
+	 * built from the run row's frozen `maxDurationMinutes` and `started_at`. A
+	 * test injects one with a fake clock to drive the trip deterministically.
+	 */
+	readonly durationWatch?: DurationWatch;
 }
 
 export interface BridgeRunStreamResult {

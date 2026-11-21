@@ -36,6 +36,7 @@ import {
 	isNearBudget,
 } from "./budget-warning.ts";
 import { persistInStreamUsage } from "./stats.ts";
+import { appendSystemEvent } from "./system-event.ts";
 import type { BridgeLogger } from "./types.ts";
 
 /** Graceful-cancel seam the bridge plugs with its burrow client. */
@@ -154,26 +155,18 @@ async function warnIfNearBudget(
 	}
 }
 
+/** One `system` event for the cap's two signals, through the shared emitter. */
 async function emitBudgetEvent(
 	input: EnforceBudgetCapInput,
 	kind: "budget.exceeded" | "budget.warning",
 	payload: Record<string, number>,
 ): Promise<void> {
-	try {
-		const seq = ((await input.repos.events.maxSeqForRun(input.runId)) ?? 0) + 1;
-		const row = await input.repos.events.append({
-			runId: input.runId,
-			sandboxEventSeq: seq,
-			ts: new Date().toISOString(),
-			kind,
-			stream: "system",
-			payload,
-		});
-		input.broker.publish(input.runId, row);
-	} catch (err) {
-		input.logger?.error?.(
-			{ runId: input.runId, err: err instanceof Error ? err.message : String(err) },
-			`failed to emit ${kind} event`,
-		);
-	}
+	await appendSystemEvent({
+		runId: input.runId,
+		kind,
+		payload,
+		repos: input.repos,
+		broker: input.broker,
+		...(input.logger !== undefined ? { logger: input.logger } : {}),
+	});
 }

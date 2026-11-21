@@ -37,6 +37,7 @@ import type { SessionStatsAccumulator } from "../usage-aggregate.ts";
 import { newSessionStatsAccumulator } from "../usage-aggregate.ts";
 import type { CancelBurrowRunFn } from "./budget.ts";
 import { persistInStreamUsage } from "./stats.ts";
+import { appendSystemEvent } from "./system-event.ts";
 import type { BridgeLogger, StreamEventView } from "./types.ts";
 
 /* --- Config --- */
@@ -357,7 +358,14 @@ export async function tripTurnMonitor(input: TurnTripActionInput): Promise<void>
 		"turn monitor tripped; cancelling run",
 	);
 	await persistKnownCost(input);
-	await emitTripEvent(input);
+	await appendSystemEvent({
+		runId: input.runId,
+		kind: tripEventKind(input.trip),
+		payload: tripEventPayload(input.trip),
+		repos: input.repos,
+		broker: input.broker,
+		...(input.logger !== undefined ? { logger: input.logger } : {}),
+	});
 	try {
 		await input.cancelBurrowRun(tripReason(input.trip));
 	} catch (err) {
@@ -387,26 +395,6 @@ async function persistKnownCost(input: TurnTripActionInput): Promise<void> {
 		repos: input.repos,
 		...(input.logger !== undefined ? { logger: input.logger } : {}),
 	});
-}
-
-async function emitTripEvent(input: TurnTripActionInput): Promise<void> {
-	try {
-		const seq = ((await input.repos.events.maxSeqForRun(input.runId)) ?? 0) + 1;
-		const row = await input.repos.events.append({
-			runId: input.runId,
-			sandboxEventSeq: seq,
-			ts: new Date().toISOString(),
-			kind: tripEventKind(input.trip),
-			stream: "system",
-			payload: tripEventPayload(input.trip),
-		});
-		input.broker.publish(input.runId, row);
-	} catch (err) {
-		input.logger?.error?.(
-			{ runId: input.runId, err: err instanceof Error ? err.message : String(err) },
-			"failed to emit turn-monitor trip event",
-		);
-	}
 }
 
 function tripEventKind(trip: TurnTrip): string {
