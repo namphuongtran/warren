@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { join } from "node:path";
 import { ValidationError } from "../errors.ts";
 import { renderCrossForkPullRequestIntent } from "./pr-request.ts";
 
@@ -84,7 +85,7 @@ describe("renderCrossForkPullRequestIntent", () => {
 	});
 
 	test("rendering performs no transport I/O — the module has no transport import", async () => {
-		const source = await Bun.file(new URL("./pr-request.ts", import.meta.url).pathname).text();
+		const source = await Bun.file(join(import.meta.dir, "pr-request.ts")).text();
 		expect(source.includes("GithubTransport")).toBe(false);
 		expect(source.includes("http-transport")).toBe(false);
 		expect(source.includes("fetch(")).toBe(false);
