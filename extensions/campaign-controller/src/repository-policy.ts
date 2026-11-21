@@ -29,6 +29,7 @@ import {
 	requireHttpsUrl,
 	requireInt,
 	requireIsoTimestamp,
+	requirePositiveNumber,
 	requireSha256,
 	requireString,
 	requireStringArray,
@@ -176,7 +177,37 @@ export interface RepositoryPolicy {
 	maxNewPrsPerDay: number;
 	requiredChecks: string[];
 	mutations: Mutations;
+	/**
+	 * The cross-model review policy (namphuongtran/warren#18). `null` (block absent) means off
+	 * and silent: no reviewer run, no status, no comment.
+	 */
+	review: ReviewPolicy | null;
 }
+
+/**
+ * Cross-model review policy (namphuongtran/warren#18). Opt-in per
+ * repository and covered by the policy digest, so operator approval binds
+ * the reviewer identity, the round cap, and the spend cap.
+ */
+export interface ReviewPolicy {
+	/** Block revision; bumps whenever the review contract changes. */
+	version: number;
+	/** The warren agent dispatched as the reviewer (read-only). */
+	agent: string;
+	/** Provider override for the reviewer; prefer a different vendor than the builder. */
+	provider: string | null;
+	/** Model override for the reviewer. */
+	model: string | null;
+	/** Commit-status context published on the reviewed SHA. */
+	statusContext: string;
+	/** Change-request rounds fed to the fixer before a human must step in. */
+	maxRounds: number;
+	/** Per-review-run USD cap; also the budget headroom each review needs. */
+	maxCostUsd: number;
+}
+
+/** The commit-status context used when the review block names none. */
+export const DEFAULT_REVIEW_STATUS_CONTEXT = "warren/review";
 
 /** Validation options: `nowMs` pins "now" so tests stay deterministic. */
 export interface PolicyValidationOptions {
@@ -209,6 +240,7 @@ const TOP_LEVEL_FIELDS = [
 	"maxNewPrsPerDay",
 	"requiredChecks",
 	"mutations",
+	"review",
 ] as const;
 
 const SOURCE_FIELDS = ["url", "fetchedAt", "sha256"] as const;
@@ -400,6 +432,54 @@ function requireEvidenceTiers(root: ReturnType<typeof asObject>): string[] | nul
 	return tiers;
 }
 
+const REVIEW_FIELDS = [
+	"version",
+	"agent",
+	"provider",
+	"model",
+	"statusContext",
+	"maxRounds",
+	"maxCostUsd",
+] as const;
+
+/** Status contexts stay plain tokens such as `warren/review`: no whitespace or control characters. */
+const STATUS_CONTEXT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/:-]{0,99}$/;
+
+/** Hard ceiling on one review run's USD cap. */
+const MAX_REVIEW_COST_USD = 100;
+
+/** Validate the optional cross-model review block (namphuongtran/warren#18). Absent → off. */
+function requireReviewPolicy(root: ReturnType<typeof asObject>): ReviewPolicy | null {
+	if (root.review === undefined || root.review === null) {
+		return null;
+	}
+	const path = "repository policy.review";
+	const raw = asObject(root.review, path);
+	rejectUnknownKeys(raw, REVIEW_FIELDS, path);
+	const optional = (key: "provider" | "model"): string | null =>
+		raw[key] === undefined || raw[key] === null
+			? null
+			: requireString(raw, key, path, { min: 1, max: 128 });
+	let statusContext = DEFAULT_REVIEW_STATUS_CONTEXT;
+	if (raw.statusContext !== undefined && raw.statusContext !== null) {
+		statusContext = requireString(raw, "statusContext", path, { min: 1, max: 100 });
+		if (!STATUS_CONTEXT_PATTERN.test(statusContext)) {
+			throw new ValidationError(
+				`expected letters, digits, and . _ / : - at '${path}.statusContext', got ${JSON.stringify(statusContext)}`,
+			);
+		}
+	}
+	return {
+		version: requireInt(raw, "version", path, { min: 1, max: 1_000 }),
+		agent: requireString(raw, "agent", path, { min: 1, max: 128 }),
+		provider: optional("provider"),
+		model: optional("model"),
+		statusContext,
+		maxRounds: requireInt(raw, "maxRounds", path, { min: 1, max: 10 }),
+		maxCostUsd: requirePositiveNumber(raw, "maxCostUsd", path, MAX_REVIEW_COST_USD),
+	};
+}
+
 function requirePrBodyContract(root: ReturnType<typeof asObject>): PrBodyContract | null {
 	if (root.prBodyContract === undefined || root.prBodyContract === null) {
 		return null;
@@ -502,6 +582,7 @@ export function validateRepositoryPolicy(
 		maxLen: 200,
 	});
 	const mutations = requireMutations(root);
+	const review = requireReviewPolicy(root);
 
 	const policy: RepositoryPolicy = {
 		schemaVersion: schemaVersion as typeof REPOSITORY_POLICY_SCHEMA_VERSION,
@@ -523,6 +604,7 @@ export function validateRepositoryPolicy(
 		maxNewPrsPerDay,
 		requiredChecks,
 		mutations,
+		review,
 	};
 	return { policy, digest: digestOf(policy) };
 }

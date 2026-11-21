@@ -171,6 +171,10 @@ approval over a code revision that adds the exact capability:
 - **claiming an issue** or creating/editing an issue;
 - posting or editing any **comment or reply**, including re-review requests
   and thread resolutions;
+- publishing **review statuses and review comments** (namphuongtran/warren#18).
+  The code path exists, but it runs only with a repository-policy `review`
+  block approved under a fresh campaign digest and a GitHub credential in
+  the deployment;
 - any **credential handoff** (issuing, rotating, or wiring tokens into the
   deployment);
 - any **GKE or secret inspection** (reading Kubernetes/GKE secrets, secret
@@ -209,3 +213,62 @@ actions/events/attention with a settled budget (cap 10000¢, available 9875¢
 after a 1.25 USD run). The negative probes prove every recorded GitHub
 request was GET, no credential reached any durable payload, and the
 uncertain dispatch was never re-POSTed across restart.
+
+## 10. Cross-model review gate (namphuongtran/warren#18)
+
+The review policy is opt-in per repository. With no `review` block in the
+repository policy, the tick has no `review` stage and nothing below runs.
+
+### Turning it on
+
+1. Add a `review` block to the repository-policy snapshot (see the
+   README). Pick a reviewer model from a different vendor than the
+   campaign's builder where you can: `provider`/`model` override the
+   `reviewer` built-in's default (the opus tier). The reviewer dispatches
+   on the `pi` runtime, so the warren deployment needs that provider's
+   credential.
+2. Import and approve a campaign bound to the new policy digest. The block
+   changes the digest, so no earlier approval carries over.
+3. Set `GITHUB_TOKEN` to a credential that can write commit statuses and
+   pull-request reviews on the upstream repository. The reviewer run never
+   receives it.
+4. On the upstream repository, add a branch-protection rule (or ruleset)
+   for the default branch that **requires the status check** named by
+   `statusContext` (`warren/review` unless you set another). That rule is
+   the merge gate. Warren's own auto-merge arming needs no change: it
+   cannot merge past a required check that is pending, failing, or absent.
+
+### What each status means
+
+| State on the head SHA | Meaning | Operator action |
+|---|---|---|
+| none | The head moved and no tick has reviewed it yet | Wait for the next tick |
+| `pending` | A reviewer run is working on this exact SHA | None |
+| `success` | The reviewer approved this SHA | None; a new push resets it |
+| `failure` | Changes requested; findings recorded for the fixer | Run the fixer (see Known limits) |
+| `failure` + `review_needs_human` attention | The fix loop hit `maxRounds` | Take the PR over by hand |
+| `error` + `review_failed` attention | The run failed, or ended without a valid verdict | Read the run; push again or fix by hand |
+
+A review runs once per SHA. A failed review is not retried on the same
+SHA; a new push gets a new review.
+
+### Known limits
+
+- The verdict rides the reviewer's transcript (`GET /runs/:id/events`)
+  until the structured handoff report (namphuongtran/warren#21) lands.
+- A new review waits while a build or fixer run for the work item is
+  live, because that run will move the head anyway.
+- Review actions (`review_run`, `review_status`, `review_comment`) are
+  journaled without a work item, so they never collide with the
+  one-active-attempt rule. Find them with `journal --campaign <id>`; the
+  review round ties each one back to its work item.
+- The fixer half of the loop is the follow-up coordinator
+  (`src/follow-up/coordinator.ts`, gated by `mutations.followUpPush`). The
+  review stage records `request_changes` findings as `review_feedback`
+  rows (category `warren_review`) for it, but the tick does not call the
+  follow-up coordinator yet. Until it does, a change request leaves a
+  `failure` status and the findings on the PR for a human or a separately
+  driven fixer run; `maxRounds` still bounds how many rounds are handed on.
+  Each finding row carries the `headSha` it was raised against. Whoever
+  wires the follow-up coordinator in must skip rows whose SHA is no longer
+  the head, or the fixer acts on stale findings.

@@ -23,9 +23,15 @@ import { ReadOnlyGithubClient } from "../github/client.ts";
 import { FakeGithubServer } from "../github/fake-server.ts";
 import { GithubPrAlreadyExistsError, type GithubPrCreateTransport } from "../github/pr-create.ts";
 import { FakeGithubPrCreator } from "../github/pr-create-fake.ts";
+import type {
+	CommitStatusIntent,
+	GithubReviewPublisherTransport,
+	PullRequestReviewIntent,
+} from "../github/review-publish.ts";
 import { PR_INTENT_ACTION_TYPE } from "../pr-intent/intender.ts";
 import { validateBotGrammar } from "../reconcile/bot-grammar.ts";
 import { CLAWSWEEPER_ACK_BODY, clawsweeperVerdictBody } from "../reconcile/clawsweeper-fixtures.ts";
+import { REVIEW_VERDICT_CLOSE, REVIEW_VERDICT_OPEN } from "../review/verdict.ts";
 import { CampaignStateStore } from "../store/state-store.ts";
 import { WarrenClient } from "../warren-client.ts";
 import { FakeWarrenServer } from "../warren-fake.ts";
@@ -34,6 +40,7 @@ import {
 	TickConcurrentError,
 	type TickDeps,
 	type TickOutcome,
+	type TickResult,
 	type TickStage,
 } from "./tick.ts";
 
@@ -198,6 +205,8 @@ function harness(options: {
 	botGrammar?: unknown;
 	/** Wire the Phase 2 creator so ticks execute journaled intents. */
 	prCreator?: GithubPrCreateTransport;
+	/** Wire the namphuongtran/warren#18 review publisher so ticks run the review stage. */
+	reviewPublisher?: GithubReviewPublisherTransport;
 }): TickHarness {
 	const clock = new FixedClock(NOW);
 	const ids = options.ids ?? new SequentialIdGenerator();
@@ -242,6 +251,9 @@ function harness(options: {
 			summaries,
 			...(options.botGrammar !== undefined ? { botGrammar: options.botGrammar } : {}),
 			...(options.prCreator !== undefined ? { prCreator: options.prCreator } : {}),
+			...(options.reviewPublisher !== undefined
+				? { reviewPublisher: options.reviewPublisher }
+				: {}),
 		},
 	};
 }
@@ -1044,5 +1056,132 @@ describe("runTick with a profile bot grammar (warren-8c83)", () => {
 		expect(detailOf(reconcileStage).newEvents).toBeGreaterThan(0);
 		expect(detailOf(reconcileStage).feedbackCreated).toBe(0);
 		expect(h.store.events.listFeedback(h.campaignId)).toHaveLength(0);
+	});
+});
+
+/** namphuongtran/warren#18: the cross-model review stage over the same tick. */
+describe("runTick review stage", () => {
+	const HEAD_SHA = "abc123abc123abc123abc123abc123abc123abc1";
+
+	function livePolicy(review: boolean): Record<string, unknown> {
+		const policy = basePolicy() as { mutations: Record<string, boolean> };
+		policy.mutations = { ...policy.mutations, createPullRequest: true };
+		return review
+			? {
+					...policy,
+					review: {
+						version: 1,
+						agent: "reviewer",
+						provider: "openai",
+						maxRounds: 2,
+						maxCostUsd: 1,
+					},
+				}
+			: policy;
+	}
+
+	class RecordingPublisher implements GithubReviewPublisherTransport {
+		readonly statuses: CommitStatusIntent[] = [];
+		readonly reviews: PullRequestReviewIntent[] = [];
+		async postCommitStatus(intent: CommitStatusIntent): Promise<{ statusId: number | null }> {
+			this.statuses.push(intent);
+			return { statusId: null };
+		}
+		async postPullRequestReview(
+			intent: PullRequestReviewIntent,
+		): Promise<{ reviewId: number | null }> {
+			this.reviews.push(intent);
+			return { reviewId: null };
+		}
+	}
+
+	/**
+	 * Drive the build run to terminal so the live creator opens upstream PR
+	 * #7 at HEAD_SHA, and return that tick (the first one a PR exists in).
+	 */
+	async function withOpenPr(h: TickHarness): Promise<TickResult> {
+		h.github.setResource("/repos/openclaw/openclaw/pulls/7", {
+			node_id: "PR_7",
+			number: 7,
+			state: "open",
+			draft: false,
+			title: "Flaky scheduler test (#812)",
+			user: { login: "warren-run-bot" },
+			head: { ref: BRANCH, sha: HEAD_SHA, repo: { full_name: "warren-run-bot/openclaw" } },
+			base: {
+				ref: "main",
+				sha: "def456def456def456def456def456def456def4",
+				repo: { full_name: "openclaw/openclaw" },
+			},
+			merged_at: null,
+			closed_at: null,
+			created_at: "2026-08-26T00:00:00.000Z",
+			updated_at: "2026-08-26T00:00:00.000Z",
+			html_url: "https://github.com/openclaw/openclaw/pull/7",
+		});
+		h.github.setResource("/repos/openclaw/openclaw/pulls/7/reviews", []);
+		h.github.setResource("/repos/openclaw/openclaw/issues/7/comments", []);
+		h.github.setResource("/repos/openclaw/openclaw/pulls/7/comments", []);
+		h.github.setResource(`/repos/openclaw/openclaw/commits/${HEAD_SHA}/check-runs`, {
+			total_count: 0,
+			check_runs: [],
+		});
+		h.github.setResource(`/repos/openclaw/openclaw/commits/${HEAD_SHA}/status`, {
+			state: "pending",
+			total_count: 0,
+			sha: HEAD_SHA,
+			statuses: [],
+		});
+		const tick1 = await runTick(h.deps, h.campaignId);
+		h.warren.setRunState(runIdOf(tick1), { state: "succeeded", costUsd: 1, branch: BRANCH });
+		const tick2 = await runTick(h.deps, h.campaignId);
+		expect(stagesOf(tick2.stages)).toContain("pr_execute:created");
+		return tick2;
+	}
+
+	test("adds no review stage when the policy has no review block", async () => {
+		const h = harness({
+			policy: livePolicy(false),
+			prCreator: new FakeGithubPrCreator({ firstPrNumber: 7 }),
+		});
+		const tick = await withOpenPr(h);
+		expect(tick.stages.some((outcome) => outcome.stage === "review")).toBe(false);
+	});
+
+	test("reviews the open PR head and publishes the verdict on that SHA", async () => {
+		const publisher = new RecordingPublisher();
+		const h = harness({
+			policy: livePolicy(true),
+			prCreator: new FakeGithubPrCreator({ firstPrNumber: 7 }),
+			reviewPublisher: publisher,
+		});
+
+		const dispatched = requireStage(await withOpenPr(h), "review");
+		expect(dispatched.status).toBe("dispatched");
+		const runId = (dispatched.detail as { runId: string }).runId;
+		const run = h.warren.getRunRow(runId);
+		expect(run?.agentName).toBe("reviewer");
+		expect(run?.projectId).toBe("openclaw-contrib");
+		expect(run?.baseCommit).toBe(HEAD_SHA);
+
+		h.warren.setRunEvents(runId, [
+			{
+				seq: 1,
+				kind: "text",
+				stream: "stdout",
+				payload: {
+					text: `${REVIEW_VERDICT_OPEN}{"verdict":"approve","summary":"Fine.","findings":[]}${REVIEW_VERDICT_CLOSE}`,
+				},
+			},
+		]);
+		h.warren.setRunState(runId, { state: "succeeded", costUsd: 0.2 });
+
+		const approved = requireStage(await runTick(h.deps, h.campaignId), "review");
+		expect(approved.status).toBe("approved");
+		expect(publisher.statuses.map((s) => [s.url, s.body.state])).toEqual([
+			[`/repos/openclaw/openclaw/statuses/${HEAD_SHA}`, "pending"],
+			[`/repos/openclaw/openclaw/statuses/${HEAD_SHA}`, "success"],
+		]);
+		expect(publisher.reviews).toHaveLength(1);
 	});
 });

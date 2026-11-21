@@ -6,8 +6,9 @@
  * file, and the Warren base URL come from flags or their named environment
  * variables; the Warren credential comes only from `WARREN_API_TOKEN` and
  * the optional GitHub credential only from `GITHUB_TOKEN`. There is no live
- * mode: the composed tick is dry-run by construction, `--dry-run` is the
- * default and only behavior, and a `--live` flag is refused as a usage error.
+ * flag: `--live` is refused as a usage error. A GitHub write happens only
+ * when the approved policy file itself enables it (`createPullRequest`, or a
+ * `review` block for namphuongtran/warren#18) and a credential is present.
  */
 import type { Clock, IdGenerator } from "../../clock.ts";
 import { ConfigError } from "../../errors.ts";
@@ -15,8 +16,9 @@ import { ReadOnlyGithubClient } from "../../github/client.ts";
 import type { FetchLike as GithubFetchLike } from "../../github/http-transport.ts";
 import { BunFetchGithubTransport } from "../../github/http-transport.ts";
 import { BunFetchGithubPrCreator } from "../../github/pr-create.ts";
+import { BunFetchGithubReviewPublisher } from "../../github/review-publish.ts";
 import { validateBotGrammar } from "../../reconcile/bot-grammar.ts";
-import { validateRepositoryPolicy } from "../../repository-policy.ts";
+import { type RepositoryPolicy, validateRepositoryPolicy } from "../../repository-policy.ts";
 import { runTick } from "../../tick/tick.ts";
 import type { FetchLike } from "../../warren-client.ts";
 import { WarrenClient } from "../../warren-client.ts";
@@ -80,7 +82,9 @@ export async function runTickCommand(
 			fetchImpl: deps.githubFetch,
 		});
 		const github = new ReadOnlyGithubClient(transport);
-		const prCreator = maybeBuildPrCreator(config, deps, policy);
+		const writerPolicy = credentialedPolicy(config, deps, policy);
+		const prCreator = maybeBuildPrCreator(config, deps, writerPolicy);
+		const reviewPublisher = maybeBuildReviewPublisher(config, deps, writerPolicy);
 		const result = await runTick(
 			{
 				store,
@@ -92,6 +96,7 @@ export async function runTickCommand(
 				summaries,
 				...(botGrammar !== undefined ? { botGrammar } : {}),
 				...(prCreator !== undefined ? { prCreator } : {}),
+				...(reviewPublisher !== undefined ? { reviewPublisher } : {}),
 			},
 			campaignId,
 		);
@@ -102,34 +107,66 @@ export async function runTickCommand(
 }
 
 /**
+ * The validated policy, when a GitHub credential exists to act on it. Every
+ * policy-gated writer starts here: no credential or an invalid policy means
+ * no writer at all (an invalid policy then fails the tick at admission with
+ * its own precise error).
+ */
+function credentialedPolicy(
+	config: CliConfig,
+	deps: TickCommandDeps,
+	policy: unknown,
+): RepositoryPolicy | undefined {
+	if (config.githubToken === null || config.githubToken.length === 0) {
+		return undefined;
+	}
+	try {
+		return validateRepositoryPolicy(policy, { nowMs: deps.clock.nowMs() }).policy;
+	} catch {
+		return undefined;
+	}
+}
+
+/**
  * The Phase 2 gate (warren-84da): the PR creator exists ONLY when the
  * validated repository policy enables `mutations.createPullRequest` AND a
  * GitHub credential is present. There is deliberately no flag for this —
  * the capability comes from the approved policy file, and `--live` stays a
- * usage error. An invalid policy fails the tick later, at admission, with
- * its own precise error; here it simply means no creator.
+ * usage error.
  */
 function maybeBuildPrCreator(
 	config: CliConfig,
 	deps: TickCommandDeps,
-	policy: unknown,
+	policy: RepositoryPolicy | undefined,
 ): BunFetchGithubPrCreator | undefined {
-	if (config.githubToken === null || config.githubToken.length === 0) {
-		return undefined;
-	}
-	let validated: ReturnType<typeof validateRepositoryPolicy>;
-	try {
-		validated = validateRepositoryPolicy(policy, { nowMs: deps.clock.nowMs() });
-	} catch {
-		return undefined;
-	}
-	if (validated.policy.mutations.createPullRequest !== true) {
+	if (policy === undefined || policy.mutations.createPullRequest !== true) {
 		return undefined;
 	}
 	return new BunFetchGithubPrCreator({
-		policy: validated.policy,
+		policy,
 		baseUrl: config.githubBaseUrl ?? undefined,
-		token: config.githubToken,
+		token: config.githubToken ?? "",
+		fetchImpl: deps.githubFetch,
+	});
+}
+
+/**
+ * The namphuongtran/warren#18 gate: the review publisher exists ONLY when the validated policy
+ * carries a `review` block AND a GitHub credential is present. Absent block
+ * means the review stage never runs, off and silent.
+ */
+function maybeBuildReviewPublisher(
+	config: CliConfig,
+	deps: TickCommandDeps,
+	policy: RepositoryPolicy | undefined,
+): BunFetchGithubReviewPublisher | undefined {
+	if (policy === undefined || policy.review === null) {
+		return undefined;
+	}
+	return new BunFetchGithubReviewPublisher({
+		policy,
+		baseUrl: config.githubBaseUrl ?? undefined,
+		token: config.githubToken ?? "",
 		fetchImpl: deps.githubFetch,
 	});
 }

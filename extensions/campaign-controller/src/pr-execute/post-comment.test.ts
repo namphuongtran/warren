@@ -47,6 +47,7 @@ function basePolicy(overrides: Partial<RepositoryPolicy> = {}): RepositoryPolicy
 		agentGuidance: null,
 		prBodyContract: null,
 		commentTemplates: null,
+		review: null,
 		evidenceTiers: null,
 		allowedWorkTypes: ["bug-fix"],
 		forbiddenPaths: ["SECURITY.md"],

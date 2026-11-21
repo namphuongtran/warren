@@ -19,6 +19,7 @@ import {
 	PI_BUILTIN,
 	PLANNER_BUILTIN,
 	PR_FIXER_BUILTIN,
+	REVIEWER_BUILTIN,
 	readAgentSource,
 	seedBuiltinAgents,
 	stampAgentSource,
@@ -36,6 +37,24 @@ describe("BUILTIN_AGENTS", () => {
 		expect(BUILTIN_AGENT_NAMES.has("leveret")).toBe(false);
 		expect(BUILTIN_AGENT_NAMES.has("healer")).toBe(true);
 		expect(BUILTIN_AGENT_NAMES.has("codex")).toBe(true);
+		expect(BUILTIN_AGENT_NAMES.has("reviewer")).toBe(true);
+	});
+
+	// namphuongtran/warren#18: the controller parses this exact block from the
+	// reviewer's final message (extensions/campaign-controller/src/review/verdict.ts).
+	test("reviewer is read-only and ends with the tagged verdict block (namphuongtran/warren#18)", () => {
+		const system = REVIEWER_BUILTIN.sections.system ?? "";
+		expect(system).toContain("<warren-review-verdict>");
+		expect(system).toContain("</warren-review-verdict>");
+		expect(system).toContain('"approve"');
+		expect(system).toContain('"request_changes"');
+		expect(system).toContain("Do not edit, create, or delete files");
+		expect(system).toContain("Do not run `git commit`");
+		expect(system).not.toContain("$WARREN_QUALITY_GATE");
+		const gated = Object.values(REVIEWER_BUILTIN.gatedPrompts ?? {}).join("\n");
+		expect(gated).not.toContain("sd create");
+		expect(gated).not.toContain("sd close");
+		expect(gated).toContain("Do not run `ml record`");
 	});
 
 	test("codex dispatches onto the codex runtime with an OpenAI model warren can price (namphuongtran/warren#17)", () => {

@@ -598,6 +598,15 @@ mutation digest, resulting Warren run/commit, and authoritative post-write
 state. A lost mutation response enters `uncertain`; it is re-read before any
 retry.
 
+**Amended for namphuongtran/warren#18:** the cross-model review gate is a
+controller policy, not a core change. An opt-in repository-policy
+`review` block makes the controller dispatch a read-only `reviewer` run
+pinned to each campaign PR's head SHA, publish its verdict as a commit
+status on that SHA plus a COMMENT review, and feed `request_changes`
+findings to the follow-up coordinator for at most `maxRounds` fix rounds.
+Forge branch protection requiring the status is the merge gate. The
+operator guide is `extensions/campaign-controller/RUNBOOK.md` §10.
+
 ### 10.2 Issue discovery and claiming
 
 Discovery follows the same ladder. First it lists candidates read-only from an

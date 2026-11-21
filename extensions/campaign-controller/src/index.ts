@@ -126,6 +126,16 @@ export {
 	renderCrossForkPullRequestIntent,
 } from "./github/pr-request.ts";
 export { REDACTED, redactHeaders, redactText, redactValue } from "./github/redact.ts";
+export {
+	BunFetchGithubReviewPublisher,
+	type CommitStatusIntent,
+	type CommitStatusState,
+	type GithubReviewPublisherTransport,
+	type PullRequestReviewIntent,
+	type ReviewPublishIntent,
+	renderCommitStatusIntent,
+	renderPullRequestReviewIntent,
+} from "./github/review-publish.ts";
 export type {
 	GithubCheckRunSnapshot,
 	GithubCombinedStatusSnapshot,
@@ -258,22 +268,49 @@ export {
 	COMMENT_PLACEHOLDERS,
 	type CommentPlaceholder,
 	type CommentTemplatesPolicy,
+	DEFAULT_REVIEW_STATUS_CONTEXT,
 	MAX_STALENESS_DAYS,
 	type PolicySource,
 	type PolicyValidationOptions,
 	REPOSITORY_POLICY_SCHEMA_VERSION,
 	type RepositoryPolicy,
+	type ReviewPolicy,
 	type ValidatedRepositoryPolicy,
 	validateCommentTemplates,
 	validateRepositoryPolicy,
 	WORK_TYPES,
 	type WorkType,
 } from "./repository-policy.ts";
+export {
+	REVIEW_COMMENT_ACTION_TYPE,
+	REVIEW_FAILED_REASON,
+	REVIEW_FEEDBACK_CATEGORY,
+	REVIEW_NEEDS_HUMAN_REASON,
+	REVIEW_RUN_ACTION_TYPE,
+	REVIEW_STATUS_ACTION_TYPE,
+	type ReviewContext,
+	ReviewCoordinator,
+	type ReviewCoordinatorDeps,
+	type ReviewStepOutcome,
+	type ReviewStepStatus,
+	type ReviewWarrenClient,
+} from "./review/coordinator.ts";
+export { renderReviewComment, renderReviewPrompt } from "./review/render.ts";
+export {
+	extractReviewVerdict,
+	parseReviewVerdict,
+	REVIEW_VERDICT_CLOSE,
+	REVIEW_VERDICT_OPEN,
+	type ReviewFinding,
+	type ReviewVerdict,
+	type VerdictParseResult,
+} from "./review/verdict.ts";
 export { ActionStore, type SettleActionInput } from "./store/actions.ts";
 export { BudgetStore } from "./store/budget.ts";
 export { CampaignStore } from "./store/campaigns.ts";
 export { EventStore } from "./store/events.ts";
 export { LeaseStore } from "./store/leases.ts";
+export { ReviewStore } from "./store/reviews.ts";
 export { MIGRATIONS } from "./store/schema.ts";
 export {
 	CampaignStateStore,
@@ -293,6 +330,8 @@ export {
 	type PrIdentityRow,
 	type ReservationRow,
 	type ReservationState,
+	type ReviewRoundRow,
+	type ReviewRoundState,
 	type RunLinkRow,
 	TERMINAL_ACTION_STATES,
 	type WorkItemRow,

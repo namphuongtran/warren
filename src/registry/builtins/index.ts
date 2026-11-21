@@ -28,6 +28,7 @@ import { NIGHTWATCH_BUILTIN } from "./nightwatch.ts";
 import { PI_BUILTIN } from "./pi.ts";
 import { PLANNER_BUILTIN } from "./planner.ts";
 import { PR_FIXER_BUILTIN } from "./pr-fixer.ts";
+import { REVIEWER_BUILTIN } from "./reviewer.ts";
 
 export const BUILTIN_AGENT_SOURCE = "builtin" as const;
 export const LIBRARY_AGENT_SOURCE = "library" as const;
@@ -51,6 +52,7 @@ export const BUILTIN_AGENTS: readonly AgentDefinition[] = [
 	BUGWATCH_BUILTIN,
 	PR_FIXER_BUILTIN,
 	HEALER_BUILTIN,
+	REVIEWER_BUILTIN,
 ];
 
 export const BUILTIN_AGENT_NAMES: ReadonlySet<string> = new Set(BUILTIN_AGENTS.map((a) => a.name));
@@ -197,4 +199,5 @@ export {
 	PI_BUILTIN,
 	PLANNER_BUILTIN,
 	PR_FIXER_BUILTIN,
+	REVIEWER_BUILTIN,
 };

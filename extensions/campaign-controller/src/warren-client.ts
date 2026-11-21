@@ -86,6 +86,8 @@ export interface WarrenDispatchInput {
 	maxCostUsd?: number;
 	/** Dispatch onto this existing branch instead of a fresh workspace branch (warren-326f). */
 	existingBranch?: string;
+	/** Cut the workspace at this exact commit SHA (warren-aaf7); a reviewer pins the PR head. */
+	baseCommit?: string;
 	/** Required, stable, and caller-owned; a repeat delivery must reuse it. */
 	idempotencyKey: string;
 }
@@ -334,6 +336,7 @@ export class WarrenClient {
 			...(input.model !== undefined ? { modelOverride: input.model } : {}),
 			...(input.maxCostUsd !== undefined ? { maxCostUsd: input.maxCostUsd } : {}),
 			...(input.existingBranch !== undefined ? { existingBranch: input.existingBranch } : {}),
+			...(input.baseCommit !== undefined ? { baseCommit: input.baseCommit } : {}),
 		});
 		let res: Response;
 		try {
@@ -372,36 +375,79 @@ export class WarrenClient {
 
 	/** Fetch run detail. Safe read: retries 429/5xx/network honoring Retry-After. */
 	async getRun(id: string): Promise<WarrenRunView> {
+		return this.read(`/runs/${encodeURIComponent(id)}`, `GET /runs/${id}`, async (res) =>
+			parseRunEnvelope(await this.safeJson(res)),
+		);
+	}
+
+	/**
+	 * One bounded page of a run's events (`GET /runs/:id/events?since&limit`,
+	 * NDJSON, `since` exclusive). Safe read, retried like `getRun`. Lines are
+	 * returned as parsed JSON objects; a non-object line is a malformed page.
+	 */
+	async readRunEvents(
+		id: string,
+		page: { since: number; limit: number },
+	): Promise<Array<Record<string, unknown>>> {
+		const path = `/runs/${encodeURIComponent(id)}/events?since=${page.since}&limit=${page.limit}`;
+		return this.read(path, `GET /runs/${id}/events`, async (res) => {
+			const events: Array<Record<string, unknown>> = [];
+			for (const line of (await res.text()).split("\n")) {
+				if (line.trim() === "") continue;
+				let parsed: unknown;
+				try {
+					parsed = JSON.parse(line);
+				} catch {
+					throw new WarrenEnvelopeError("events page carries a non-JSON line");
+				}
+				if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+					throw new WarrenEnvelopeError("events page carries a non-object line");
+				}
+				events.push(parsed as Record<string, unknown>);
+			}
+			return events;
+		});
+	}
+
+	/** A safe GET: retries 429/5xx/network honoring Retry-After, bounded. */
+	private async read<T>(
+		path: string,
+		label: string,
+		parse: (res: Response) => Promise<T>,
+	): Promise<T> {
 		let attempt = 0;
 		for (;;) {
-			const outcome = await this.attemptGetRun(id);
-			if (outcome.run !== undefined) {
-				return outcome.run;
+			const outcome = await this.attemptRead(path, label);
+			if (outcome.res !== undefined) {
+				return parse(outcome.res);
 			}
 			if (!outcome.retryable || attempt >= this.maxReadRetries) {
-				throw outcome.failure ?? new WarrenUnreachableError(`GET /runs/${id} failed`);
+				throw outcome.failure ?? new WarrenUnreachableError(`${label} failed`);
 			}
 			await this.backOff(outcome.retryAfterMs ?? null, attempt);
 			attempt += 1;
 		}
 	}
 
-	/** One read attempt: either a parsed run or the failure the retry loop acts on. */
-	private async attemptGetRun(id: string): Promise<{
-		run?: WarrenRunView;
+	/** One read attempt: either a 2xx response or the failure the retry loop acts on. */
+	private async attemptRead(
+		path: string,
+		label: string,
+	): Promise<{
+		res?: Response;
 		failure?: CampaignControllerError;
 		retryAfterMs?: number | null;
 		retryable: boolean;
 	}> {
 		let res: Response;
 		try {
-			res = await this.fetchFn(`${this.baseUrl}/runs/${encodeURIComponent(id)}`, {
+			res = await this.fetchFn(`${this.baseUrl}${path}`, {
 				method: "GET",
 				headers: this.headers(),
 			});
 		} catch (cause) {
 			return {
-				failure: new WarrenUnreachableError(`GET /runs/${id} failed`, { cause }),
+				failure: new WarrenUnreachableError(`${label} failed`, { cause }),
 				retryable: true,
 			};
 		}
@@ -421,11 +467,11 @@ export class WarrenClient {
 		if (res.status < 200 || res.status >= 300) {
 			const err = await readErrorEnvelope(res);
 			return {
-				failure: new WarrenRejectedError(res.status, err.code, `GET run rejected: ${err.message}`),
+				failure: new WarrenRejectedError(res.status, err.code, `${label} rejected: ${err.message}`),
 				retryable: false,
 			};
 		}
-		return { run: parseRunEnvelope(await this.safeJson(res)), retryable: false };
+		return { res, retryable: false };
 	}
 
 	private async backOff(retryAfterMs: number | null, attempt: number): Promise<void> {

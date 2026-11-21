@@ -247,3 +247,34 @@ export interface LeaseRow {
 	readonly acquiredAtMs: number;
 	readonly expiresAtMs: number;
 }
+
+/**
+ * Lifecycle of one cross-model review round (namphuongtran/warren#18). `dispatched` is the only
+ * live state; every other state is settled. `superseded` means the PR head
+ * moved before the verdict landed, so the verdict is void.
+ */
+export type ReviewRoundState =
+	| "dispatched"
+	| "approved"
+	| "changes_requested"
+	| "needs_human"
+	| "failed"
+	| "superseded";
+
+/** One reviewer run bound to one PR head SHA (namphuongtran/warren#18). */
+export interface ReviewRoundRow {
+	readonly id: string;
+	readonly campaignId: string;
+	readonly workItemId: string;
+	readonly prNumber: number;
+	readonly headSha: string;
+	/** 1-based count of reviews on this work item, superseded ones included. */
+	readonly round: number;
+	readonly actionId: string | null;
+	readonly runId: string | null;
+	readonly state: ReviewRoundState;
+	readonly verdictJson: string | null;
+	readonly failureReason: string | null;
+	readonly createdAtMs: number;
+	readonly updatedAtMs: number;
+}

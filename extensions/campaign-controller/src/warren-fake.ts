@@ -33,6 +33,8 @@ export interface FakeRunRow {
 	provider: string | null;
 	model: string | null;
 	maxCostUsd: number | null;
+	/** The `baseCommit` the dispatch pinned, if any (namphuongtran/warren#18 reviewer runs). */
+	baseCommit: string | null;
 	state: string;
 	failureReason: string | null;
 	ref: string | null;
@@ -82,7 +84,10 @@ function recordRequest(
 /** Required dispatch body fields, validated the way warren's handler does. */
 function readDispatchFields(
 	body: unknown,
-): Pick<FakeRunRow, "agentName" | "projectId" | "prompt" | "provider" | "model" | "maxCostUsd"> {
+): Pick<
+	FakeRunRow,
+	"agentName" | "projectId" | "prompt" | "provider" | "model" | "maxCostUsd" | "baseCommit"
+> {
 	if (typeof body !== "object" || body === null) {
 		throw new Error("fake warren: dispatch body must be an object");
 	}
@@ -101,6 +106,7 @@ function readDispatchFields(
 		provider: typeof b.providerOverride === "string" ? b.providerOverride : null,
 		model: typeof b.modelOverride === "string" ? b.modelOverride : null,
 		maxCostUsd: typeof b.maxCostUsd === "number" ? b.maxCostUsd : null,
+		baseCommit: typeof b.baseCommit === "string" ? b.baseCommit : null,
 	};
 }
 
@@ -112,6 +118,7 @@ export class FakeWarrenServer {
 	private readonly token: string;
 	private readonly idGenerator: IdGenerator;
 	private readonly runs = new Map<string, FakeRunRow>();
+	private readonly runEvents = new Map<string, Array<Record<string, unknown>>>();
 	/** In-memory idempotency store, exactly as non-durable as warren's. */
 	private readonly idempotency = new Map<string, string>();
 	private readonly requests: RecordedRequest[] = [];
@@ -148,11 +155,11 @@ export class FakeWarrenServer {
 			}
 			throw new Error("simulated connection reset after the request was accepted");
 		}
-		return this.route(req);
+		return this.route(req, new URL(url));
 	};
 
 	/** Route one authenticated, non-dropped request. */
-	private route(req: RecordedRequest): Response {
+	private route(req: RecordedRequest, url: URL): Response {
 		if (req.method === "GET" && this.rateLimitedReadsRemaining > 0) {
 			this.rateLimitedReadsRemaining -= 1;
 			return this.rateLimitResponse();
@@ -168,6 +175,10 @@ export class FakeWarrenServer {
 			});
 		}
 		if (req.method === "GET") {
+			const eventsResponse = this.runEventsResponse(req.path, url);
+			if (eventsResponse !== undefined) {
+				return eventsResponse;
+			}
 			const runResponse = this.runDetailResponse(req.path);
 			if (runResponse !== undefined) {
 				return runResponse;
@@ -201,6 +212,36 @@ export class FakeWarrenServer {
 			return errorResponse(404, "not_found", "run not found");
 		}
 		return jsonResponse(200, { run });
+	}
+
+	/**
+	 * `GET /runs/:id/events?since&limit`: NDJSON, `since` exclusive on
+	 * `seq`, at most `limit` lines — the bounded read warren serves.
+	 */
+	private runEventsResponse(path: string, url: URL): Response | undefined {
+		const match = /^\/runs\/([^/]+)\/events$/.exec(path);
+		if (match === null) {
+			return undefined;
+		}
+		const id = decodeURIComponent(match[1] ?? "");
+		if (!this.runs.has(id)) {
+			return errorResponse(404, "not_found", "run not found");
+		}
+		const since = Number.parseInt(url.searchParams.get("since") ?? "0", 10);
+		const limit = Number.parseInt(url.searchParams.get("limit") ?? "1000", 10);
+		const page = (this.runEvents.get(id) ?? [])
+			.filter((event) => typeof event.seq === "number" && event.seq > since)
+			.slice(0, limit);
+		const body = page.map((event) => `${JSON.stringify(event)}\n`).join("");
+		return new Response(body, { status: 200, headers: { "Content-Type": "application/x-ndjson" } });
+	}
+
+	/** Seed the event stream a run serves (each event needs a numeric `seq`). */
+	setRunEvents(id: string, events: Array<Record<string, unknown>>): void {
+		if (!this.runs.has(id)) {
+			throw new Error(`fake warren has no run ${id}`);
+		}
+		this.runEvents.set(id, [...events]);
 	}
 
 	/** Recorded requests, oldest first. */

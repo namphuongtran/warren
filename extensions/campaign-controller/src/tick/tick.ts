@@ -24,6 +24,9 @@
  *    response-loss discipline: uncertain settles, never re-POSTs.
  * 5. **read-only GitHub reconcile** — every PR identity with a known
  *    upstream PR number is reconciled read-only and deduplicated.
+ * 5b. **review** (namphuongtran/warren#18, opt-in) — with a policy `review` block and a wired
+ *    review publisher, each open PR head is reviewed by a read-only
+ *    reviewer run and the verdict is published as a commit status.
  * 6. **settle/report** — campaign status settles, and the tick returns the
  *    stage trace plus a budget/work-item/attention report.
  *
@@ -38,6 +41,7 @@ import { WARREN_DISPATCH_ACTION_TYPE, WarrenDispatcher } from "../dispatch/dispa
 import { CampaignControllerError, StateError, ValidationError } from "../errors.ts";
 import type { ReadOnlyGithubClient } from "../github/client.ts";
 import type { GithubPrCreateTransport } from "../github/pr-create.ts";
+import type { GithubReviewPublisherTransport } from "../github/review-publish.ts";
 import type { GithubIssueSnapshot } from "../github/types.ts";
 import type { CampaignManifest } from "../manifest.ts";
 import { executeJournaledPrIntent } from "../pr-execute/executor.ts";
@@ -57,6 +61,7 @@ import { composeDispatchPrompt, validateRepositoryPolicy } from "../repository-p
 import type { CampaignStateStore } from "../store/state-store.ts";
 import type { CampaignRow, CampaignStatus, WorkItemRow } from "../store/types.ts";
 import { runPushedBranch, type WarrenClient } from "../warren-client.ts";
+import { runReviewStage } from "./review-stage.ts";
 
 /** A concurrent tick holds the campaign lease. */
 export class TickConcurrentError extends CampaignControllerError {
@@ -95,6 +100,7 @@ export type TickStage =
 	| "pr_intent"
 	| "pr_execute"
 	| "github_reconcile"
+	| "review"
 	| "settle";
 
 /** One stage's outcome. All fields are JSON-safe and secret-free. */
@@ -124,9 +130,10 @@ export interface TickReport {
 export interface TickResult {
 	readonly campaignId: string;
 	/**
-	 * False only when a policy-gated PR creator is wired (Phase 2,
-	 * warren-84da): the one mutation the tick may then perform is executing
-	 * a journaled cross-fork PR intent. Everything else stays read-only.
+	 * False only when a policy-gated writer is wired: the PR creator (Phase 2,
+	 * warren-84da), which executes a journaled cross-fork PR intent, or the
+	 * review publisher (namphuongtran/warren#18), which posts review statuses and comments.
+	 * Everything else stays read-only.
 	 */
 	readonly dryRun: boolean;
 	readonly stages: readonly TickOutcome[];
@@ -161,6 +168,12 @@ export interface TickDeps {
 	 * means the tick is dry-run by construction, exactly as V0 shipped.
 	 */
 	readonly prCreator?: GithubPrCreateTransport;
+	/**
+	 * The cross-model review publisher (namphuongtran/warren#18). Wired only when the validated
+	 * policy carries a `review` block AND a GitHub credential exists; absent
+	 * means the review stage does not run at all.
+	 */
+	readonly reviewPublisher?: GithubReviewPublisherTransport;
 	/** Tick lease TTL. Default 60 000 ms. */
 	readonly leaseTtlMs?: number;
 }
@@ -261,10 +274,11 @@ async function runLeasedTick(
 		}
 	}
 	stages.push(...(await reconcileUpstreamPrs(deps, campaign)));
+	stages.push(...(await reviewOpenPrs(deps, campaign, manifest)));
 	const campaignStatus = settleCampaign(store, campaign.id);
 	return {
 		campaignId: campaign.id,
-		dryRun: deps.prCreator === undefined,
+		dryRun: deps.prCreator === undefined && deps.reviewPublisher === undefined,
 		stages,
 		restart: {
 			expiredLeases: restart.expiredLeases,
@@ -681,6 +695,36 @@ async function reconcileUpstreamPrs(deps: TickDeps, campaign: CampaignRow): Prom
 		});
 	}
 	return outcomes;
+}
+
+/**
+ * Stage 5b (namphuongtran/warren#18): the cross-model review of every open PR head. Absent —
+ * not even a "none" outcome — unless the policy has a `review` block and a
+ * publisher is wired, so a repository without the policy sees no change.
+ */
+async function reviewOpenPrs(
+	deps: TickDeps,
+	campaign: CampaignRow,
+	manifest: CampaignManifest,
+): Promise<TickOutcome[]> {
+	if (deps.reviewPublisher === undefined) {
+		return [];
+	}
+	const { policy } = validateRepositoryPolicy(deps.policy, { nowMs: deps.clock.nowMs() });
+	if (policy.review === null) {
+		return [];
+	}
+	return runReviewStage(
+		{
+			store: deps.store,
+			warrenClient: deps.warrenClient,
+			github: deps.github,
+			publisher: deps.reviewPublisher,
+			policy,
+		},
+		campaign,
+		manifest,
+	);
 }
 
 /** Stage 6: settle campaign status from work-item states. */

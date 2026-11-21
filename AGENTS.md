@@ -39,9 +39,10 @@ as opt-in features, not required infrastructure.
   [docs/design/issue-tracker.md](docs/design/issue-tracker.md).
 
 The agent registry is entirely inline. `BUILTIN_AGENTS`
-(`src/registry/builtins/`) ships eight agents and boot seeds them into
+(`src/registry/builtins/`) ships nine agents and boot seeds them into
 the agents table on every start: `claude-code`, `pi`, `codex`,
-`planner`, `nightwatch`, `bugwatch`, `pr-fixer`, and `healer`. There is
+`planner`, `nightwatch`, `bugwatch`, `pr-fixer`, `healer`, and
+`reviewer`. There is
 no external agent library. `GET /agents` still reports
 `source: "builtin" | "library"` provenance. The `library` arm survives
 only for legacy rows.
