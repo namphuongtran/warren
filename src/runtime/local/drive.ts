@@ -44,7 +44,11 @@ import { extractAgentEventEnvelope } from "../../core/event-envelope.ts";
 import type { ProxyHandle, StartProxyOptions } from "../../sandbox/proxy-server.ts";
 import { runSandboxed } from "../../sandbox/sandbox.ts";
 import type { SandboxProfile, SpawnCommand, SpawnResult } from "../../sandbox/types.ts";
-import type { AdapterRuntimeEvent, AgentRuntimeAdapter } from "../adapters/index.ts";
+import type {
+	AdapterParseContext,
+	AdapterRuntimeEvent,
+	AgentRuntimeAdapter,
+} from "../adapters/index.ts";
 import type { AgentFrontmatter } from "../adapters/types.ts";
 import type { RunSpec } from "../contract.ts";
 import {
@@ -181,7 +185,7 @@ async function spawnAndPump(
 	} catch {
 		// Best-effort observability; a writer fault must not kill the drive loop.
 	}
-	const { runtime, runProfile, runCommand, proxy, useStdinHold } = prepared;
+	const { runtime, runProfile, runCommand, proxy, useStdinHold, frontmatter } = prepared;
 
 	// Re-check after async setup — cancel may have landed mid-prepare.
 	if (cancelWon(store, record)) {
@@ -207,7 +211,14 @@ async function spawnAndPump(
 	const stdin = createStdinController(runtime, proc, useStdinHold);
 	const midRun = startMidRunSteering(store, record, runtime, proc, stdin, deps);
 	try {
-		const outcome = await pumpToExit(store, record, runtime, proc, stdin, deps);
+		const outcome = await pumpToExit(
+			store,
+			record,
+			{ runtime, parse: { frontmatter } },
+			proc,
+			stdin,
+			deps,
+		);
 		terminalize(store, record, runProfile, proc, outcome, deps);
 		log(`local-drive: '${runtime.runtimeId}' exited ${outcome.exitCode}`);
 	} finally {
@@ -232,17 +243,18 @@ interface PumpOutcome {
 async function pumpToExit(
 	store: LocalRunStore,
 	record: LocalRunRecord,
-	runtime: AgentRuntimeAdapter,
+	harness: { readonly runtime: AgentRuntimeAdapter; readonly parse: AdapterParseContext },
 	proc: SpawnResult,
 	stdin: StdinController,
 	deps: DriveDeps,
 ): Promise<PumpOutcome> {
+	const { runtime, parse } = harness;
 	const now = deps.now ?? (() => new Date());
 	let sawTerminalEnvelope = false;
 	const pumpStdout = async (): Promise<void> => {
 		for await (const line of readLines(proc.stdout)) {
 			if (line.length === 0) continue;
-			const events = runtime.parseEvents?.(line) ?? [];
+			const events = runtime.parseEvents?.(line, parse) ?? [];
 			for (const ev of events) {
 				store.appendEvent(record, { kind: ev.kind, stream: ev.stream, payload: ev.payload }, now);
 				if (isTerminalEnvelope(ev)) sawTerminalEnvelope = true;

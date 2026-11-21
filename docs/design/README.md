@@ -57,6 +57,7 @@ This table is the complete inventory. `Approved` means a design is coherent enou
 | [`.warren/` configuration](./warren-config.md) | `contract` | `approved` | `shipped` | 2026-08-01 |
 | [Kubernetes migration](./k8s-migration.md) | `architecture-decision` | `approved` | `shipped` | 2026-07-07 |
 | [Claude Code model selection and credential isolation](./claude-code-model-and-auth.md) | `architecture-decision` | `approved` | `shipped` | 2026-11-21 |
+| [Codex CLI harness adapter](./runtime-codex-adapter.md) | `architecture-decision` | `approved` | `mixed` | 2026-11-21 |
 | [2026-07-29 planning-session record](./2026-07-29-planning-session-record.md) | `historical-evidence` | `approved` | `not-applicable` | 2026-07-31 |
 | [Architecture overview (C4 + flows)](./architecture-overview.md) | `historical-evidence` | `approved` | `not-applicable` | 2026-11-20 |
 <!-- design-catalog:end -->
@@ -95,7 +96,7 @@ A shipped record preserves rationale and contract history. Its `Current truth` f
 | 2026-09-24 | Team identity, grants, and brokered credentials |
 | 2026-10-08 | Judge on-demand evaluation; UI design review rubric; UI visual gate and baseline approval |
 | 2026-11-20 | Agent Substrate integration assessment; Architecture overview (C4 + flows) |
-| 2026-11-21 | Claude Code model selection and credential isolation |
+| 2026-11-21 | Claude Code model selection and credential isolation; Codex CLI harness adapter |
 
 ## Adding or changing a record
 

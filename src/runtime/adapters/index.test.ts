@@ -48,11 +48,13 @@ describe("what the seam must not lose (warren-c80e)", () => {
 		expect(harnessStatePrefixes()).toContain(".claude/");
 	});
 
-	test("the provider-error union is exactly the pair the classifier hardcoded", () => {
-		// warren-edc3 read `turn_end` and `agent_end` and nothing else. This
-		// move is behavior-neutral only while the union stays that set, so a
-		// future adapter adding a third type has to come here and say why.
-		expect([...providerErrorEnvelopeTypes()].sort()).toEqual(["agent_end", "turn_end"]);
+	test("the provider-error union is pi's pair plus the shared result envelope", () => {
+		// warren-edc3 read `turn_end` and `agent_end` and nothing else. A new
+		// type has to come here and say why. namphuongtran/warren#17: Codex normalizes
+		// `turn.failed` onto `result` with `stopReason: "error"`. claude-code's
+		// own `result` carries no `stopReason`, so the classifier still ignores
+		// every claude-code envelope, as it did before.
+		expect([...providerErrorEnvelopeTypes()].sort()).toEqual(["agent_end", "result", "turn_end"]);
 	});
 
 	test("pi contributes its transcript dir but NOT the composition dirs above it", () => {

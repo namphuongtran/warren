@@ -106,6 +106,7 @@ RUN bun install -g \
     @os-eco/mulch-cli@0.10.7 \
     @anthropic-ai/claude-code@2.1.150 \
     @earendil-works/pi-coding-agent@0.84.2 \
+    @openai/codex@0.171.0 \
     pnpm@11.1.2
 
 # bun install -g skips lifecycle scripts by default, so claude-code's
@@ -125,6 +126,13 @@ RUN bun run /usr/local/install/global/node_modules/@anthropic-ai/claude-code/ins
 # pi does not target — and break on the first bun-only API it touches.
 RUN sed -i '1s|^#!/usr/bin/env node|#!/usr/bin/env bun|' \
         /usr/local/install/global/node_modules/@earendil-works/pi-coding-agent/dist/cli.js
+
+# Codex (namphuongtran/warren#17) ships bin/codex.js, a `#!/usr/bin/env node` launcher that
+# execs the platform-native binary from its optional dependency
+# (@openai/codex-linux-<arch>). It runs under the real Node from the apt layer;
+# unlike pi it needs no shebang patch. Fail the build if the native binary did
+# not land, rather than at the first codex run.
+RUN codex --version
 
 WORKDIR /app
 

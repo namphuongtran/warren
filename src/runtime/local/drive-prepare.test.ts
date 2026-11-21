@@ -104,3 +104,63 @@ describe("prepareSpawn host-credential fallback", () => {
 		expect(await forwardedHomes("pi", PROFILE, {})).toEqual([]);
 	});
 });
+
+describe("prepareSpawn adapter-declared credential hand-off (namphuongtran/warren#17)", () => {
+	async function handOff(
+		profile: SandboxProfile,
+		hostEnv: Record<string, string | undefined>,
+	): Promise<{ homePath: string; openai: boolean; codex: boolean }[]> {
+		const calls: { homePath: string; openai: boolean; codex: boolean }[] = [];
+		const withHook: AgentRuntimeAdapter = {
+			...adapter("codex"),
+			forwardHostCredentials: async (ctx) => {
+				calls.push({
+					homePath: ctx.homePath,
+					openai: ctx.hasEnv("OPENAI_API_KEY"),
+					codex: ctx.hasEnv("CODEX_API_KEY"),
+				});
+			},
+		};
+		const store = new LocalRunStore();
+		const record = store.create({
+			runId: "run_prep2",
+			sandboxId: "local-run_prep2",
+			workspacePath: "/tmp/ws",
+			homePath: "/tmp/home",
+			branch: "warren/run_prep2",
+		});
+		const prepared = await prepareSpawn(store, record, spec("codex"), profile, {
+			registry: { get: (id) => (id === "codex" ? withHook : undefined) },
+			forwardCredentials: async () => {
+				throw new Error("the claude-code copy must not run for codex");
+			},
+			hostEnv,
+		});
+		expect(prepared).not.toBeNull();
+		return calls;
+	}
+
+	test("calls the adapter's hook with the run's private home", async () => {
+		expect(await handOff(PROFILE, {})).toEqual([
+			{ homePath: "/tmp/home", openai: false, codex: false },
+		]);
+	});
+
+	test("tells the hook which credentials the run already carries", async () => {
+		const profile = {
+			...PROFILE,
+			envPassthrough: ["OPENAI_API_KEY"],
+			setEnv: { CODEX_API_KEY: "k" },
+		};
+		expect(await handOff(profile, { OPENAI_API_KEY: "sk-x" })).toEqual([
+			{ homePath: "/tmp/home", openai: true, codex: true },
+		]);
+	});
+
+	test("does not report a passthrough name the host env leaves blank", async () => {
+		const profile = { ...PROFILE, envPassthrough: ["OPENAI_API_KEY"] };
+		expect(await handOff(profile, { OPENAI_API_KEY: " " })).toEqual([
+			{ homePath: "/tmp/home", openai: false, codex: false },
+		]);
+	});
+});

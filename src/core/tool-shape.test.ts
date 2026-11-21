@@ -3,8 +3,8 @@ import { TOOL_SHAPES, toolShapeFor } from "./tool-shape.ts";
 import { KNOWN_RUNTIME_IDS } from "./wire.ts";
 
 describe("toolShape registry", () => {
-	test("covers claude-code and pi", () => {
-		expect(Object.keys(TOOL_SHAPES).sort()).toEqual(["claude-code", "pi"]);
+	test("covers claude-code, codex, and pi", () => {
+		expect(Object.keys(TOOL_SHAPES).sort()).toEqual(["claude-code", "codex", "pi"]);
 		expect(toolShapeFor("claude-code")?.runtime).toBe("claude-code");
 		expect(toolShapeFor("pi")?.runtime).toBe("pi");
 		for (const id of KNOWN_RUNTIME_IDS) {
@@ -170,5 +170,49 @@ describe("pi toolShape", () => {
 	test("returns null for a payload with no tool fields (parse failure)", () => {
 		expect(shape.readToolUse({ type: "message" })).toBeNull();
 		expect(shape.readToolResult({})).toBeNull();
+	});
+});
+
+/**
+ * namphuongtran/warren#17: rows as the Codex parser (`jsonl-codex.ts`) writes them, copied
+ * from `codex-v0.171.0-tools.canonical.jsonl`.
+ */
+describe("codex toolShape", () => {
+	const shape = toolShapeFor("codex");
+	if (shape === null) throw new Error("codex shape missing");
+
+	test("reads a shell call's command and join id", () => {
+		expect(
+			shape.readToolUse({
+				type: "tool_use",
+				id: "item_1",
+				name: "shell",
+				input: { command: "bash -lc ls" },
+			}),
+		).toEqual({ toolName: "shell", command: "bash -lc ls", toolUseId: "item_1" });
+	});
+
+	test("reads an apply_patch call as a structured tool with no command", () => {
+		expect(
+			shape.readToolUse({
+				type: "tool_use",
+				id: "item_3",
+				name: "apply_patch",
+				input: { changes: [{ path: "/workspace/notes.md", kind: "add" }] },
+			}),
+		).toEqual({ toolName: "apply_patch", command: null, toolUseId: "item_3" });
+	});
+
+	test("reads a failed shell result's error flag and output size", () => {
+		expect(
+			shape.readToolResult({
+				type: "tool_result",
+				tool_use_id: "item_1",
+				name: "shell",
+				is_error: true,
+				content: "boom",
+				exit_code: 1,
+			}),
+		).toEqual({ toolUseId: "item_1", isError: true, resultBytes: 4 });
 	});
 });

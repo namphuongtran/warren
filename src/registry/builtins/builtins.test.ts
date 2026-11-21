@@ -14,6 +14,7 @@ import {
 	BUILTIN_AGENT_NAMES,
 	BUILTIN_AGENTS,
 	CLAUDE_CODE_BUILTIN,
+	CODEX_BUILTIN,
 	HEALER_BUILTIN,
 	PI_BUILTIN,
 	PLANNER_BUILTIN,
@@ -34,6 +35,13 @@ describe("BUILTIN_AGENTS", () => {
 		expect(BUILTIN_AGENT_NAMES.has("pr-fixer")).toBe(true);
 		expect(BUILTIN_AGENT_NAMES.has("leveret")).toBe(false);
 		expect(BUILTIN_AGENT_NAMES.has("healer")).toBe(true);
+		expect(BUILTIN_AGENT_NAMES.has("codex")).toBe(true);
+	});
+
+	test("codex dispatches onto the codex runtime with an OpenAI model warren can price (namphuongtran/warren#17)", () => {
+		expect(readRuntimeId(CODEX_BUILTIN)).toBe("codex");
+		expect(CODEX_BUILTIN.frontmatter.provider).toBe("openai");
+		expect(CODEX_BUILTIN.frontmatter.model).toBe("gpt-5.3-codex");
 	});
 
 	test("each builtin name passes the shared kebab grammar (warren-2b75)", () => {
@@ -94,8 +102,8 @@ describe("BUILTIN_AGENTS", () => {
 	// This regression test prevents the bullet from drifting back to softer
 	// "run gates before committing" wording that lets agents declare success
 	// on a red tree.
-	test("claude-code / pi declare the quality gate as terminal (warren-6a34)", () => {
-		for (const builtin of [CLAUDE_CODE_BUILTIN, PI_BUILTIN]) {
+	test("claude-code / pi / codex declare the quality gate as terminal (warren-6a34)", () => {
+		for (const builtin of [CLAUDE_CODE_BUILTIN, PI_BUILTIN, CODEX_BUILTIN]) {
 			const system = builtin.sections.system ?? "";
 			expect(system).toContain("$WARREN_QUALITY_GATE");
 			expect(system).toContain("NOT done until the gate exits zero");
@@ -109,7 +117,13 @@ describe("BUILTIN_AGENTS", () => {
 	// unchanged inputs. Every source-editing builtin keeps the mandatory
 	// final green run but carries the no-unchanged-rerun discipline instead.
 	test("source-editing builtins keep one final green gate without unchanged reruns (warren-7e82)", () => {
-		for (const builtin of [CLAUDE_CODE_BUILTIN, PI_BUILTIN, PR_FIXER_BUILTIN, HEALER_BUILTIN]) {
+		for (const builtin of [
+			CLAUDE_CODE_BUILTIN,
+			PI_BUILTIN,
+			CODEX_BUILTIN,
+			PR_FIXER_BUILTIN,
+			HEALER_BUILTIN,
+		]) {
 			const system = builtin.sections.system ?? "";
 			expect(system).not.toContain("again before reporting completion");
 			expect(system).toContain(GATE_FINAL_RUN_RULE);

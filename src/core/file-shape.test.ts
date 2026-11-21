@@ -3,8 +3,8 @@ import { FILE_SHAPES, fileShapeFor } from "./file-shape.ts";
 import { KNOWN_RUNTIME_IDS } from "./wire.ts";
 
 describe("fileShape registry", () => {
-	test("covers claude-code and pi", () => {
-		expect(Object.keys(FILE_SHAPES).sort()).toEqual(["claude-code", "pi"]);
+	test("covers claude-code, codex, and pi", () => {
+		expect(Object.keys(FILE_SHAPES).sort()).toEqual(["claude-code", "codex", "pi"]);
 		expect(fileShapeFor("claude-code")?.runtime).toBe("claude-code");
 		expect(fileShapeFor("pi")?.runtime).toBe("pi");
 		for (const id of KNOWN_RUNTIME_IDS) {
@@ -98,5 +98,35 @@ describe("claude-code fileShape ignores the arguments dialect", () => {
 
 	test("arguments wrapper belongs to pi", () => {
 		expect(shape.readPaths({ name: "Read", arguments: { file_path: "x.ts" } })).toEqual([]);
+	});
+});
+
+/** namphuongtran/warren#17: Codex's `file_change` item, as the Codex parser writes its tool_use. */
+describe("codex fileShape", () => {
+	const shape = fileShapeFor("codex");
+	if (shape === null) throw new Error("codex shape missing");
+
+	test("reads every path an apply_patch call touches", () => {
+		expect(
+			shape.readPaths({
+				type: "tool_use",
+				id: "item_3",
+				name: "apply_patch",
+				input: {
+					changes: [
+						{ path: "/workspace/notes.md", kind: "add" },
+						{ path: "/workspace/a.txt", kind: "update" },
+					],
+				},
+			}),
+		).toEqual(["/workspace/notes.md", "/workspace/a.txt"]);
+	});
+
+	test("returns an empty list for shell calls and malformed change lists", () => {
+		expect(shape.readPaths({ name: "shell", input: { command: "cat a.txt" } })).toEqual([]);
+		expect(shape.readPaths({ name: "apply_patch", input: { changes: "nope" } })).toEqual([]);
+		expect(shape.readPaths({ name: "apply_patch", input: { changes: [{ kind: "add" }] } })).toEqual(
+			[],
+		);
 	});
 });

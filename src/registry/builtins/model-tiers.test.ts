@@ -18,6 +18,14 @@ describe("resolveModelTiers", () => {
 		expect(tiers.sonnet).toEqual({ provider: "anthropic", model: "claude-sonnet-5" });
 	});
 
+	test("defaults the codex tier to an OpenAI model and lets env override it (namphuongtran/warren#17)", () => {
+		expect(resolveModelTiers({}).codex).toEqual({ provider: "openai", model: "gpt-5.3-codex" });
+		expect(resolveModelTiers({ WARREN_MODEL_CODEX: "gpt-5.5" }).codex).toEqual({
+			provider: "openai",
+			model: "gpt-5.5",
+		});
+	});
+
 	test("treats empty or whitespace env values as unset", () => {
 		const tiers = resolveModelTiers({ WARREN_MODEL_OPUS: "   ", WARREN_MODEL_SONNET: "" });
 		expect(tiers.opus.model).toBe("claude-opus-5-5");

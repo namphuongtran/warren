@@ -19,7 +19,7 @@
  * was a non-command tool) from "commands did not parse" (a declared
  * shape rejected the payload).
  *
- * {@link TOOL_SHAPES} declares `claude-code` and `pi` only. A runtime
+ * {@link TOOL_SHAPES} declares `claude-code`, `pi`, and `codex`. A runtime
  * with no entry resolves to `null` and its rows count as unshaped, not
  * as parse failures.
  *
@@ -186,12 +186,21 @@ const PI_TOOL_SHAPE: ToolShape = {
 };
 
 /**
+ * Codex's parser (`src/runtime/adapters/parsers/jsonl-codex.ts`, namphuongtran/warren#17)
+ * writes its items in the Anthropic content-block field names (`shell` and
+ * `apply_patch` calls, `tool_use_id`, `is_error`, a string or block body), so
+ * the claude-code readers apply as-is.
+ */
+const CODEX_TOOL_SHAPE: ToolShape = { ...CLAUDE_CODE_TOOL_SHAPE, runtime: "codex" };
+
+/**
  * The tool shapes, declared per runtime id. Keyed off
  * {@link KNOWN_RUNTIME_IDS} via `Partial<Record<RuntimeId, …>>`.
  */
 export const TOOL_SHAPES: Readonly<Partial<Record<RuntimeId, ToolShape>>> = {
 	"claude-code": CLAUDE_CODE_TOOL_SHAPE,
 	pi: PI_TOOL_SHAPE,
+	codex: CODEX_TOOL_SHAPE,
 };
 
 /**

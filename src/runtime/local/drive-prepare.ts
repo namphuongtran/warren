@@ -46,11 +46,22 @@ export function hasClaudeAuthEnv(
 	profile: Pick<SandboxProfile, "setEnv" | "envPassthrough">,
 	hostEnv: Readonly<Record<string, string | undefined>> = process.env,
 ): boolean {
+	return CLAUDE_AUTH_ENV.some((name) => runCarriesEnv(profile, hostEnv, name));
+}
+
+/**
+ * True when the run will carry a non-blank value for `name`: set on the
+ * profile, or forwarded by reference from the host env through the allowlist.
+ */
+export function runCarriesEnv(
+	profile: Pick<SandboxProfile, "setEnv" | "envPassthrough">,
+	hostEnv: Readonly<Record<string, string | undefined>>,
+	name: string,
+): boolean {
 	const present = (value: string | undefined): boolean => (value?.trim() ?? "") !== "";
-	return CLAUDE_AUTH_ENV.some(
-		(name) =>
-			present(profile.setEnv[name]) ||
-			(profile.envPassthrough.includes(name) && present(hostEnv[name])),
+	return (
+		present(profile.setEnv[name]) ||
+		(profile.envPassthrough.includes(name) && present(hostEnv[name]))
 	);
 }
 
@@ -130,6 +141,8 @@ export interface PreparedSpawn {
 	readonly runCommand: SpawnCommand;
 	readonly proxy: ProxyHandle | null;
 	readonly useStdinHold: boolean;
+	/** The run's frontmatter, handed to `parseEvents` (Codex prices usage by model). */
+	readonly frontmatter: AgentFrontmatter | undefined;
 }
 
 /** Resolve runtime + command + optional restricted-network proxy, or null on fail. */
@@ -173,6 +186,18 @@ export async function prepareSpawn(
 		const forward = deps.forwardCredentials ?? forwardClaudeHostCredentials;
 		await forward(record.homePath).catch(() => {});
 	}
+	// namphuongtran/warren#17: a harness that declares its own hand-off reads the host login
+	// into the run's private $HOME here. Best-effort, like the copy above: a
+	// missing login surfaces as the CLI's own auth error, not a spawn failure.
+	if (runtime.forwardHostCredentials !== undefined) {
+		const hostEnv = deps.hostEnv ?? process.env;
+		await runtime
+			.forwardHostCredentials({
+				homePath: record.homePath,
+				hasEnv: (name) => runCarriesEnv(profile, hostEnv, name),
+			})
+			.catch(() => {});
+	}
 
 	const useStdinHold = typeof runtime.shouldCloseStdinOnEvent === "function";
 	const baseCommand = runtime.buildSpawnCommand({
@@ -196,6 +221,7 @@ export async function prepareSpawn(
 		runCommand: armed.runCommand,
 		proxy: armed.proxy,
 		useStdinHold,
+		frontmatter,
 	};
 }
 

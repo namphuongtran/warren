@@ -24,6 +24,7 @@
 
 import { KNOWN_RUNTIME_IDS, type RuntimeId } from "../../core/wire.ts";
 import { claudeCodeAdapter } from "./claude-code.ts";
+import { codexAdapter } from "./codex.ts";
 import { piAdapter } from "./pi.ts";
 import type { AgentRuntimeAdapter } from "./types.ts";
 
@@ -31,8 +32,10 @@ import type { AgentRuntimeAdapter } from "./types.ts";
 // in-pod rewiring (warren-0efe) can consume the lifted types from the
 // registry root.
 export type {
+	AdapterCredentialContext,
 	AdapterEventKind,
 	AdapterExtractMetadataContext,
+	AdapterParseContext,
 	AdapterPrepareContext,
 	AdapterRuntimeEvent,
 	AdapterSpawnContext,
@@ -51,6 +54,7 @@ export type {
 export const RUNTIME_ADAPTERS = {
 	"claude-code": claudeCodeAdapter,
 	pi: piAdapter,
+	codex: codexAdapter,
 } satisfies Record<RuntimeId, AgentRuntimeAdapter>;
 
 /** The adapter for one runtime id. Total over the union, so never null. */

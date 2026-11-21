@@ -99,7 +99,16 @@ describe("resolveEnvPassthrough", () => {
 	});
 
 	test("returns no passthrough for an unknown runtime", () => {
-		expect(resolveEnvPassthrough("codex", undefined)).toEqual([]);
+		expect(resolveEnvPassthrough("stub-shell", undefined)).toEqual([]);
+	});
+
+	test("forwards the OpenAI and Codex keys a codex run authenticates with (namphuongtran/warren#17)", () => {
+		expect(resolveEnvPassthrough("codex", undefined)).toEqual([
+			"OPENAI_API_KEY",
+			"OPENAI_BASE_URL",
+			"CODEX_API_KEY",
+		]);
+		expect(resolveEnvPassthrough("codex", undefined)).not.toContain("ANTHROPIC_API_KEY");
 	});
 });
 
@@ -123,6 +132,12 @@ describe("resolveToolchainPaths", () => {
 			name === "claude" ? "/home/dev/.local/bin/claude" : null;
 		const dirs = resolveToolchainPaths("claude-code", which, "");
 		expect(dirs).toContain("/home/dev/.local/bin");
+	});
+
+	test("resolves the codex CLI a codex run spawns (namphuongtran/warren#17)", () => {
+		const which = (name: string): string | null =>
+			name === "codex" ? "/opt/tools/codex/bin/codex" : null;
+		expect(resolveToolchainPaths("codex", which, "")).toContain("/opt/tools/codex/bin");
 	});
 
 	test("keeps system-mounted bin dirs for the PATH contribution", () => {
