@@ -42,6 +42,9 @@ import type {
 
 const CLAUDE_BIN = "claude";
 
+/** Ceiling for one foreground Bash call in a run: one hour. */
+const FOREGROUND_BASH_MAX_TIMEOUT_MS = 60 * 60 * 1000;
+
 /**
  * `--model <id>` from the resolved frontmatter, or nothing.
  *
@@ -155,6 +158,16 @@ export const claudeCodeAdapter: AgentRuntimeAdapter = {
 				// This is the documented switch ("Disable claude.ai connectors",
 				// code.claude.com/docs/en/mcp); --strict-mcp-config does not cover them.
 				ENABLE_CLAUDEAI_MCP_SERVERS: "false",
+				// A --print session ends with the agent's turn. A Bash command the
+				// agent started with run_in_background then never reports back: the
+				// agent ends its turn to "wait for the notification", the session
+				// exits, and reap finds uncommitted edits (`dropped_commit`). Seen on
+				// a familyroots run whose final gate went to the background.
+				CLAUDE_CODE_DISABLE_BACKGROUND_TASKS: "1",
+				// With background tasks off, a full quality gate has to fit one
+				// foreground Bash call. The CLI caps that call at 10 minutes by
+				// default; the run's own duration limit still bounds the session.
+				BASH_MAX_TIMEOUT_MS: String(FOREGROUND_BASH_MAX_TIMEOUT_MS),
 			},
 			stdin: encodeClaudeStdin(ctx.prompt, ctx.pendingMessages),
 		};
