@@ -62,8 +62,11 @@ onto the agent's frontmatter (overriding the agent's own
 `frontmatter.maxCostUsd`, so trigger > agent), freezing a single
 effective cap onto `runs.rendered_agent_json`; the event-bridge cancels
 the run once cumulative cost crosses it (emitting a `budget.exceeded`
-event). A malformed / non-positive value fails OPEN (no cap) so a budget
-typo never silently cancels every run. `config.yaml` and legacy
+event). It first emits one `budget.warning` event at a fraction of the
+cap (default 80%, `WARREN_BUDGET_WARNING_FRACTION`), and steers a
+`steering: mid-run` harness to wrap up (namphuongtran/warren#9). A
+malformed / non-positive value fails OPEN (no cap) so a budget typo
+never silently cancels every run. `config.yaml` and legacy
 `defaults.json` share the same
 schema — `{ defaultRole?, defaultBranch?, defaultPrompt?, defaultProvider?,
 defaultModel?, runBranchPrefix?, agentImage?, preview?, maxCostUsd?, pr? }` — all optional,
