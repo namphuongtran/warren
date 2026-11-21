@@ -33,12 +33,32 @@ import type {
 	AdapterPrepareContext,
 	AdapterRuntimeEvent,
 	AdapterSpawnContext,
+	AgentFrontmatter,
 	AgentRuntimeAdapter,
 	SpawnCommand,
 	SteeringMessage,
 } from "./types.ts";
 
 const CLAUDE_BIN = "claude";
+
+/**
+ * `--model <id>` from the resolved frontmatter, or nothing.
+ *
+ * The run row freezes the declared model (agent frontmatter, then the project
+ * default, then the per-run override), and analytics group by it. Without this
+ * flag the CLI fell back to the logged-in account's default model, so a run the
+ * UI labelled `claude-sonnet-4-6` actually ran on whatever the account default
+ * was. Claude Code speaks only the Anthropic API, so a non-Anthropic provider
+ * (a pi-only model id such as an OpenRouter slug) leaves the flag off rather
+ * than handing the CLI a model it cannot resolve.
+ */
+export function claudeModelArgs(frontmatter: AgentFrontmatter | undefined): string[] {
+	const model = frontmatter?.model?.trim();
+	if (model === undefined || model === "") return [];
+	const provider = frontmatter?.provider?.trim();
+	if (provider !== undefined && provider !== "" && provider !== "anthropic") return [];
+	return ["--model", model];
+}
 
 export const CLAUDE_CODE_SETTINGS_PATH = ".claude/settings.local.json";
 
@@ -100,6 +120,7 @@ export const claudeCodeAdapter: AgentRuntimeAdapter = {
 				// The sandbox is the enforcement boundary; an in-app prompt would
 				// deadlock a non-interactive spawn.
 				"--dangerously-skip-permissions",
+				...claudeModelArgs(ctx.frontmatter),
 			],
 			env: { TMPDIR: claudeCodeBurrowTmpdir(ctx.workspacePath) },
 			stdin: encodeClaudeStdin(ctx.prompt, ctx.pendingMessages),

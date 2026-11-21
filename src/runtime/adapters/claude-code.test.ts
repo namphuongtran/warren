@@ -14,6 +14,7 @@ import {
 	CLAUDE_CODE_SETTINGS_PATH,
 	claudeCodeAdapter,
 	claudeCodeBurrowTmpdir,
+	claudeModelArgs,
 	encodeClaudeStdin,
 } from "./claude-code.ts";
 import { forwardClaudeHostCredentials } from "./claude-credentials.ts";
@@ -74,6 +75,42 @@ describe("claudeCodeAdapter.buildSpawnCommand", () => {
 			fakeSpawnContext({ prompt: "p", workspacePath: "/host/ws" }),
 		);
 		expect(cmd?.env?.TMPDIR).toBe(claudeCodeBurrowTmpdir("/host/ws"));
+	});
+});
+
+describe("claudeCodeAdapter.buildSpawnCommand model flag", () => {
+	test("passes the frontmatter model as --model after the fixed flags", () => {
+		const cmd = claudeCodeAdapter.buildSpawnCommand?.(
+			fakeSpawnContext({ frontmatter: { provider: "anthropic", model: "claude-sonnet-4-6" } }),
+		);
+		expect(cmd?.argv.slice(-2)).toEqual(["--model", "claude-sonnet-4-6"]);
+	});
+
+	test("omits --model when the frontmatter names no model", () => {
+		const cmd = claudeCodeAdapter.buildSpawnCommand?.(fakeSpawnContext({ frontmatter: {} }));
+		expect(cmd?.argv).not.toContain("--model");
+	});
+});
+
+describe("claudeModelArgs", () => {
+	test("accepts a model with no provider", () => {
+		expect(claudeModelArgs({ model: "opus" })).toEqual(["--model", "opus"]);
+	});
+
+	test("trims the model and treats a blank one as absent", () => {
+		expect(claudeModelArgs({ model: "  claude-opus-4-8  " })).toEqual([
+			"--model",
+			"claude-opus-4-8",
+		]);
+		expect(claudeModelArgs({ model: "   " })).toEqual([]);
+	});
+
+	test("leaves the flag off for a non-Anthropic provider", () => {
+		expect(claudeModelArgs({ provider: "openrouter", model: "moonshotai/kimi-k3" })).toEqual([]);
+	});
+
+	test("returns nothing without frontmatter", () => {
+		expect(claudeModelArgs(undefined)).toEqual([]);
 	});
 });
 
