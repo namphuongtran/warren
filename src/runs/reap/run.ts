@@ -1,7 +1,5 @@
 import type { EventRow, RunFailureReason, RunTerminalState } from "../../db/schema.ts";
-import { mintGitCredential } from "../../forge/credentials.ts";
 import type { RunHandle, RuntimeProvider, WorkspaceInfo } from "../../runtime/contract.ts";
-import type { GitSpawnCredential } from "../../workspace/git/credential-env.ts";
 import { lifecycleBus } from "../lifecycle-bus.ts";
 import { isInfraLostRunFailure } from "../retry/infra-lost-retry.ts";
 import { bindBridgeLogger } from "../stream/index.ts";
@@ -9,7 +7,11 @@ import { runWorkspaceDestroy } from "./destroy.ts";
 import { classifyInfraLoss, infraLossEventPayload, REAP_INFRA_LOSS_KIND } from "./infra-loss.ts";
 import { createPipelineState, runReapPipeline } from "./pipeline.ts";
 import { detectTerminalProviderError, providerErrorEventPayload } from "./provider-error.ts";
-import { salvageWorkspace, surfacePodSalvage, type WorkspaceSalvageOutcome } from "./salvage.ts";
+import {
+	salvageLocalWorkspace,
+	surfacePodSalvage,
+	type WorkspaceSalvageOutcome,
+} from "./salvage.ts";
 import {
 	detectSpawnExecFailure,
 	inferFailureReason,
@@ -278,51 +280,26 @@ export async function reapRun(input: ReapRunInput): Promise<ReapRunResult> {
 			emit,
 		});
 	}
-	if (state.finalizeFailed && workspacePath !== null) {
-		// warren-4e1c: mint the rescue-push credential immediately before the
-		// salvage spawn (forge-contract.md §4 — minted, never held). A mint
-		// failure is recorded and degrades to an anonymous push (which fails
-		// closed on a private repo) rather than skipping the salvage.
-		let gitCredential: GitSpawnCredential | undefined;
-		if (input.forge !== undefined && project !== null) {
-			try {
-				gitCredential = await mintGitCredential(input.forge, project.gitUrl);
-			} catch (err) {
-				await fail("branch_push", err);
-			}
-		}
-		salvage = await salvageWorkspace({
-			runId: run.id,
-			workspacePath,
-			baseBranch,
-			...(input.salvageDir !== undefined ? { salvageDir: input.salvageDir } : {}),
-			...(gitCredential !== undefined ? { gitCredential } : {}),
-			exec,
-			fs,
+	// namphuongtran/warren#8: a dropped commit's work exists only as a dirty
+	// tree, so it is salvaged the same way (captured onto a ref first).
+	if ((state.finalizeFailed || state.droppedCommit) && workspacePath !== null) {
+		salvage = await salvageLocalWorkspace({
+			capture: {
+				runId: run.id,
+				workspacePath,
+				baseBranch,
+				includeUncommitted: state.droppedCommit,
+				...(input.salvageDir !== undefined ? { salvageDir: input.salvageDir } : {}),
+				exec,
+				fs,
+			},
+			gitUrl: project?.gitUrl ?? null,
+			...(input.forge !== undefined ? { forge: input.forge } : {}),
+			setSalvage: (id, s) => input.repos.runs.setSalvage(id, s),
+			emit,
+			fail,
+			log,
 		});
-		if (salvage.rescueRef !== null || salvage.bundlePath !== null) {
-			try {
-				await input.repos.runs.setSalvage(run.id, {
-					rescueRef: salvage.rescueRef,
-					bundlePath: salvage.bundlePath,
-				});
-			} catch (err) {
-				// The row write is bookkeeping; the capture itself is the artifact.
-				log.warn(
-					{
-						event: "reap.salvage_stamp_failed",
-						err: err instanceof Error ? err.message : String(err),
-					},
-					"salvage captured but the run row could not be stamped",
-				);
-			}
-			await emit("reap.workspace_salvaged", {
-				rescueRef: salvage.rescueRef,
-				bundlePath: salvage.bundlePath,
-			});
-		} else {
-			await emit("reap.workspace_salvage_failed", { errors: salvage.errors });
-		}
 	}
 	// The destroy skip (warren-495d) now gates on a FAILED salvage too: once
 	// the work is captured, preserving the workspace buys nothing.
@@ -390,6 +367,7 @@ export async function reapRun(input: ReapRunInput): Promise<ReapRunResult> {
 		// self-salvages instead — or a local salvage that failed outright). Once
 		// salvage lands, destroy proceeds: the work is durable elsewhere.
 		branchPushFailed: workspacePreserved || salvageFailed,
+		...(state.droppedCommit && salvageFailed ? { skipReason: "salvage_failed" as const } : {}),
 		terminate,
 		emit,
 		fail: (step, err) => fail(step, err),

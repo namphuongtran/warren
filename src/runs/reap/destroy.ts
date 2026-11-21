@@ -34,6 +34,12 @@ export interface RunWorkspaceDestroyInput {
 	 */
 	readonly branchPushFailed?: boolean;
 	/**
+	 * Why `branchPushFailed` preserves the workspace; defaults to
+	 * `branch_push_failed`. `salvage_failed` is a dropped-commit run whose push
+	 * landed but whose uncommitted work could not be captured.
+	 */
+	readonly skipReason?: "branch_push_failed" | "salvage_failed";
+	/**
 	 * The RuntimeProvider `terminate(handle)` seam bound to this run (warren-1f56)
 	 * — reap calls it to tear the sandbox down. `null` when the run has no burrow
 	 * or reap never resolved the worker (mirrors the old `workerClient === null`
@@ -75,7 +81,7 @@ export async function runWorkspaceDestroy(input: RunWorkspaceDestroyInput): Prom
 	if (input.branchPushFailed === true) {
 		await input.emit("reap.workspace_destroy_skipped", {
 			sandboxId: run.sandboxId,
-			reason: "branch_push_failed",
+			reason: input.skipReason ?? "branch_push_failed",
 		});
 		return false;
 	}

@@ -40,7 +40,7 @@ import {
 	warrenCommitIdentityArgs,
 	warrenCommitIdentityEnv,
 } from "../../bot-identity.ts";
-import { MAX_SALVAGE_BUNDLE_BYTES, rescueBranchFor } from "../salvage.ts";
+import { MAX_SALVAGE_BUNDLE_BYTES, rescueBranchFor, salvageCommitMessage } from "../salvage.ts";
 import { authenticateOrigin, type FinalizeGitRunner } from "./finalize-collect.ts";
 
 /** What the in-pod salvage attempt produced (maps onto the SalvageEnvelope). */
@@ -119,7 +119,7 @@ export async function commitUncommittedWork(
 			// A salvage capture must never gate on the project's git hooks.
 			"--no-verify",
 			"-m",
-			`chore(warren): salvage uncommitted workspace work ${input.runId}`,
+			salvageCommitMessage(input.runId),
 		],
 		{
 			cwd: input.workspacePath,
