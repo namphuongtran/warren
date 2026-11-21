@@ -148,9 +148,10 @@ function isTerminal(state: string): boolean {
  * Extract the frozen agent frontmatter from `runs.rendered_agent_json` (same
  * defensive shape `resolveCostCapUsd` uses) and read its declared steering
  * capability. `undefined` = the agent predates the flag (warren-3305) and
- * stays legacy fail-open.
+ * stays legacy fail-open. Also read by the bridge's budget warning
+ * (namphuongtran/warren#9) to decide whether to steer at the warning.
  */
-function steeringCapabilityOf(renderedAgentJson: unknown): SteeringCapability | undefined {
+export function steeringCapabilityOf(renderedAgentJson: unknown): SteeringCapability | undefined {
 	if (renderedAgentJson === null || typeof renderedAgentJson !== "object") return undefined;
 	const frontmatter = (renderedAgentJson as Record<string, unknown>).frontmatter;
 	if (frontmatter === null || typeof frontmatter !== "object") return undefined;

@@ -47,6 +47,8 @@ A cost cap can come from three levels, in strongest-first order:
 
 Warren enforces the resolved cap during the run. A malformed agent cap fails open rather than overriding a valid project default silently.
 
+Before the cap trips, warren warns. Once observed cost reaches 80% of the cap, the run log gets one `budget.warning` event. Set `WARREN_BUDGET_WARNING_FRACTION` to a value between 0 and 1 to move the threshold, or to `0` to turn the warning off. When the agent declares `steering: mid-run`, warren also sends it one steering message asking it to finish, commit, and write its final message. A spawn-only harness such as claude-code cannot read a steer mid-run, so it gets the event only. The hard cap still cancels the run once cost passes the cap.
+
 ## Run events
 
 `GET /runs/:id/events` returns the persisted NDJSON stream. A request follows a non-terminal run by default. Use `?follow=0` for replay, `?since=<seq>` for cursor paging, or `?limit=N` for a bounded read.

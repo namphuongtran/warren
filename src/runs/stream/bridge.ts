@@ -14,7 +14,6 @@ import type { EventStream, RunTerminalState } from "../../db/schema.ts";
 import { EVENT_STREAMS } from "../../db/schema.ts";
 import type { RunHandle } from "../../runtime/contract.ts";
 import { RuntimeRunNotFoundError } from "../../runtime/errors.ts";
-import { resolveCostCapUsd } from "../cost-cap.ts";
 import { lifecycleBus } from "../lifecycle-bus.ts";
 import { accumulatePiUsage, extractClaudeUsage } from "../usage-aggregate.ts";
 import { appendOrDrop, newAppendGuard } from "./append-guard.ts";
@@ -22,8 +21,16 @@ import {
 	type CancelBurrowRunFn,
 	type EnforceBudgetCapInput,
 	enforceBudgetCap,
+	observedCostUsd,
 	persistObservedUsage,
 } from "./budget.ts";
+import {
+	budgetWarningFractionFromEnv,
+	newBudgetWarning,
+	resolveBridgeBudgetPolicy,
+	type SteerRunFn,
+	warningSteer,
+} from "./budget-warning.ts";
 import { isPerDeltaNoiseEvent } from "./delta-noise.ts";
 import { recordObservedModel } from "./observed-model.ts";
 import { providerStreamSource } from "./provider-source.ts";
@@ -34,7 +41,6 @@ import { detectRuntimeTerminal, isPiAgentEnd } from "./terminal-detect.ts";
 import { recordToolCallRollup, resolveBridgeToolRuntime } from "./tool-call-rollup.ts";
 import { bridgeTurnMonitor, TurnMonitor, turnMonitorOptionsFromEnv } from "./turn-monitor.ts";
 import {
-	type BridgeLogger,
 	type BridgeRunStreamInput,
 	type BridgeRunStreamResult,
 	type BurrowTerminalSnapshot,
@@ -93,7 +99,9 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 	// input wins (tests); otherwise read the cap frozen onto
 	// `runs.rendered_agent_json` (per-trigger override already folded over
 	// the per-agent value at dispatch). A null cap disables enforcement.
-	const costCapUsd = input.costCapUsd ?? (await resolveBridgeCostCap(repos, runId, input.logger));
+	// namphuongtran/warren#9: the same read yields the steering capability.
+	const budgetPolicy = await resolveBridgeBudgetPolicy(repos, runId, input.logger);
+	const costCapUsd = input.costCapUsd ?? budgetPolicy.costCapUsd;
 	// warren-7746: resolve the run's runtime once so each persisted tool event
 	// extracts through the correct runtime's shapes into the `tool_calls` rollup.
 	const toolRuntime = await resolveBridgeToolRuntime(repos, runId, input.logger);
@@ -105,6 +113,13 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 		input.cancelBurrowRun ??
 		(input.source === undefined
 			? (reason: string) => provider.cancel(handle, reason)
+			: async () => {});
+	// namphuongtran/warren#9: the budget-warning steer goes through `steerRun`
+	// (audit event + capability gate); inert under a test `source` override.
+	const steerAtWarning: SteerRunFn =
+		input.budgetWarningSteer ??
+		(input.source === undefined
+			? warningSteer({ runId, repos, broker, provider })
 			: async () => {});
 
 	// warren-6596: run-state poller. Covers runtimes that don't emit a
@@ -179,6 +194,13 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 		repos,
 		broker,
 		cancelBurrowRun,
+		warning: newBudgetWarning({
+			capUsd: costCapUsd,
+			fraction: budgetWarningFractionFromEnv(process.env, input.logger),
+			steering: budgetPolicy.steering,
+			steer: steerAtWarning,
+			seededCostUsd: observedCostUsd(piUsage, claudeUsage),
+		}),
 		...(input.logger !== undefined ? { logger: input.logger } : {}),
 	};
 	// warren-1247: a seeded total already over the cap (crash after the event
@@ -465,26 +487,4 @@ function normalizeStream(value: unknown): EventStream | null {
 
 function toIsoString(ts: Date | string): string {
 	return ts instanceof Date ? ts.toISOString() : ts;
-}
-
-/**
- * Resolve the run's spend cap (warren-a63d) from its frozen
- * `runs.rendered_agent_json`. Best-effort: a missing row or read error
- * resolves to `null` (no cap) so a DB hiccup never blocks streaming.
- */
-async function resolveBridgeCostCap(
-	repos: BridgeRunStreamInput["repos"],
-	runId: string,
-	logger: BridgeLogger | undefined,
-): Promise<number | null> {
-	try {
-		const run = await repos.runs.require(runId);
-		return resolveCostCapUsd(run.renderedAgentJson);
-	} catch (err) {
-		logger?.warn?.(
-			{ runId, err: err instanceof Error ? err.message : String(err) },
-			"failed to resolve spend cap; proceeding without enforcement",
-		);
-		return null;
-	}
 }
