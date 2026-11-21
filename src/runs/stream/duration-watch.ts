@@ -25,8 +25,7 @@
 import type { RunFailureReason, RunTerminalState } from "../../core/wire.ts";
 import type { Repos } from "../../db/repos/index.ts";
 import { resolveDurationLimitMs } from "../duration-limit.ts";
-import type { RunEventBroker } from "../events.ts";
-import type { CancelBurrowRunFn } from "./budget.ts";
+import { type EnforceBudgetCapInput, persistObservedUsage } from "./budget.ts";
 import { appendSystemEvent } from "./system-event.ts";
 import { detectRuntimeTerminal } from "./terminal-detect.ts";
 import type { BridgeLogger, StreamEventView } from "./types.ts";
@@ -136,16 +135,14 @@ export interface DurationTerminal {
 
 export interface BridgeDurationWatchInput {
 	readonly watch: DurationWatch;
-	readonly runId: string;
-	readonly sandboxRunId: string;
-	readonly repos: Repos;
-	readonly broker: RunEventBroker;
-	readonly cancelBurrowRun: CancelBurrowRunFn;
-	/** Persist observed usage; the terminal envelope never arrives once cancelled. */
-	readonly persistUsage: () => Promise<void>;
+	/**
+	 * The bridge's spend-cap input: the run ids, repos, broker, cancel seam and
+	 * usage accumulators a trip needs (usage is persisted because the terminal
+	 * envelope never arrives once the run is cancelled).
+	 */
+	readonly budget: EnforceBudgetCapInput;
 	/** The bridge's abort controller; a timer trip aborts the parked source. */
 	readonly ctrl: AbortController;
-	readonly logger?: BridgeLogger;
 }
 
 export interface BridgeDurationWatch {
@@ -153,9 +150,12 @@ export interface BridgeDurationWatch {
 	readonly expiredAt: (event: StreamEventView) => boolean;
 	/** True once the limit passed (the bridge's catch treats the abort as terminal). */
 	readonly tripped: { readonly value: boolean };
-	/** Act on a trip once (persist, emit, cancel) and return reap's terminal; else `undefined`. */
-	readonly settle: () => Promise<DurationTerminal | undefined>;
-	readonly stop: () => void;
+	/**
+	 * Stop the timer, then settle: when the loop ended with no terminal and the
+	 * limit passed, act on the trip once (persist, emit, cancel) and return
+	 * reap's terminal. Otherwise return `current` unchanged.
+	 */
+	readonly finish: <T>(current: T | undefined) => Promise<T | DurationTerminal | undefined>;
 }
 
 /** Wire one watch into one bridge run: arms the timer, returns the loop surface. */
@@ -180,24 +180,24 @@ export function bridgeDurationWatch(input: BridgeDurationWatchInput): BridgeDura
 			return true;
 		},
 		tripped,
-		settle: async () => {
-			if (pending === null) return undefined;
+		finish: async (current) => {
+			input.watch.stop();
+			if (current !== undefined || pending === null) return current;
 			if (!settled) {
 				settled = true;
-				await actOnTrip(input, pending);
+				await actOnTrip(input.budget, pending);
 			}
 			return { outcome: "failed", failureReason: "duration_exceeded" };
 		},
-		stop: () => input.watch.stop(),
 	};
 }
 
-async function actOnTrip(input: BridgeDurationWatchInput, trip: DurationTrip): Promise<void> {
+async function actOnTrip(input: EnforceBudgetCapInput, trip: DurationTrip): Promise<void> {
 	input.logger?.warn?.(
 		{ runId: input.runId, sandboxRunId: input.sandboxRunId, ...trip },
 		"run exceeded wall-clock limit; cancelling",
 	);
-	await input.persistUsage();
+	await persistObservedUsage(input);
 	await appendSystemEvent({
 		runId: input.runId,
 		kind: DURATION_EXCEEDED_EVENT,

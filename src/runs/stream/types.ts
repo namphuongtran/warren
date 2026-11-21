@@ -12,6 +12,7 @@ import type { Repos } from "../../db/repos/index.ts";
 import type { RunFailureReason, RunMode, RunTerminalState } from "../../db/schema.ts";
 import type { RuntimeProvider, TerminalReason } from "../../runtime/contract.ts";
 import type { RunEventBroker } from "../events.ts";
+import type { SteerRunFn } from "./budget-warning.ts";
 import type { DurationWatch } from "./duration-watch.ts";
 import type { TurnMonitor } from "./turn-monitor.ts";
 
@@ -208,6 +209,12 @@ export interface BridgeRunStreamInput {
 	 * the cancel fired without a live burrow.
 	 */
 	readonly cancelBurrowRun?: (reason: string) => Promise<void>;
+	/**
+	 * Override the steering seam used at the budget warning
+	 * (namphuongtran/warren#9, tests). Production defaults to `steerRun`;
+	 * the bridge only calls it when the agent declares `steering: "mid-run"`.
+	 */
+	readonly budgetWarningSteer?: SteerRunFn;
 	/**
 	 * TurnMonitor override (warren-1f85 / warren-74a7, #1242, tests). Default:
 	 * built from the `WARREN_TURN_*` env knobs plus the resolved spend cap. A

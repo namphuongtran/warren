@@ -21,9 +21,16 @@ import {
 	type CancelBurrowRunFn,
 	type EnforceBudgetCapInput,
 	enforceBudgetCap,
+	observedCostUsd,
 	persistObservedUsage,
-	resolveBridgeCostCap,
 } from "./budget.ts";
+import {
+	budgetWarningFractionFromEnv,
+	newBudgetWarning,
+	resolveBridgeBudgetPolicy,
+	type SteerRunFn,
+	warningSteer,
+} from "./budget-warning.ts";
 import { isPerDeltaNoiseEvent } from "./delta-noise.ts";
 import { bridgeDurationWatch, resolveDurationWatch } from "./duration-watch.ts";
 import { recordObservedModel } from "./observed-model.ts";
@@ -93,7 +100,9 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 	// input wins (tests); otherwise read the cap frozen onto
 	// `runs.rendered_agent_json` (per-trigger override already folded over
 	// the per-agent value at dispatch). A null cap disables enforcement.
-	const costCapUsd = input.costCapUsd ?? (await resolveBridgeCostCap(repos, runId, input.logger));
+	// namphuongtran/warren#9: the same read yields the steering capability.
+	const budgetPolicy = await resolveBridgeBudgetPolicy(repos, runId, input.logger);
+	const costCapUsd = input.costCapUsd ?? budgetPolicy.costCapUsd;
 	// warren-7746: resolve the run's runtime once so each persisted tool event
 	// extracts through the correct runtime's shapes into the `tool_calls` rollup.
 	const toolRuntime = await resolveBridgeToolRuntime(repos, runId, input.logger);
@@ -105,6 +114,13 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 		input.cancelBurrowRun ??
 		(input.source === undefined
 			? (reason: string) => provider.cancel(handle, reason)
+			: async () => {});
+	// namphuongtran/warren#9: the budget-warning steer goes through `steerRun`
+	// (audit event + capability gate); inert under a test `source` override.
+	const steerAtWarning: SteerRunFn =
+		input.budgetWarningSteer ??
+		(input.source === undefined
+			? warningSteer({ runId, repos, broker, provider })
 			: async () => {});
 
 	// warren-6596: run-state poller. Covers runtimes that don't emit a
@@ -179,6 +195,13 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 		repos,
 		broker,
 		cancelBurrowRun,
+		warning: newBudgetWarning({
+			capUsd: costCapUsd,
+			fraction: budgetWarningFractionFromEnv(process.env, input.logger),
+			steering: budgetPolicy.steering,
+			steer: steerAtWarning,
+			seededCostUsd: observedCostUsd(piUsage, claudeUsage),
+		}),
 		...(input.logger !== undefined ? { logger: input.logger } : {}),
 	};
 	// warren-1247: a seeded total already over the cap (crash after the event
@@ -187,17 +210,11 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 		statsPersisted = true;
 		terminalDetected = { outcome: "cancelled" };
 	}
-	// namphuongtran/warren#10: per-run wall-clock limit, checked per event and on a timer.
+	// namphuongtran/warren#10: per-run wall-clock limit (at start, on a timer, per event).
 	const durationWatch = bridgeDurationWatch({
 		watch: input.durationWatch ?? (await resolveDurationWatch(repos, runId, input.logger)),
-		runId,
-		sandboxRunId,
-		repos,
-		broker,
-		cancelBurrowRun,
+		budget: capInput,
 		ctrl,
-		persistUsage: () => persistObservedUsage(capInput),
-		...(input.logger !== undefined ? { logger: input.logger } : {}),
 	});
 
 	try {
@@ -415,9 +432,8 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 		}
 	} finally {
 		turnWatch.stop();
-		durationWatch.stop();
 		// #10: act on a wall-clock trip once, after the loop and before the broker closes.
-		if (terminalDetected === undefined) terminalDetected = await durationWatch.settle();
+		terminalDetected = await durationWatch.finish(terminalDetected);
 		if (input.signal !== undefined) input.signal.removeEventListener("abort", onAbort);
 		ctrl.abort();
 		if (pollerTask !== null) await pollerTask;

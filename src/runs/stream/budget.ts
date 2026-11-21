@@ -15,14 +15,26 @@
  *
  * It returns `true` to signal the caller to break the stream with a
  * `cancelled` terminal outcome; reap finalizes the warren row from there.
+ *
+ * Below the cap, the same call raises the soft warning
+ * (namphuongtran/warren#9, policy in `./budget-warning.ts`): once cost
+ * reaches the warning fraction it emits one `budget.warning` event and,
+ * for a mid-run-steerable harness, sends one wrap-up steering message.
+ *
  * All steps are best-effort — a persist / event / cancel failure is
  * logged and swallowed so enforcement never throws out of the bridge.
  */
 
 import type { Repos } from "../../db/repos/index.ts";
-import { isOverBudget, resolveCostCapUsd } from "../cost-cap.ts";
+import { isOverBudget } from "../cost-cap.ts";
 import type { RunEventBroker } from "../events.ts";
 import type { SessionStatsAccumulator } from "../usage-aggregate.ts";
+import {
+	type BudgetWarning,
+	budgetWarningSteerBody,
+	budgetWarningThresholdUsd,
+	isNearBudget,
+} from "./budget-warning.ts";
 import { persistInStreamUsage } from "./stats.ts";
 import { appendSystemEvent } from "./system-event.ts";
 import type { BridgeLogger } from "./types.ts";
@@ -41,6 +53,8 @@ export interface EnforceBudgetCapInput {
 	readonly repos: Repos;
 	readonly broker: RunEventBroker;
 	readonly cancelBurrowRun: CancelBurrowRunFn;
+	/** Soft-warning latch (namphuongtran/warren#9); absent/null disables it. */
+	readonly warning?: BudgetWarning | null;
 	readonly logger?: BridgeLogger;
 }
 
@@ -50,30 +64,25 @@ export interface EnforceBudgetCapInput {
  * otherwise. Reads pi cost when observed, else claude cost.
  */
 export async function enforceBudgetCap(input: EnforceBudgetCapInput): Promise<boolean> {
-	const usePi = input.piUsage.seen;
-	const observedCostUsd = usePi ? input.piUsage.costUsd : input.claudeUsage.costUsd;
-	if (!isOverBudget(observedCostUsd, input.costCapUsd)) return false;
+	const costUsd = observedCostUsd(input.piUsage, input.claudeUsage);
+	if (!isOverBudget(costUsd, input.costCapUsd)) {
+		await warnIfNearBudget(input, costUsd);
+		return false;
+	}
 
 	const capUsd = input.costCapUsd as number;
 	input.logger?.warn?.(
-		{ runId: input.runId, sandboxRunId: input.sandboxRunId, observedCostUsd, capUsd },
+		{ runId: input.runId, sandboxRunId: input.sandboxRunId, observedCostUsd: costUsd, capUsd },
 		"run exceeded spend cap; cancelling",
 	);
 
 	// Persist the spend that tripped the cap so cost_usd isn't left null.
 	await persistObservedUsage(input);
 
-	await appendSystemEvent({
-		runId: input.runId,
-		kind: "budget.exceeded",
-		payload: { costUsd: observedCostUsd, capUsd },
-		repos: input.repos,
-		broker: input.broker,
-		...(input.logger !== undefined ? { logger: input.logger } : {}),
-	});
+	await emitBudgetEvent(input, "budget.exceeded", { costUsd, capUsd });
 
 	try {
-		await input.cancelBurrowRun(`spend cap exceeded: $${observedCostUsd} > $${capUsd}`);
+		await input.cancelBurrowRun(`spend cap exceeded: $${costUsd} > $${capUsd}`);
 	} catch (err) {
 		input.logger?.error?.(
 			{
@@ -85,6 +94,14 @@ export async function enforceBudgetCap(input: EnforceBudgetCapInput): Promise<bo
 		);
 	}
 	return true;
+}
+
+/** Cumulative run cost with the bridge's pi-wins tiebreak (pi when observed, else claude). */
+export function observedCostUsd(
+	piUsage: SessionStatsAccumulator,
+	claudeUsage: SessionStatsAccumulator,
+): number {
+	return piUsage.seen ? piUsage.costUsd : claudeUsage.costUsd;
 }
 
 /**
@@ -109,23 +126,47 @@ export async function persistObservedUsage(
 }
 
 /**
- * Resolve the run's spend cap (warren-a63d) from its frozen
- * `runs.rendered_agent_json`. Best-effort: a missing row or read error
- * resolves to `null` (no cap) so a DB hiccup never blocks streaming.
+ * Raise the soft warning once (namphuongtran/warren#9): latch, emit
+ * `budget.warning`, then steer when the harness reads steering mid-run.
  */
-export async function resolveBridgeCostCap(
-	repos: Repos,
-	runId: string,
-	logger: BridgeLogger | undefined,
-): Promise<number | null> {
+async function warnIfNearBudget(
+	input: EnforceBudgetCapInput,
+	observedCostUsd: number,
+): Promise<void> {
+	const warning = input.warning;
+	if (warning === undefined || warning === null || warning.fired) return;
+	if (!isNearBudget(observedCostUsd, input.costCapUsd, warning.fraction)) return;
+	warning.fired = true;
+	const capUsd = input.costCapUsd as number;
+	await emitBudgetEvent(input, "budget.warning", {
+		costUsd: observedCostUsd,
+		capUsd,
+		thresholdUsd: budgetWarningThresholdUsd(capUsd, warning.fraction),
+		fraction: warning.fraction,
+	});
+	if (warning.steer === null) return;
 	try {
-		const run = await repos.runs.require(runId);
-		return resolveCostCapUsd(run.renderedAgentJson);
+		await warning.steer(budgetWarningSteerBody(observedCostUsd, capUsd));
 	} catch (err) {
-		logger?.warn?.(
-			{ runId, err: err instanceof Error ? err.message : String(err) },
-			"failed to resolve spend cap; proceeding without enforcement",
+		input.logger?.error?.(
+			{ runId: input.runId, err: err instanceof Error ? err.message : String(err) },
+			"budget-warning steer failed; the hard cap still applies",
 		);
-		return null;
 	}
+}
+
+/** One `system` event for the cap's two signals, through the shared emitter. */
+async function emitBudgetEvent(
+	input: EnforceBudgetCapInput,
+	kind: "budget.exceeded" | "budget.warning",
+	payload: Record<string, number>,
+): Promise<void> {
+	await appendSystemEvent({
+		runId: input.runId,
+		kind,
+		payload,
+		repos: input.repos,
+		broker: input.broker,
+		...(input.logger !== undefined ? { logger: input.logger } : {}),
+	});
 }

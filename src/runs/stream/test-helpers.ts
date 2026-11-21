@@ -236,7 +236,7 @@ export interface BridgeFixtureIds {
 
 export async function seedBridgeRun(
 	repos: Repos,
-	overrides?: Partial<BridgeFixtureIds>,
+	overrides?: Partial<BridgeFixtureIds> & { readonly renderedAgentJson?: unknown },
 ): Promise<BridgeFixtureIds> {
 	await repos.agents.upsert({ name: "refactor-bot", renderedJson: {} });
 	const project = await repos.projects.create({
@@ -250,7 +250,7 @@ export async function seedBridgeRun(
 		agentName: "refactor-bot",
 		projectId: project.id,
 		prompt: "p",
-		renderedAgentJson: {},
+		renderedAgentJson: overrides?.renderedAgentJson ?? {},
 		trigger: "manual",
 		sandboxId,
 		sandboxRunId,
