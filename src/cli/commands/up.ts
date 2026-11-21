@@ -179,6 +179,27 @@ function exportStoredEnv(
 	}
 }
 
+/**
+ * The data dir and runtime that `up` resolved must reach the process env too,
+ * for the same reason as {@link exportStoredEnv}: the runtime providers read
+ * `process.env`, not the boot env. The docker provider builds its LocalEngine
+ * over `process.env`, so a defaulted `WARREN_DATA_DIR` that lived only in the
+ * boot env sent run workspaces to the built-in `/data`, which fails with EROFS
+ * on macOS. An explicit value is already in both envs, so this only fills in
+ * what `up` defaulted.
+ */
+const UP_DEFAULTED_KEYS = ["WARREN_DATA_DIR", "WARREN_RUNTIME"] as const;
+
+function exportUpDefaults(
+	target: Record<string, string | undefined>,
+	env: Record<string, string | undefined>,
+): void {
+	for (const key of UP_DEFAULTED_KEYS) {
+		const value = env[key];
+		if (value !== undefined) target[key] = value;
+	}
+}
+
 export async function runUp(context: CliContext, deps: UpDeps, args: UpArgs): Promise<UpResult> {
 	const probe: UpRuntimeProbe = deps.probe ?? {
 		platform: process.platform,
@@ -232,7 +253,9 @@ export async function runUp(context: CliContext, deps: UpDeps, args: UpArgs): Pr
 	const storedEnv = await runUpWizard(context, wizardDeps, { wizard: args.wizard !== false });
 	const merged = mergeUnderEnv(env, storedEnv);
 	Object.assign(env, merged);
-	exportStoredEnv(deps.processEnv ?? process.env, storedEnv, merged);
+	const processEnv = deps.processEnv ?? process.env;
+	exportStoredEnv(processEnv, storedEnv, merged);
+	exportUpDefaults(processEnv, env);
 
 	return runServe(
 		upContext,
