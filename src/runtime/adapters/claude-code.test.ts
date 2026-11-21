@@ -266,6 +266,18 @@ describe("claudeCodeAdapter credential and connector isolation", () => {
 	});
 });
 
+describe("claudeCodeAdapter one-shot session", () => {
+	test("turns off background tasks, whose completion notice a --print run never receives", () => {
+		const cmd = claudeCodeAdapter.buildSpawnCommand?.(fakeSpawnContext());
+		expect(cmd?.env?.CLAUDE_CODE_DISABLE_BACKGROUND_TASKS).toBe("1");
+	});
+
+	test("raises the foreground Bash timeout ceiling to one hour so a full gate fits", () => {
+		const cmd = claudeCodeAdapter.buildSpawnCommand?.(fakeSpawnContext());
+		expect(cmd?.env?.BASH_MAX_TIMEOUT_MS).toBe("3600000");
+	});
+});
+
 describe("forwardClaudeHostCredentials (linux)", () => {
 	let workspaceDir: string;
 	let fakeHome: string;
