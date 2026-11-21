@@ -250,15 +250,16 @@ Common `failureReason` values:
 
 | failureReason | Meaning | Fix |
 |---|---|---|
-| `dropped_commit` | The agent edited files but did not commit | State it clearly in the prompt or in `AGENTS.md`: "commit before you finish" |
+| `dropped_commit` | The agent edited files but did not commit | Warren commits the uncommitted work to `warren/rescue/<runId>` (or a bundle). See the `reap.workspace_salvaged` event, or run again with `--rescue-from`. To prevent it, state "commit before you finish" in the prompt or in `AGENTS.md`. |
 | `no_changes` | The run targeted an existing branch but made no commits | Check the prompt again |
 | `provider_error` | The model API failed, for example out of credit | Check the key or the credit. If the code was pushed, the PR still opens. |
 | `finalize_failed` | The push failed | See the `reap.workspace_salvaged` event. Run again with `--rescue-from`. |
 | `push_rejected_policy` | The remote rejected the push because of a policy, for example secret scanning | Read the `reap.push_rejected` event to get the unblock link |
 | infra loss (OOM, lost pod, Spot) | Infrastructure failure | Warren retries **once** automatically |
 
-When a push fails, Warren saves the commits to the `warren/rescue/<runId>` branch or
-to a `git bundle` file, so the agent's work is not lost.
+When a push fails, or the agent finishes without committing its changes, Warren saves
+the work to the `warren/rescue/<runId>` branch or to a `git bundle` file, so the agent's
+work is not lost.
 
 ---
 

@@ -230,6 +230,30 @@ describe("reapRun ref-dispatch zero-commit (warren-ba08)", () => {
 		expect(row.failureReason).toBe("no_changes");
 	});
 
+	test("a clean ref-dispatch no_changes run salvages nothing (namphuongtran/warren#8)", async () => {
+		const { repos, runId } = await setupSeeded(null, { ref: "fix/pr-head" });
+		const f = fakeFs({ "/data/projects/x/y/.seeds/issues.jsonl": ISSUES });
+		const e = fakeExec({ revListCount: "0" });
+
+		const result = await reapRun({
+			runId,
+			outcome: "succeeded",
+			repos,
+			...reapDeps(fakeBurrowClient(makeBurrow()), { fs: f.fs, exec: e.exec }),
+			fs: f.fs,
+			exec: e.exec,
+			salvageDir: "/data/salvage",
+		});
+
+		expect(result.failureReason).toBe("no_changes");
+		expect(result.salvageRescueRef).toBeNull();
+		expect(result.salvagePath).toBeNull();
+		expect(e.calls.some((c) => (c.args[2] ?? "").includes("warren/rescue/"))).toBe(false);
+		const row = await repos.runs.require(runId);
+		expect(row.salvageRef).toBeNull();
+		expect(row.salvagePath).toBeNull();
+	});
+
 	test("ref-dispatch with real uncommitted work stays dropped_commit, not no_changes", async () => {
 		const { repos, runId } = await setupSeeded(null, {
 			ref: "fix/pr-head",

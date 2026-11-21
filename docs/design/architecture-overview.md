@@ -508,8 +508,8 @@ reason in the list that matches wins:
 
 #### When the workspace is **not** deleted
 
-- The push fails **and** the salvage also fails: Warren keeps the workspace so the operator can
-  recover the work by hand.
+- The push fails, or the run ends `dropped_commit`, **and** the salvage also fails: Warren
+  keeps the workspace so the operator can recover the work by hand.
 - A preview is still `live` / `starting`: the eviction worker does the deletion instead.
 
 #### Design principles

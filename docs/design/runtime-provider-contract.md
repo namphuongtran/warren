@@ -281,6 +281,8 @@ itself never holds a push token.
 The runtime split mirrors `finalize` itself.
 
 - **LocalProvider:** the salvage step (`src/runs/reap/salvage.ts`) runs inside reap before `runWorkspaceDestroy`. A captured work product lifts the old preserve-the-workspace skip. A total failure keeps the skip and emits `reap.workspace_salvage_failed`.
+- **LocalProvider and DockerProvider, dropped commit:** salvage also runs when a run ends `succeeded` with a dirty tree and zero commits (`failed` / `dropped_commit`). Reap reads `HEAD` into a temporary index, stages the dirty tree there, and writes a commit with `commit-tree` and the canonical bot identity. A local `refs/heads/warren/rescue/<runId>` points at that commit, and both capture forms read that ref, not `HEAD`.
+- **What a dropped-commit salvage keeps:** reap does not change the agent's checkout or index, and it skips harness scratch such as `.claude/`. The run stays `dropped_commit`. If salvage fails, reap keeps the workspace. Under K8s, the in-pod `empty_push_dirty` trigger also captures a dirty tree, but it commits on `HEAD` and keeps harness scratch.
 - **K8sProvider:** the pod salvages itself (`src/runtime/k8s/salvage.ts`). On a failed push it posts BEFORE the finalize result that releases warren to destroy the pod. With no intent at all it retries the bundle POST through the rollout window (`WARREN_SALVAGE_MAX_WAIT_MS`).
 
 The intake route `POST /runs/:id/salvage` stores the bundle, stamps

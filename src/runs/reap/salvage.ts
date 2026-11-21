@@ -17,6 +17,13 @@
  *      rejection because it never touches origin. Skipped when no salvageDir
  *      was threaded (tests).
  *
+ * DROPPED COMMIT (namphuongtran/warren#8): a run that ends `succeeded` with a
+ * dirty tree and zero commits pushed an empty branch, so its work exists only
+ * as uncommitted changes. `includeUncommitted` folds that tree onto a
+ * throwaway ref first (see `captureUncommittedWork`), and both capture forms
+ * then read that ref instead of `HEAD`. The K8s pod does the same in-pod
+ * (`empty_push_dirty`, `src/runtime/k8s/salvage.ts`).
+ *
  * The outcome drives reap's destroy gating: a successful capture (either form)
  * means the work is safe and the workspace CAN be destroyed; a total failure
  * keeps the old preserve-the-workspace skip, now paired with an explicit
@@ -24,11 +31,22 @@
  * operator-visible instead of silent.
  */
 
+import { copyFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import {
+	gitRepoContextScrubEnv,
+	warrenCommitIdentityArgs,
+	warrenCommitIdentityEnv,
+} from "../../bot-identity.ts";
 import type { RunRow } from "../../db/schema.ts";
-import { rescueBranchFor, salvageBundlePath } from "../../runtime/salvage.ts";
+import type { Forge } from "../../forge/contract.ts";
+import { mintGitCredential } from "../../forge/credentials.ts";
+import { rescueBranchFor, salvageBundlePath, salvageCommitMessage } from "../../runtime/salvage.ts";
 import type { GitSpawnCredential } from "../../workspace/git/credential-env.ts";
 import { gitCredentialGitEnv } from "../../workspace/git/credential-env.ts";
-import type { ReapExec, ReapFs } from "./types.ts";
+import type { ReapExec, ReapFs, ReapStep } from "./types.ts";
+import { HARNESS_STATE_PREFIXES, WARREN_RUNTIME_SCRATCH } from "./util.ts";
 
 export interface WorkspaceSalvageInput {
 	readonly runId: string;
@@ -45,6 +63,11 @@ export interface WorkspaceSalvageInput {
 	 * no credential for the URL.
 	 */
 	readonly gitCredential?: GitSpawnCredential;
+	/**
+	 * Fold the dirty tree into a commit on a throwaway ref before capturing
+	 * (a dropped commit: the work was never committed). Absent ⇒ capture `HEAD`.
+	 */
+	readonly includeUncommitted?: boolean;
 	readonly exec: ReapExec;
 	readonly fs: ReapFs;
 }
@@ -76,8 +99,20 @@ export async function salvageWorkspace(
 	let bundlePath: string | null = null;
 
 	const branch = rescueBranchFor(input.runId);
+	// What both capture forms read: `HEAD`, or the captured dirty-tree commit.
+	let source = "HEAD";
+	if (input.includeUncommitted === true) {
+		try {
+			source = `refs/heads/${branch}`;
+			await captureUncommittedWork(input, source);
+		} catch (err) {
+			// Without the commit there is nothing to capture: HEAD is the base.
+			errors.push(`uncommitted-work capture failed: ${errMessage(err)}`);
+			return { rescueRef, bundlePath, errors };
+		}
+	}
 	try {
-		await input.exec.run("git", ["push", "origin", `HEAD:refs/heads/${branch}`], {
+		await input.exec.run("git", ["push", "origin", `${source}:refs/heads/${branch}`], {
 			cwd: input.workspacePath,
 			timeoutMs: 60_000,
 			env: gitCredentialGitEnv(input.gitCredential),
@@ -89,7 +124,9 @@ export async function salvageWorkspace(
 
 	if (rescueRef === null && input.salvageDir !== undefined) {
 		const range =
-			input.baseBranch !== null && input.baseBranch !== "" ? `${input.baseBranch}..HEAD` : "HEAD";
+			input.baseBranch !== null && input.baseBranch !== ""
+				? `${input.baseBranch}..${source}`
+				: source;
 		try {
 			// Shared resolver, not a bare join (warren-7c1e): this run id comes
 			// off a db row rather than a route param, but the containment check
@@ -110,6 +147,124 @@ export async function salvageWorkspace(
 	}
 
 	return { rescueRef, bundlePath, errors };
+}
+
+export interface LocalSalvageInput {
+	/** What to capture; the rescue-push credential is minted here. */
+	readonly capture: Omit<WorkspaceSalvageInput, "gitCredential">;
+	/** The project's clone URL; null (orphaned run) ⇒ anonymous rescue push. */
+	readonly gitUrl: string | null;
+	readonly forge?: Forge;
+	readonly setSalvage: (
+		runId: string,
+		salvage: { rescueRef: string | null; bundlePath: string | null },
+	) => Promise<unknown>;
+	readonly emit: (kind: string, payload: unknown) => Promise<unknown>;
+	readonly fail: (step: ReapStep, err: unknown) => Promise<void>;
+	readonly log: { warn: (obj: Record<string, unknown>, msg: string) => void };
+}
+
+/**
+ * The reap-side local salvage step (LocalProvider and DockerProvider, whose
+ * workspace is host-reachable): mint the rescue-push credential, capture the
+ * work, stamp the run row, and emit `reap.workspace_salvaged` or
+ * `reap.workspace_salvage_failed`. Never throws.
+ */
+export async function salvageLocalWorkspace(
+	input: LocalSalvageInput,
+): Promise<WorkspaceSalvageOutcome> {
+	// warren-4e1c: mint the rescue-push credential immediately before the
+	// salvage spawn (forge-contract.md §4 — minted, never held). A mint
+	// failure is recorded and degrades to an anonymous push (which fails
+	// closed on a private repo) rather than skipping the salvage.
+	let gitCredential: GitSpawnCredential | undefined;
+	if (input.forge !== undefined && input.gitUrl !== null) {
+		try {
+			gitCredential = await mintGitCredential(input.forge, input.gitUrl);
+		} catch (err) {
+			await input.fail("branch_push", err);
+		}
+	}
+	const { capture, setSalvage, emit, log } = input;
+	const salvage = await salvageWorkspace({
+		...capture,
+		...(gitCredential !== undefined ? { gitCredential } : {}),
+	});
+	if (salvage.rescueRef === null && salvage.bundlePath === null) {
+		await emit("reap.workspace_salvage_failed", { errors: salvage.errors });
+		return salvage;
+	}
+	try {
+		await setSalvage(capture.runId, {
+			rescueRef: salvage.rescueRef,
+			bundlePath: salvage.bundlePath,
+		});
+	} catch (err) {
+		// The row write is bookkeeping; the capture itself is the artifact.
+		log.warn(
+			{ event: "reap.salvage_stamp_failed", err: errMessage(err) },
+			"salvage captured but the run row could not be stamped",
+		);
+	}
+	await emit("reap.workspace_salvaged", {
+		rescueRef: salvage.rescueRef,
+		bundlePath: salvage.bundlePath,
+	});
+	return salvage;
+}
+
+/** Harness scratch and warren runtime files: not agent work, never captured. */
+const NOT_AGENT_WORK: readonly string[] = [...HARNESS_STATE_PREFIXES, ...WARREN_RUNTIME_SCRATCH];
+
+/**
+ * Commit the workspace's dirty tree onto `ref` (the local rescue branch, so the
+ * bundle's head and the pushed branch read the same) without touching the
+ * agent's checkout: the tree is staged into a TEMPORARY index, written with
+ * `commit-tree` under the canonical bot identity (`src/bot-identity.ts`,
+ * Article VII), and pointed at by the ref. Harness scratch (`.claude/`, …) is
+ * excluded: it is not agent work and may hold harness settings. Every spawn
+ * carries the repo-context scrub so an inherited `GIT_DIR` can never redirect
+ * it. Throws on any git failure (the caller records it).
+ */
+async function captureUncommittedWork(input: WorkspaceSalvageInput, ref: string): Promise<void> {
+	const indexFile = join(tmpdir(), `warren-salvage-${input.runId}.index`);
+	const git = async (args: string[], env: Record<string, string> = {}): Promise<string> => {
+		const out = await input.exec.run("git", args, {
+			cwd: input.workspacePath,
+			timeoutMs: 60_000,
+			env: { ...gitRepoContextScrubEnv(), ...env },
+		});
+		return out.stdout.trim();
+	};
+	const indexEnv = { GIT_INDEX_FILE: indexFile };
+	try {
+		// Seed from the agent's own index: its stat cache keeps `add -A` from
+		// rehashing every tracked file of a large repo. No index ⇒ start at HEAD.
+		try {
+			const agentIndex = await git(["rev-parse", "--git-path", "index"]);
+			await copyFile(resolve(input.workspacePath, agentIndex), indexFile);
+		} catch {
+			await git(["read-tree", "HEAD"], indexEnv);
+		}
+		const excludes = NOT_AGENT_WORK.map((p) => `:(exclude)${p}`);
+		await git(["add", "-A", "--", ".", ...excludes], indexEnv);
+		const tree = await git(["write-tree"], indexEnv);
+		const commit = await git(
+			[
+				...warrenCommitIdentityArgs(),
+				"commit-tree",
+				tree,
+				"-p",
+				"HEAD",
+				"-m",
+				salvageCommitMessage(input.runId),
+			],
+			warrenCommitIdentityEnv(),
+		);
+		await git(["update-ref", ref, commit]);
+	} finally {
+		await rm(indexFile, { force: true }).catch(() => {});
+	}
 }
 
 /* ----------------------------------------------------------------------- */

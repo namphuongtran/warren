@@ -45,6 +45,15 @@ export function rescueBranchFor(runId: string): string {
 	return `${RESCUE_BRANCH_PREFIX}${runId}`;
 }
 
+/**
+ * Message of the warren bookkeeping commit that folds a dirty tree into a
+ * capturable commit before salvage — shared by the in-pod salvage
+ * (`src/runtime/k8s/salvage.ts`) and reap's local salvage.
+ */
+export function salvageCommitMessage(runId: string): string {
+	return `chore(warren): salvage uncommitted workspace work ${runId}`;
+}
+
 /** The warren-side durable file name for a salvaged bundle (`<runId>.bundle`). */
 export function salvageBundleFileName(runId: string): string {
 	return `${runId}.bundle`;

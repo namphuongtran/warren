@@ -9,6 +9,7 @@ import { reapRun } from "./index.ts";
 import {
 	type Ctx,
 	fakeBurrowClient,
+	fakeExec,
 	fakeForge,
 	fakeFs,
 	makeBurrow,
@@ -168,5 +169,35 @@ describe("reapRun salvage-before-destroy (warren-cd3b)", () => {
 		expect(events.some((ev) => ev.kind === "reap.workspace_salvage_failed")).toBe(true);
 		const skipped = events.find((ev) => ev.kind === "reap.workspace_destroy_skipped");
 		expect(skipped?.payloadJson).toMatchObject({ reason: "branch_push_failed" });
+	});
+
+	test("a dropped commit captures the dirty tree onto the rescue ref before destroy (namphuongtran/warren#8)", async () => {
+		const f = fakeFs();
+		const e = fakeExec({ revListCount: "0", gitStatus: " M src/foo.ts\n?? new.ts\n" });
+		const result = await reapRun({
+			runId: ctx.runId,
+			outcome: "succeeded",
+			repos: ctx.repos,
+			...reapDeps(fakeBurrowClient(makeBurrow()), { fs: f.fs, exec: e.exec }),
+			broker: ctx.broker,
+			fs: f.fs,
+			exec: e.exec,
+			salvageDir: "/data/salvage",
+		});
+
+		// The run still fails as a dropped commit; only the work survives.
+		expect(result.state).toBe("failed");
+		expect(result.failureReason).toBe("dropped_commit");
+		const rescue = `warren/rescue/${ctx.runId}`;
+		expect(result.salvageRescueRef).toBe(rescue);
+		// The rescue push sends the captured commit, not the empty HEAD.
+		const pushes = e.calls.filter((c) => c.args[0] === "push").map((c) => c.args[2]);
+		expect(pushes).toContain(`refs/heads/${rescue}:refs/heads/${rescue}`);
+		const row = await ctx.repos.runs.require(ctx.runId);
+		expect(row.salvageRef).toBe(rescue);
+		const events = await ctx.repos.events.listByRun(ctx.runId);
+		const salvaged = events.find((ev) => ev.kind === "reap.workspace_salvaged");
+		expect(salvaged?.payloadJson).toMatchObject({ rescueRef: rescue });
+		expect(result.workspaceDestroyed).toBe(true);
 	});
 });
