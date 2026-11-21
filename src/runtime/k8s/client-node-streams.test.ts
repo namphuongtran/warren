@@ -124,7 +124,10 @@ describe("@kubernetes/client-node stream compatibility", () => {
 
 		controller.abort();
 		await waitFor(() => doneCount === 1);
-		// v2 closes Readable.fromWeb cleanly before its abort error reaches `done`.
-		expect(doneError).toBeNull();
+		// A deliberate abort ends the watch exactly once. Bun 1.3 closed
+		// Readable.fromWeb cleanly (`null`); Bun 1.4 surfaces the AbortError
+		// (namphuongtran/warren#15). ListWatch aborts only on stop and breaks
+		// before reading the error, so either shape is safe.
+		if (doneError !== null) expect((doneError as Error).name).toBe("AbortError");
 	});
 });
