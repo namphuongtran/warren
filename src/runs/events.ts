@@ -194,7 +194,7 @@ export interface TailRunEventsInput {
 	 * `false`: replay history and return.
 	 */
 	readonly follow: boolean;
-	/** Skip events with `sandbox_event_seq <= sinceSeq`. Default: 0 (all). */
+	/** Skip events with `sandbox_event_seq <= sinceSeq`. Default: 0 (all, seq 0 included). */
 	readonly sinceSeq?: number;
 	readonly signal?: AbortSignal;
 	/**
@@ -293,7 +293,10 @@ async function* followRunEvents(
 		sinceSeq > 0
 			? { sinceSeq, limit: input.snapshotLimit ?? DEFAULT_SNAPSHOT_PAGE_LIMIT }
 			: { limit: input.snapshotLimit ?? DEFAULT_SNAPSHOT_PAGE_LIMIT };
-	let lastYielded = sinceSeq;
+	// A cursor of 0 means "everything", as on the non-follow path. Start the
+	// high-water mark below 0 so a pre-runtime seq-0 row (dispatch's
+	// `model_selection_ignored` warning, namphuongtran/warren#7) is yielded too.
+	let lastYielded = sinceSeq > 0 ? sinceSeq : -1;
 	try {
 		lastYielded = yield* pageHistory(repos, runId, listOpts, lastYielded);
 		lastYielded = yield* yieldNewerRows(live, lastYielded);

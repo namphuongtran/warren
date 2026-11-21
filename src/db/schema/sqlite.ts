@@ -233,11 +233,11 @@ export const runs = sqliteTable(
 		// the overwhelming majority of runs are first attempts. Plain text (no
 		// FK) for symmetry with the other run back-links.
 		retryOf: text("retry_of"),
-		// Declared provider/model at dispatch time (warren-2ede / pl-103e),
-		// frozen from the rendered agent frontmatter after the override chain
-		// (operator override > project default > agent frontmatter) resolves.
-		// These record the DECLARED model; what the harness actually used is
-		// future work that needs a harness that can emit it. Nullable:
+		// Provider/model frozen at dispatch (warren-2ede / pl-103e) from the
+		// rendered agent frontmatter once the override chain resolves. The
+		// bridge then overwrites `model` with the model a harness names in its
+		// init envelope (claude-code, namphuongtran/warren#7), so it reads as the model actually
+		// used; `provider` stays the declared one. Nullable:
 		// historical rows predate the columns — analytics labels them
 		// "unknown" and excludes them from denominators rather than folding
 		// them into a real bucket.

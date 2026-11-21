@@ -153,6 +153,26 @@ export interface AgentRuntimeAdapter {
 	extractMetadata?(
 		ctx: AdapterExtractMetadataContext,
 	): Promise<Record<string, unknown> | undefined>;
+
+	/**
+	 * Dispatch-time check (namphuongtran/warren#7): the resolved provider/model this harness
+	 * will NOT pass to its CLI, or `undefined` when it honors them. Dispatch
+	 * records a warning event from the answer so a dropped selection is never
+	 * silent. A harness that honors every provider leaves this undefined.
+	 */
+	ignoredModelSelection?(
+		frontmatter: AgentFrontmatter | undefined,
+	): IgnoredModelSelection | undefined;
+}
+
+/** What {@link AgentRuntimeAdapter.ignoredModelSelection} reports as dropped. */
+export interface IgnoredModelSelection {
+	/** The provider the harness cannot talk to. */
+	readonly provider: string;
+	/** The model that went with it, when one was declared. */
+	readonly model?: string;
+	/** Operator-facing reason, including what the harness runs instead. */
+	readonly reason: string;
 }
 
 /**

@@ -231,6 +231,19 @@ describe("tailRunEvents", () => {
 		expect(out.map((e) => e.sandboxEventSeq)).toEqual([1, 2, 3, 4, 5]);
 	});
 
+	test("follow=true replays a pre-runtime seq-0 warning before runtime events (namphuongtran/warren#7)", async () => {
+		for (const seq of [0, 1, 2]) await appendRow(seq);
+		const tail = tailRunEvents({ runId, repos, broker, follow: true });
+		const out: EventRow[] = [];
+		const done = (async () => {
+			for await (const ev of tail) out.push(ev);
+		})();
+		await new Promise((r) => setTimeout(r, 20));
+		broker.close(runId);
+		await done;
+		expect(out.map((e) => e.sandboxEventSeq)).toEqual([0, 1, 2]);
+	});
+
 	test("follow=true: history first, then live events, dedup at the seam", async () => {
 		await appendRow(1);
 		await appendRow(2);

@@ -114,6 +114,41 @@ describe("claudeModelArgs", () => {
 	});
 });
 
+describe("claudeCodeAdapter.ignoredModelSelection", () => {
+	test("names a non-Anthropic provider and model the CLI will not use", () => {
+		const ignored = claudeCodeAdapter.ignoredModelSelection?.({
+			provider: "openrouter",
+			model: "moonshotai/kimi-k3",
+		});
+		expect(ignored?.provider).toBe("openrouter");
+		expect(ignored?.model).toBe("moonshotai/kimi-k3");
+		expect(ignored?.reason).toContain("Anthropic");
+	});
+
+	test("names a non-Anthropic provider that came without a model", () => {
+		const ignored = claudeCodeAdapter.ignoredModelSelection?.({ provider: " openrouter " });
+		expect(ignored?.provider).toBe("openrouter");
+		expect(ignored !== undefined && "model" in ignored).toBe(false);
+	});
+
+	test("treats a blank provider as no provider", () => {
+		expect(
+			claudeCodeAdapter.ignoredModelSelection?.({ provider: "   ", model: "opus" }),
+		).toBeUndefined();
+	});
+
+	test("reports nothing for an Anthropic model it passes through", () => {
+		expect(
+			claudeCodeAdapter.ignoredModelSelection?.({
+				provider: "anthropic",
+				model: "claude-opus-5-5",
+			}),
+		).toBeUndefined();
+		expect(claudeCodeAdapter.ignoredModelSelection?.({ model: "opus" })).toBeUndefined();
+		expect(claudeCodeAdapter.ignoredModelSelection?.(undefined)).toBeUndefined();
+	});
+});
+
 describe("claudeCodeBurrowTmpdir", () => {
 	test("linux resolves under bwrap's /workspace remap, not the host path", () => {
 		expect(claudeCodeBurrowTmpdir("/host/ws", "linux")).toBe(

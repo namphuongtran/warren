@@ -34,6 +34,7 @@ import {
 	detectMigrationJournalCollisions,
 	runDispatchMigrationPreflight,
 } from "./migration-preflight.ts";
+import { recordIgnoredModelSelection } from "./model-selection.ts";
 import { gateAgentPrompts, withMulchArm } from "./prompt-capabilities.ts";
 import { assertNoKnownProviderModelMismatch } from "./provider-model.ts";
 import {
@@ -262,6 +263,9 @@ async function dispatchRun(input: SpawnRunInput): Promise<SpawnRunResult> {
 	});
 	// warren-e7b7: warn once per dispatch when agent git identity is unset (K8s).
 	warnIfGitIdentityUnconfigured(log, input.serverEnv ?? process.env);
+	// namphuongtran/warren#7: warn when the harness drops the resolved provider/model.
+	const selection = { provider: declaredProvider, model: declaredModel };
+	await recordIgnoredModelSelection(input, { runId: run.id, runtimeId, selection, log });
 	// Runtime-provider seam (warren-c42c: burrow-client eviction, bucket 2).
 	// `provider.create` collapses burrow's provision + dispatch (`sandboxUp` +
 	// `runs.create`) into one call and owns the sandbox-half rollback on a partial

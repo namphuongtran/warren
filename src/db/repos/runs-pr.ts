@@ -1,6 +1,7 @@
 /**
- * PR- and branch-fact write methods for the `runs` table (warren-f6af's
- * `setPrUrl`, warren-3bc6's `setPrState`, warren-5255's `setBranch`),
+ * PR-, branch-, and model-fact write methods for the `runs` table (warren-f6af's
+ * `setPrUrl`, warren-3bc6's `setPrState`, warren-5255's `setBranch`, namphuongtran/warren#7's
+ * `setModel`),
  * extracted from `RunsRepo` to keep `runs.ts`
  * under the file-size budget. Mirrors the `runs-queries.ts` /
  * `runs-ci-fixer.ts` precedent: each method is a free function taking the
@@ -44,6 +45,18 @@ export async function setBranch(
 	const current = await requireRun(adapter, id);
 	await adapter.runWrite(db.update(runs).set({ branch }).where(eq(runs.id, id)));
 	return { ...current, branch };
+}
+
+/**
+ * Overwrite the run's `model` with the one the harness reported using
+ * (namphuongtran/warren#7). Dispatch froze the declared model; the bridge calls this when the
+ * harness's own init envelope names a different one. The declared value
+ * survives in `rendered_agent_json` and the dispatch-context snapshot.
+ */
+export async function setModel(adapter: DrizzleAdapter, id: string, model: string): Promise<void> {
+	const db = adapter.drizzle as SqliteDrizzleDb;
+	const runs = adapter.schema.runs;
+	await adapter.runWrite(db.update(runs).set({ model }).where(eq(runs.id, id)));
 }
 
 export async function setPrUrl(
