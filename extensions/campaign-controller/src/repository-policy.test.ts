@@ -274,3 +274,67 @@ describe("agentGuidance block (warren-39b0)", () => {
 		expect(initial).not.toBe(followUp);
 	});
 });
+
+describe("validateRepositoryPolicy review block (namphuongtran/warren#18)", () => {
+	function withReview(review: unknown): Record<string, unknown> {
+		return { ...basePolicy(), review };
+	}
+
+	test("leaves review off when the block is absent", () => {
+		expect(validate(basePolicy()).policy.review).toBeNull();
+	});
+
+	test("normalizes a review block and defaults the status context", () => {
+		const { policy } = validate(
+			withReview({
+				version: 1,
+				agent: "reviewer",
+				provider: "openai",
+				model: "gpt-5-codex",
+				maxRounds: 2,
+				maxCostUsd: 1.5,
+			}),
+		);
+		expect(policy.review).toEqual({
+			version: 1,
+			agent: "reviewer",
+			provider: "openai",
+			model: "gpt-5-codex",
+			statusContext: "warren/review",
+			maxRounds: 2,
+			maxCostUsd: 1.5,
+		});
+	});
+
+	test("binds the review block into the policy digest", () => {
+		const off = validate(basePolicy()).digest;
+		const on = validate(
+			withReview({ version: 1, agent: "reviewer", maxRounds: 2, maxCostUsd: 1 }),
+		).digest;
+		expect(on).not.toBe(off);
+	});
+
+	test("rejects unknown review keys and out-of-range rounds", () => {
+		expectInvalid(
+			withReview({ version: 1, agent: "reviewer", maxRounds: 2, maxCostUsd: 1, token: "x" }),
+			"unknown field(s)",
+		);
+		expectInvalid(
+			withReview({ version: 1, agent: "reviewer", maxRounds: 0, maxCostUsd: 1 }),
+			"repository policy.review",
+		);
+	});
+
+	test("rejects a status context with characters GitHub would mangle", () => {
+		expectInvalid(
+			withReview({
+				version: 1,
+				agent: "reviewer",
+				statusContext: "warren review\n",
+				maxRounds: 2,
+				maxCostUsd: 1,
+			}),
+			"statusContext",
+		);
+	});
+});

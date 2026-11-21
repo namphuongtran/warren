@@ -216,20 +216,20 @@ export interface MutationTransportOptions {
 	userAgent?: string;
 }
 
-type SendFn = (
+export type SendFn = (
 	what: string,
 	method: "PATCH" | "POST" | "PUT",
 	url: string,
 	body: unknown,
 ) => Promise<Response>;
 
-function requireToken(token: string, what: string): void {
+export function requireToken(token: string, what: string): void {
 	if (typeof token !== "string" || token.length === 0) {
 		throw new BoundaryError(`refusing to construct the ${what}: a GitHub credential is required`);
 	}
 }
 
-function makeSend(options: MutationTransportOptions): SendFn {
+export function makeSend(options: MutationTransportOptions): SendFn {
 	const baseUrl = (options.baseUrl ?? "https://api.github.com").replace(/\/+$/, "");
 	return async (what, method, url, body) => {
 		const headers: Record<string, string> = {
@@ -476,7 +476,7 @@ function requireUpdateBranchUrl(url: string, policy: RepositoryPolicy): number {
 // Response narrowing
 // ---------------------------------------------------------------------------
 
-async function readJson(response: Response): Promise<Record<string, unknown> | null> {
+export async function readJson(response: Response): Promise<Record<string, unknown> | null> {
 	try {
 		const raw: unknown = await response.json();
 		if (typeof raw === "object" && raw !== null) {

@@ -16,6 +16,7 @@
 
 import { canonicalJson, sha256Hex } from "../digest.ts";
 import { GithubMutationUncertainError, type MutationIntent } from "../github/pr-mutations.ts";
+import type { ReviewPublishIntent } from "../github/review-publish.ts";
 import type { CampaignStateStore } from "../store/state-store.ts";
 import type { ActionRow } from "../store/types.ts";
 
@@ -30,7 +31,7 @@ export const MUTATION_UNCERTAIN_REASON = "mutation_uncertain";
 export const MUTATION_FAILED_REASON = "mutation_failed";
 
 /** The canonical request digest over a journaled mutation intent. */
-export function mutationRequestDigest(intent: MutationIntent): string {
+export function mutationRequestDigest(intent: MutationIntent | ReviewPublishIntent): string {
 	return sha256Hex(canonicalJson(intent));
 }
 
@@ -41,7 +42,7 @@ export interface JournalMutationIntentInput {
 	readonly workItemId?: string | null;
 	/** One of the phase-3 `*_ACTION_TYPE` constants. */
 	readonly actionType: string;
-	readonly intent: MutationIntent;
+	readonly intent: MutationIntent | ReviewPublishIntent;
 	readonly policyDigest?: string | null;
 	readonly attempt?: number;
 }

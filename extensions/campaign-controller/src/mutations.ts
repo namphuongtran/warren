@@ -9,6 +9,14 @@
  * response-loop mutations `updatePullRequest`, `postComment`, `updateBranch`,
  * and `followUpPush` — each still individually policy-gated and
  * digest-covered.
+ *
+ * The cross-model review writes (a commit status and a COMMENT review,
+ * namphuongtran/warren#18) are deliberately NOT a flag here. Every flag must
+ * be bound explicitly, so a new flag would make every existing profile fail
+ * validation, while the review policy must be off and silent when absent.
+ * They are gated instead by the optional, digest-covered `review` block of
+ * the repository policy: `BunFetchGithubReviewPublisher` cannot be
+ * constructed without it, the same enforced-by-absence property.
  */
 
 /** Every GitHub mutation the controller could ever represent. */

@@ -197,4 +197,28 @@ CREATE TABLE follow_up_progress (
 );
 `,
 	},
+	{
+		id: 6,
+		name: "006_review_rounds",
+		sql: `
+CREATE TABLE review_rounds (
+	id TEXT PRIMARY KEY,
+	campaign_id TEXT NOT NULL REFERENCES campaigns(id),
+	work_item_id TEXT NOT NULL REFERENCES work_items(id),
+	pr_number INTEGER NOT NULL,
+	head_sha TEXT NOT NULL,
+	round INTEGER NOT NULL,
+	action_id TEXT REFERENCES actions(id),
+	run_id TEXT,
+	state TEXT NOT NULL,
+	verdict_json TEXT,
+	failure_reason TEXT,
+	created_at_ms INTEGER NOT NULL,
+	updated_at_ms INTEGER NOT NULL
+);
+CREATE INDEX idx_review_rounds_work_item ON review_rounds(work_item_id);
+CREATE UNIQUE INDEX idx_review_rounds_live_head ON review_rounds(work_item_id, head_sha)
+	WHERE state != 'superseded';
+`,
+	},
 ];

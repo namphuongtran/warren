@@ -203,6 +203,54 @@ operator CLI —
   mutates GitHub, discovers GKE secrets, or enables a live mode
   (`--live`/`--execute` are refused as usage errors).
 
+Landed for namphuongtran/warren#18: the cross-model review policy, an
+opt-in merge gate driven by a commit status —
+
+- [`src/review/`](src/review/) — `ReviewCoordinator` reviews the CURRENT
+  head SHA of each open campaign PR. It dispatches a read-only `reviewer`
+  run over `POST /runs` pinned to that SHA with `baseCommit` (under the
+  policy's agent/provider/model, so a different model reviews than the
+  one that built), reads the run's verdict from `GET /runs/:id/events`
+  ([`verdict.ts`](src/review/verdict.ts): a tagged JSON block in the
+  agent's own `text` events, size-capped), and publishes it as a commit
+  status (`warren/review` by default) plus a COMMENT review with the
+  findings. A verdict is bound to its SHA: a push supersedes any live
+  review on the old SHA and starts a new one with a `pending` status.
+  `request_changes` findings are recorded as `review_feedback` rows for
+  the follow-up coordinator, at most `maxRounds` times; the next change
+  request publishes `failure` and opens `review_needs_human`. (The tick
+  does not drive the follow-up coordinator yet, so no fixer run starts on
+  its own; see [RUNBOOK.md](RUNBOOK.md) §10.) A failed run or a missing
+  verdict publishes `error` and opens `review_failed`. Nothing approves by
+  default. Publishing is derived from each round's durable state, so a
+  crash between settling and publishing is repaired on the next tick.
+- [`src/github/review-publish.ts`](src/github/review-publish.ts) — the
+  status/review transport, constructible only from a policy whose
+  `review` block is present, and URL-checked against the policy upstream.
+- [`src/tick/review-stage.ts`](src/tick/review-stage.ts) — the tick's
+  `review` stage, after the read-only GitHub reconcile. It runs only when
+  the policy has a `review` block and `GITHUB_TOKEN` is set; otherwise the
+  stage is absent, off and silent.
+
+The repository policy opts in with an optional `review` block (covered by
+the policy digest, so approval binds it):
+
+```json
+"review": {
+  "version": 1,
+  "agent": "reviewer",
+  "provider": "openai",
+  "model": "gpt-5.3-codex",
+  "statusContext": "warren/review",
+  "maxRounds": 2,
+  "maxCostUsd": 2
+}
+```
+
+`provider`, `model`, and `statusContext` are optional. The merge gate
+itself is forge branch protection requiring the status context; see
+[RUNBOOK.md](RUNBOOK.md) §10.
+
 ## Layout
 
 ```
@@ -221,8 +269,9 @@ src/
   pr-intent/ dry-run cross-fork PR-intent rendering + journaling
   github/    structurally read-only GitHub client, PR-intent renderer,
              dedupe/redaction helpers, and the fake GitHub server
-  tick/      the composed dry-run tick (lease → admit → dispatch/reconcile
-             → PR intent → read-only GitHub reconcile → settle/report)
+  review/    cross-model review policy: verdict parser, renderers, coordinator
+  tick/      the composed tick (lease → admit → dispatch/reconcile → PR intent
+             → read-only GitHub reconcile → opt-in review → settle/report)
   cli/       the operator CLI: run/main, config, output envelopes, exit codes
   warren-client.ts minimal V0 Warren HTTP client (dispatch, detail, retries)
   warren-fake.ts   deterministic in-process fake Warren server

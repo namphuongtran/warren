@@ -20,6 +20,7 @@ import { CampaignStore } from "./campaigns.ts";
 import { EventStore } from "./events.ts";
 import { FollowUpStore } from "./follow-ups.ts";
 import { LeaseStore } from "./leases.ts";
+import { ReviewStore } from "./reviews.ts";
 import { MIGRATIONS } from "./schema.ts";
 
 /** One `table_name.column_name` pair from the live schema. */
@@ -44,6 +45,7 @@ export class CampaignStateStore {
 	readonly leases: LeaseStore;
 	readonly budget: BudgetStore;
 	readonly followUps: FollowUpStore;
+	readonly reviews: ReviewStore;
 
 	/**
 	 * Open (and migrate) the store. `path` may be `":memory:"` for tests.
@@ -62,6 +64,7 @@ export class CampaignStateStore {
 		this.leases = new LeaseStore(ctx);
 		this.budget = new BudgetStore(ctx);
 		this.followUps = new FollowUpStore(ctx);
+		this.reviews = new ReviewStore(ctx);
 		this.migrate();
 	}
 

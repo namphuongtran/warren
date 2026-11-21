@@ -403,3 +403,36 @@ describe("redaction", () => {
 		expect(failures).toHaveLength(3);
 	});
 });
+
+describe("WarrenClient.readRunEvents", () => {
+	test("reads one bounded NDJSON page with an exclusive since cursor", async () => {
+		const fake = makeFake();
+		const client = makeClient(fake);
+		const run = await client.dispatchRun({
+			project: "p",
+			agent: "reviewer",
+			prompt: "review",
+			idempotencyKey: "k-events",
+		});
+		fake.setRunEvents(run.id, [
+			{ seq: 1, kind: "text", payload: { text: "a" } },
+			{ seq: 2, kind: "text", payload: { text: "b" } },
+			{ seq: 3, kind: "text", payload: { text: "c" } },
+		]);
+		const page = await client.readRunEvents(run.id, { since: 1, limit: 1 });
+		expect(page).toEqual([{ seq: 2, kind: "text", payload: { text: "b" } }]);
+	});
+
+	test("refuses a page carrying a non-JSON or non-object line", async () => {
+		const fake = makeFake();
+		const client = makeClient(fake);
+		fake.respondOnceWith(new Response("not json\n", { status: 200 }));
+		await expect(client.readRunEvents("run-x", { since: 0, limit: 10 })).rejects.toThrow(
+			WarrenEnvelopeError,
+		);
+		fake.respondOnceWith(new Response("[1,2]\n", { status: 200 }));
+		await expect(client.readRunEvents("run-x", { since: 0, limit: 10 })).rejects.toThrow(
+			"non-object line",
+		);
+	});
+});
