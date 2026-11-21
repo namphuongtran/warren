@@ -186,6 +186,30 @@ Obey these rules when you write the Dockerfile:
 - **Load the SDK artifacts at build time.** Run one small build or test in the Dockerfile, as the Flutter step does. Then the first run does not spend its budget on downloads.
 - **Keep the entrypoint transparent.** Warren does not replace the image `ENTRYPOINT`. It appends the harness command as arguments. A custom entrypoint script must end with `exec "$@"`.
 
+### Browser tests with Playwright
+
+A run can download a browser into its own home, but it cannot install the system libraries that the browser needs, such as `libnss3`. Without them, every Playwright spec fails at browser launch. Build the shipped image with the `WITH_BROWSER_DEPS` build argument to add those libraries:
+
+```bash
+docker build -f deploy/docker/Dockerfile.agent \
+  --build-arg WITH_BROWSER_DEPS=1 -t warren-agent:latest .
+```
+
+The argument is off by default, and the default image does not change. `PLAYWRIGHT_VERSION` (default `1.62.1`) selects the Playwright release whose library list the build installs.
+
+A project image can then install the browser at build time, at the Playwright version that the project lockfile pins. A shared `PLAYWRIGHT_BROWSERS_PATH` that every uid can read means a run does not download the browser:
+
+```dockerfile
+FROM warren-agent:latest
+USER root
+ENV PLAYWRIGHT_BROWSERS_PATH=/opt/ms-playwright
+RUN npx -y playwright@1.62.1 install chromium \
+    && chmod -R a+rX /opt/ms-playwright && rm -rf /tmp/.npm
+USER bun
+```
+
+When the project bumps Playwright, rebuild the image with the new version, because each Playwright release expects its own browser build.
+
 ### Test the image before you use it
 
 Run the quality gate of the project inside the candidate image, as your host uid, against a clone of the repository:

@@ -121,6 +121,20 @@ COPY . /app
 ENV BUN_INSTALL_CACHE_DIR=/tmp/bun-install-cache
 ENV HOME=/tmp
 
+# Opt-in system libraries for Playwright's Chromium (namphuongtran/warren#44).
+# A run is non-root under no-new-privileges, so it can download a browser into
+# its own $HOME but cannot apt-get the shared libraries (libnss3 and the rest)
+# that browser needs. `playwright install-deps` installs Playwright's own list
+# for this Debian release. Off by default, so the default image does not grow:
+#   docker build -f deploy/docker/Dockerfile.agent \
+#     --build-arg WITH_BROWSER_DEPS=1 -t warren-agent:latest .
+ARG WITH_BROWSER_DEPS=0
+ARG PLAYWRIGHT_VERSION=1.62.1
+RUN if [ "$WITH_BROWSER_DEPS" = "1" ]; then \
+        npx -y "playwright@${PLAYWRIGHT_VERSION}" install-deps chromium \
+        && rm -rf /var/lib/apt/lists/* /tmp/.npm; \
+    fi
+
 # oven/bun ships a non-root `bun` user at uid/gid 1000. Drop root in the image
 # as defense in depth (warren-3f32): claude-code refuses
 # `--dangerously-skip-permissions` when getuid()==0. DockerProvider also passes
