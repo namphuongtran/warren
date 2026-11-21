@@ -5,7 +5,7 @@ This directory holds operator, API, architecture, and contributor documentation.
 ## Run warren
 
 - [`quickstart.md`](quickstart.md) — the casual path end to end: install script, `warren up`, credential wizard, GitHub App connect, first run.
-- [`usage-guide-vi.md`](usage-guide-vi.md): a Vietnamese guide to install, project config, runs, plan-runs, schedules, and operations.
+- [`usage-guide.md`](usage-guide.md): a guide to install, project config, runs, plan-runs, schedules, and operations.
 - [`credentials.md`](credentials.md) — the two model paths and the two GitHub paths, including machine-account guidance.
 - [`self-host/docker.md`](self-host/docker.md) — local and sibling-container Docker topologies, agent images, persistence, and macOS Docker Desktop requirements.
 - [`RUNBOOK-K8S.md`](RUNBOOK-K8S.md) — Kubernetes deployment, secrets, RBAC, garbage collection, admission, and incident response.
@@ -30,7 +30,7 @@ This directory holds operator, API, architecture, and contributor documentation.
 ## Understand the project
 
 - [`PHILOSOPHY.md`](PHILOSOPHY.md) — product and architecture policy.
-- [`design/architecture-overview.md`](design/architecture-overview.md): C4 and run-flow diagrams for the whole system, in Vietnamese.
+- [`design/architecture-overview.md`](design/architecture-overview.md): C4 and run-flow diagrams for the whole system.
 - [`design/README.md`](design/README.md) — complete design-record catalog with delivery state.
 - [`../ROADMAP.md`](../ROADMAP.md) — current direction and sequencing.
 - [`../SECURITY.md`](../SECURITY.md) — threat model and vulnerability reporting.
@@ -56,6 +56,7 @@ Docs paths are a public surface (warren-d602). When maintainers delete or move a
 - `deploy/gke-deploy-prep.md` — retired, see [`RUNBOOK-K8S.md`](RUNBOOK-K8S.md) §1.5 (warren-c69e)
 - `design/k8s-migration-plan.md` — retired, see [`design/k8s-migration.md`](design/k8s-migration.md) (warren-c69e)
 - `design/data-plane-trajectory.md` — retired because its feature no longer exists (warren-c69e)
+- `usage-guide-vi.md` -> [`usage-guide.md`](usage-guide.md), the same guide in English
 
 ## History
 
