@@ -140,6 +140,84 @@ A harness needs a Warren runtime adapter and its executable must exist in the se
 
 A custom image can add another language toolchain or an operator-provided harness. An arbitrary executable does not become compatible merely because it is present in the image. Warren also needs an adapter for command construction, event parsing, steering, terminal detection, and usage extraction.
 
+### A custom image for a project toolchain
+
+Warren starts each run inside its agent container. The agent can run only the tools in that image. It cannot see a tool that you installed on the Docker host. When the quality gate of a project needs a toolchain that the shipped image does not have, build a project image from the shipped one.
+
+This example is for a repository with a Python backend, a Next.js web app, and a Flutter mobile app. It adds pinned versions of all three toolchains:
+
+```dockerfile
+FROM warren-agent:latest
+USER root
+
+# Python for the backend gate. The run HOME holds the uv cache, not the image.
+ENV UV_PYTHON_INSTALL_DIR=/opt/uv-python UV_LINK_MODE=copy
+RUN UV_CACHE_DIR=/root/.cache/uv uv python install 3.14.2 \
+    && rm -rf /root/.cache/uv && chmod -R a+rX /opt/uv-python
+
+# pnpm for the web gate.
+RUN npm install -g pnpm@10.6.0
+
+# Flutter for the mobile gate. A git checkout, because the release archive is x64 only.
+ENV FLUTTER_ROOT=/opt/flutter PATH=/opt/flutter/bin:$PATH
+RUN apt-get update && apt-get install -y --no-install-recommends unzip xz-utils \
+    && rm -rf /var/lib/apt/lists/* \
+    && git clone --depth 1 --branch 3.44.8 https://github.com/flutter/flutter.git /opt/flutter \
+    && git config --system --add safe.directory '*' \
+    && flutter --disable-analytics && flutter precache --universal \
+    && cd /tmp && flutter create --no-pub warm && cd warm && flutter test \
+    && cd / && rm -rf /tmp/warm /root/.pub-cache \
+    && chmod -R a+rwX /opt/flutter
+
+USER bun
+```
+
+```bash
+docker build -t myproject-agent:candidate ./agent-image
+```
+
+Obey these rules when you write the Dockerfile:
+
+- **Start from the shipped agent image.** The harness executables live there. A plain language image has no Claude Code and no Pi.
+- **Install every tool at build time.** Warren starts the container with a non-root `--user` and `no-new-privileges`. A run cannot use `sudo` or `apt-get`.
+- **Let any uid use the tools.** Warren runs the container as the host uid, not as the image `USER`. On macOS that uid is usually 501. When the host user is root, Warren uses uid 1000. Make each directory that a tool writes to at run time writable by all users. A git checkout of an SDK also needs `safe.directory`, because the run uid does not own it.
+- **Keep caches out of the image.** Warren mounts a writable home for each run and sets `HOME` to it. Per-user caches such as `~/.cache/uv` and `~/.pub-cache` go there. A cache from the build belongs to root, and the run cannot write to it.
+- **Match the host architecture.** On Apple silicon, Docker builds `linux/arm64` images. Some SDKs publish Linux archives for x64 only. Use a source checkout or an arm64 build for those.
+- **Load the SDK artifacts at build time.** Run one small build or test in the Dockerfile, as the Flutter step does. Then the first run does not spend its budget on downloads.
+- **Keep the entrypoint transparent.** Warren does not replace the image `ENTRYPOINT`. It appends the harness command as arguments. A custom entrypoint script must end with `exec "$@"`.
+
+### Test the image before you use it
+
+Run the quality gate of the project inside the candidate image, as your host uid, against a clone of the repository:
+
+```bash
+cd /path/to/clone
+docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp/home \
+  -v "$PWD":/ws -w /ws --entrypoint bash myproject-agent:candidate \
+  -c 'mkdir -p "$HOME" && cd mobile && flutter pub get && flutter analyze && flutter test'
+```
+
+Compare the result with the CI result for the same commit. Some tests depend on the platform. For example, golden images that a developer rendered on macOS fail on Linux. CI often excludes such tests. Tell the agent the same thing with `repoContext` in `.warren/config.yaml`, or in the task prompt. If you do not, the agent reports these failures, or it regenerates the baselines.
+
+### Select and replace the image
+
+Warren selects the image for each run in this order:
+
+1. `agentImage` in the `.warren/config.yaml` of the project.
+2. The `WARREN_DOCKER_AGENT_IMAGE` variable that the warren server reads at boot.
+3. The built-in default, `warren-agent:latest`.
+
+A deployment-wide `WARREN_DOCKER_AGENT_IMAGE` applies to every project. Use `agentImage` when only one project needs the extra toolchain.
+
+Docker resolves the tag again at each run start. To replace an image, keep the old one under a second tag and move the selected tag to the candidate:
+
+```bash
+docker tag myproject-agent:latest myproject-agent:previous
+docker tag myproject-agent:candidate myproject-agent:latest
+```
+
+The next run uses the new image. A run that is already active keeps its old image. You do not have to restart warren. To roll back, move the tag back to `previous`.
+
 ## Persistence and security
 
 The data directory contains the database, project clones, workspaces, and the minted operator token. Back it up and restrict host access.
