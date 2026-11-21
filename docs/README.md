@@ -5,6 +5,7 @@ This directory holds operator, API, architecture, and contributor documentation.
 ## Run warren
 
 - [`quickstart.md`](quickstart.md) — the casual path end to end: install script, `warren up`, credential wizard, GitHub App connect, first run.
+- [`usage-guide-vi.md`](usage-guide-vi.md): a Vietnamese guide to install, project config, runs, plan-runs, schedules, and operations.
 - [`credentials.md`](credentials.md) — the two model paths and the two GitHub paths, including machine-account guidance.
 - [`self-host/docker.md`](self-host/docker.md) — local and sibling-container Docker topologies, agent images, persistence, and macOS Docker Desktop requirements.
 - [`RUNBOOK-K8S.md`](RUNBOOK-K8S.md) — Kubernetes deployment, secrets, RBAC, garbage collection, admission, and incident response.
@@ -29,6 +30,7 @@ This directory holds operator, API, architecture, and contributor documentation.
 ## Understand the project
 
 - [`PHILOSOPHY.md`](PHILOSOPHY.md) — product and architecture policy.
+- [`design/architecture-overview.md`](design/architecture-overview.md): C4 and run-flow diagrams for the whole system, in Vietnamese.
 - [`design/README.md`](design/README.md) — complete design-record catalog with delivery state.
 - [`../ROADMAP.md`](../ROADMAP.md) — current direction and sequencing.
 - [`../SECURITY.md`](../SECURITY.md) — threat model and vulnerability reporting.
