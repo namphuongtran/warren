@@ -212,6 +212,23 @@ describe("claudeCodeAdapter.prepareWorkspace", () => {
 		expect(fs.statSync(tmpDir).isDirectory()).toBe(true);
 		expect(await readFile(join(tmpDir, ".gitignore"), "utf8")).toBe("*\n");
 	});
+
+	test("never writes credentials into the workspace (the git checkout the run pushes)", async () => {
+		await claudeCodeAdapter.prepareWorkspace?.({ runId: "run_test", workspacePath: dir });
+		const fs = await import("node:fs");
+		expect(fs.existsSync(join(dir, ".claude", ".credentials.json"))).toBe(false);
+	});
+});
+
+describe("claudeCodeAdapter credential and connector isolation", () => {
+	test("excludes the credentials file from run commits, by exact path", () => {
+		expect(claudeCodeAdapter.commitExcludes).toEqual([".claude/.credentials.json"]);
+	});
+
+	test("turns off the account's claude.ai connectors in the spawn env", () => {
+		const cmd = claudeCodeAdapter.buildSpawnCommand?.(fakeSpawnContext());
+		expect(cmd?.env?.ENABLE_CLAUDEAI_MCP_SERVERS).toBe("false");
+	});
 });
 
 describe("forwardClaudeHostCredentials (linux)", () => {

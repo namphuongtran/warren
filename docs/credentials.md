@@ -11,6 +11,12 @@ Warren needs two kinds of credential: one so an agent can call its model API, an
 
 When the `claude` CLI is on PATH, the `warren up` wizard offers `claude setup-token` and stores the resulting `CLAUDE_CODE_OAUTH_TOKEN`. A pasted token works too.
 
+Prefer this token over a logged-in `claude` CLI. It is Claude Code's documented method for headless use. It can only make model requests, so a run cannot reach the account's claude.ai connectors.
+
+With no `CLAUDE_CODE_OAUTH_TOKEN`, `ANTHROPIC_API_KEY`, or `ANTHROPIC_AUTH_TOKEN` in the run's env, the local and docker runtimes fall back to the host's interactive login. That login lives in the macOS Keychain, or in `~/.claude/.credentials.json` on Linux. Warren copies it into each run's private `$HOME`, never into the workspace. The adapter also excludes `.claude/.credentials.json` from run commits.
+
+Every claude-code run sets `ENABLE_CLAUDEAI_MCP_SERVERS=false`, so the claude.ai connectors stay off even under the fallback.
+
 Subscription auth serves the claude-code harness only. Pi and every other harness still need their own API keys. The wizard states this limit at the prompt, and the cost display honors it: runs under subscription auth carry `costBasis=subscription_estimate` and the UI shows the cost as an estimate, not a bill. `maxCostUsd` still enforces against that estimate as a runaway brake.
 
 ### Anthropic API key

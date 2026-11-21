@@ -14,9 +14,10 @@
  * the agent has a stable settings file even when the project ships none,
  * plants a private `.sandbox-tmp/` for the spawn's `TMPDIR` (burrow-8452 —
  * the host UID-keyed `/tmp/claude-${uid}/` root races every other
- * claude-code on the machine during startup cleanup), and, when the host
- * is logged in, forwards credentials into the run's `.claude/` (see
- * `./claude-credentials.ts`).
+ * claude-code on the machine during startup cleanup). It never writes
+ * credentials into the workspace: the workspace is the git checkout the run
+ * pushes, so a broad `git add -A` would publish them. Host credentials, when
+ * forwarded at all, go to the run's private $HOME (`../local/drive-prepare.ts`).
  *
  * claude-code `--print` relies on stdin EOF to flush its final output, so
  * this adapter deliberately declares NO `shouldCloseStdinOnEvent` and NO
@@ -26,7 +27,6 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { forwardClaudeHostCredentials } from "./claude-credentials.ts";
 import { mulchClaudeHooks, readMulchArm } from "./mulch-arm.ts";
 import { parseJsonlClaude } from "./parsers/jsonl-claude.ts";
 import type {
@@ -90,13 +90,17 @@ export const claudeCodeAdapter: AgentRuntimeAdapter = {
 	 */
 	harnessStatePrefixes: [".claude/", ".claude.json"],
 	/**
-	 * Empty on purpose. `.claude/` is tracked in plenty of target repos
-	 * (this one keeps five files there), so excluding the prefix would eat
-	 * real work; `.claude/settings.local.json` and `.claude.json` have not
-	 * been observed in a pull request yet. Add the exact file the day one
-	 * does (warren-194a).
+	 * Exact files only, never the `.claude/` prefix: `.claude/` is tracked in
+	 * plenty of target repos (this one keeps five files there), so excluding
+	 * the prefix would eat real work. `.claude/settings.local.json` and
+	 * `.claude.json` have not been observed in a pull request yet; add the
+	 * exact file the day one does (warren-194a). `.claude/.credentials.json`
+	 * is the exception that cannot wait for an observation: it holds an OAuth
+	 * session, and one broad commit would push it to the remote. Nothing in
+	 * warren writes it into the workspace any more, so this is the backstop
+	 * for a harness or a target repo that does.
 	 */
-	commitExcludes: [],
+	commitExcludes: [".claude/.credentials.json"],
 	/**
 	 * Empty by evidence, not by omission. The provider-error net (warren-edc3)
 	 * was written against pi's turn lifecycle, and warren has never observed
@@ -122,7 +126,15 @@ export const claudeCodeAdapter: AgentRuntimeAdapter = {
 				"--dangerously-skip-permissions",
 				...claudeModelArgs(ctx.frontmatter),
 			],
-			env: { TMPDIR: claudeCodeBurrowTmpdir(ctx.workspacePath) },
+			env: {
+				TMPDIR: claudeCodeBurrowTmpdir(ctx.workspacePath),
+				// A subscription login makes the CLI fetch the account's claude.ai
+				// connectors (mail, drive, docs, ...) into a run that executes with
+				// --dangerously-skip-permissions. A coding run needs none of them.
+				// This is the documented switch ("Disable claude.ai connectors",
+				// code.claude.com/docs/en/mcp); --strict-mcp-config does not cover them.
+				ENABLE_CLAUDEAI_MCP_SERVERS: "false",
+			},
 			stdin: encodeClaudeStdin(ctx.prompt, ctx.pendingMessages),
 		};
 	},
@@ -149,7 +161,6 @@ export const claudeCodeAdapter: AgentRuntimeAdapter = {
 			{ encoding: "utf8", flag: "w" },
 		);
 		ensureBurrowTmpdir(ctx.workspacePath);
-		await forwardClaudeHostCredentials(ctx.workspacePath);
 	},
 };
 
