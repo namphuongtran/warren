@@ -189,4 +189,65 @@ describe("createPlanRunSpawn", () => {
 
 		expect(captured).toHaveLength(1);
 	});
+
+	// namphuongtran/warren#30: a quota-stopped child's retry builds on its
+	// pushed branch, while the PR keeps targeting the plan's base.
+	test("continueFrom spawns a continue clone with the plan's ref as the PR base", async () => {
+		const { planRun } = await repos.planRuns.create({
+			planId: "pl-quota",
+			projectId,
+			agentName: "claude-code",
+			children: [{ seq: 1, seedId: "warren-a" }],
+			ref: "feature/base",
+			now: NOW,
+		});
+		const child = (await repos.planRuns.listChildren(planRun.id))[0];
+		if (child === undefined) throw new Error("child seq=1 missing");
+		const captured: SpawnRunInput[] = [];
+		const spawn = createPlanRunSpawn({
+			repos,
+			runtimeProvider: RUNTIME_PROVIDER,
+			bridges: makeBridges(),
+			warrenConfigs: createWarrenConfigCache({
+				load: async () => ({
+					triggers: null,
+					defaults: null,
+					prTemplate: null,
+					sourceFile: null,
+					errors: [],
+					warnings: [],
+				}),
+			}),
+			projectsConfig: { root: "/data/projects", gitBinary: "git" },
+			projectSpawn: (async () => ({ stdout: "", stderr: "", exitCode: 0 })) as SpawnFn,
+			seedsCli: {
+				sdBinary: "sd",
+				spawn: (async () => ({ stdout: "", stderr: "", exitCode: 0 })) as SpawnFn,
+			},
+			spawnRunFn: async (input: SpawnRunInput): Promise<SpawnRunResult> => {
+				captured.push(input);
+				const run = await repos.runs.create({
+					agentName: input.agentName,
+					projectId: input.projectId,
+					prompt: input.prompt,
+					renderedAgentJson: { sections: {} },
+					trigger: "plan-run",
+					now: NOW,
+				});
+				return {
+					run,
+					sandbox: { id: "bur_c", workspacePath: "/ws" },
+					sandboxRun: { id: "rb_c" },
+					agent: { name: input.agentName, sections: {} } as never,
+				};
+			},
+			now: () => NOW,
+		});
+
+		await spawn({ planRun, child, prompt: "work on sd warren-a", continueFrom: "run_stopped" });
+
+		expect(captured[0]?.parentRunId).toBe("run_stopped");
+		expect(captured[0]?.cloneKind).toBe("continue");
+		expect(captured[0]?.ref).toBe("feature/base");
+	});
 });

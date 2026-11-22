@@ -13,6 +13,7 @@ import { formatError } from "../core/errors.ts";
 import { IssueNotFoundError } from "../core/wire.ts";
 import type { PlanRunChildRow, PlanRunRow, RunRow } from "../db/schema.ts";
 import type { PrMergeChecker } from "../runs/pr-merge.ts";
+import { quotaContinuationPrompt } from "../runs/retry/quota-resume.ts";
 import { renderChildPrompt } from "./child-prompt.ts";
 import type {
 	AdvanceResult,
@@ -367,10 +368,17 @@ async function retryChild(
 	run: RunRow,
 ): Promise<HandleInFlightDecision> {
 	const { repos, planRun, child, emit, spawn, now } = input;
-	const prompt = await renderChildPrompt(repos, planRun, child);
+	const childPrompt = await renderChildPrompt(repos, planRun, child);
+	const continued = continuesPushedWork(run);
+	const prompt = continued ? quotaContinuationPrompt(run.id, childPrompt) : childPrompt;
 	let spawnResult: CoordinatorSpawnResult;
 	try {
-		spawnResult = await spawn({ planRun, child, prompt });
+		spawnResult = await spawn({
+			planRun,
+			child,
+			prompt,
+			...(continued ? { continueFrom: run.id } : {}),
+		});
 	} catch (err) {
 		if (err instanceof PlanRunSpawnDeferredError) {
 			return { kind: "result", result: { kind: "noop", reason: err.code } };
@@ -398,6 +406,15 @@ async function retryChild(
 		retryCount,
 	});
 	return { kind: "result", result: { kind: "dispatched", childRunId: spawnResult.runId } };
+}
+
+/**
+ * namphuongtran/warren#30: a child the provider stopped on a spent usage
+ * window keeps its pushed commits, so its retry continues from them. Other
+ * retryable causes keep the fresh re-dispatch (warren-6de9).
+ */
+function continuesPushedWork(run: RunRow): boolean {
+	return run.failureReason === "quota_exhausted" && (run.commitsAhead ?? 0) > 0;
 }
 
 export async function handleInFlight(input: HandleInFlightInput): Promise<HandleInFlightDecision> {

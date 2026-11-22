@@ -179,8 +179,9 @@ that dies mid-dispatch never spawns a second successor.
 
 A due resume that the dispatch guard still refuses (a newer report moved the
 reset) is scheduled again at the new reset and keeps its attempt. Plan-run
-children are skipped, because the coordinator already defers a child that the
-guard refuses.
+children are skipped, because the coordinator retries a `quota_exhausted`
+child itself: the guard defers that retry until the reset, and a child that
+pushed commits is retried as a `continue` clone of its branch.
 
 | Kind | Stream | Payload |
 |---|---|---|

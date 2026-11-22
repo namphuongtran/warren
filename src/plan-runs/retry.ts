@@ -42,6 +42,11 @@ export const RETRYABLE_CHILD_FAILURE_REASONS = [
 	// died because GKE reclaimed its node), kept a distinct reason so
 	// telemetry can tell capacity reclamation apart from a generic loss.
 	"preempted",
+	// namphuongtran/warren#30: the provider refused the child because the
+	// credential's usage window is spent. The retry spawn is refused by the
+	// dispatch guard until the reset, which the coordinator turns into a noop,
+	// so the child waits for the window instead of failing the plan.
+	"quota_exhausted",
 ] as const satisfies readonly RunFailureReason[];
 
 export type RetryableChildFailureReason = (typeof RETRYABLE_CHILD_FAILURE_REASONS)[number];

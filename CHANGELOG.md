@@ -22,9 +22,13 @@ Releases **0.9.10 and earlier** live in
   lives in the failed run's events, so it survives a restart, and a claim
   event stops a crash mid-dispatch from spawning twice. A resume that the
   dispatch guard still refuses waits for the new reset and keeps its attempt.
-  Automatic-trigger runs stay under the automatic-run cap. Plan-run children
-  stay with the coordinator. `dispatch_context.retry_kind` gains
-  `quota_exhausted`. No schema change.
+  Automatic-trigger runs stay under the automatic-run cap. A plan-run child
+  that reaps `quota_exhausted` no longer fails its plan: the coordinator
+  retries it once (it joins `RETRYABLE_CHILD_FAILURE_REASONS`), the dispatch
+  guard holds that retry until the reset, and a child that pushed commits is
+  retried as a `continue` clone of its branch with the plan's `ref` still as
+  the PR base. `dispatch_context.retry_kind` gains `quota_exhausted`. No
+  schema change.
 
 - **Approach note before the first edit (namphuongtran/warren#33).** The
   source-editing built-ins (`claude-code`, `pi`, `codex`, `pr-fixer`,

@@ -32,7 +32,7 @@ import type { RuntimeProvider } from "../runtime/contract.ts";
 import type { SeedsCliDeps } from "../seeds-cli/index.ts";
 import type { IssueTracker } from "../tracker/contract.ts";
 import type { WarrenConfigCache } from "../warren-config/index.ts";
-import type { CoordinatorSpawnFn } from "./coordinator.ts";
+import type { CoordinatorSpawnFn, CoordinatorSpawnInput } from "./coordinator.ts";
 
 export interface CreatePlanRunSpawnInput {
 	readonly repos: Repos;
@@ -62,9 +62,20 @@ export interface CreatePlanRunSpawnInput {
 	readonly spawnRunFn?: typeof spawnRun;
 }
 
+/** The plan-run's provider, model and spend-cap overrides, set on every child dispatch. */
+function planRunOverrides(planRun: CoordinatorSpawnInput["planRun"]) {
+	return {
+		...(planRun.providerOverride !== null ? { providerOverride: planRun.providerOverride } : {}),
+		...(planRun.modelOverride !== null ? { modelOverride: planRun.modelOverride } : {}),
+		// warren-a63d: the plan-run's spend cap applies to EACH child dispatch
+		// on the override tier, same slot a POST /runs body cap rides.
+		...(planRun.maxCostUsd !== null ? { maxCostUsdOverride: planRun.maxCostUsd } : {}),
+	};
+}
+
 export function createPlanRunSpawn(input: CreatePlanRunSpawnInput): CoordinatorSpawnFn {
 	const spawnRunFn = input.spawnRunFn ?? spawnRun;
-	return async ({ planRun, child, prompt }) => {
+	return async ({ planRun, child, prompt, continueFrom }) => {
 		const project = await input.repos.projects.require(planRun.projectId);
 		const ref = planRun.ref ?? project.defaultBranch;
 		const gitCredential =
@@ -80,12 +91,13 @@ export function createPlanRunSpawn(input: CreatePlanRunSpawnInput): CoordinatorS
 			// vocabulary (distinct from the hyphenated trigger column).
 			dispatchOrigin: "plan_run",
 			seedId: child.seedId,
-			...(planRun.providerOverride !== null ? { providerOverride: planRun.providerOverride } : {}),
-			...(planRun.modelOverride !== null ? { modelOverride: planRun.modelOverride } : {}),
-			// warren-a63d: the plan-run's spend cap applies to EACH child dispatch
-			// on the override tier, same slot a POST /runs body cap rides.
-			...(planRun.maxCostUsd !== null ? { maxCostUsdOverride: planRun.maxCostUsd } : {}),
+			...planRunOverrides(planRun),
 			ref,
+			// namphuongtran/warren#30: build on a quota-stopped child's pushed
+			// branch. `ref` still freezes onto the row, so the PR base stays the plan's.
+			...(continueFrom !== undefined
+				? { parentRunId: continueFrom, cloneKind: "continue" as const }
+				: {}),
 			metadata: {
 				planRunId: planRun.id,
 				planId: planRun.planId,

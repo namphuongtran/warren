@@ -55,6 +55,12 @@ export interface CoordinatorSpawnInput {
 	readonly planRun: PlanRunRow;
 	readonly child: PlanRunChildRow;
 	readonly prompt: string;
+	/**
+	 * A retry that builds on this failed child run's pushed branch (a
+	 * `continue` clone) instead of starting fresh from the plan's base
+	 * (namphuongtran/warren#30). The PR base stays the plan's `ref`.
+	 */
+	readonly continueFrom?: string;
 }
 
 export interface CoordinatorSpawnResult {
