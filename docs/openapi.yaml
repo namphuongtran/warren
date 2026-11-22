@@ -1303,6 +1303,7 @@ components:
         - preempted
         - duration_exceeded
         - handoff_missing
+        - quota_exhausted
     RunMode:
       type: string
       enum:
@@ -1514,6 +1515,7 @@ components:
             - preempted
             - duration_exceeded
             - handoff_missing
+            - quota_exhausted
             - null
         createdAt:
           type:

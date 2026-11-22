@@ -22,11 +22,12 @@
  * down to reap, not to the move that creates the seam.
  */
 
+import type { EventEnvelopeInput } from "../../core/event-envelope.ts";
 import { KNOWN_RUNTIME_IDS, type RuntimeId } from "../../core/wire.ts";
 import { claudeCodeAdapter } from "./claude-code.ts";
 import { codexAdapter } from "./codex.ts";
 import { piAdapter } from "./pi.ts";
-import type { AgentRuntimeAdapter } from "./types.ts";
+import type { AgentRuntimeAdapter, QuotaExhaustedSignal } from "./types.ts";
 
 // Phase-2 harness surface (warren-7933) — additive re-exports so the k8s
 // in-pod rewiring (warren-0efe) can consume the lifted types from the
@@ -43,6 +44,7 @@ export type {
 	AgentRuntimeAdapter,
 	IgnoredModelSelection,
 	PiFrontmatterOptions,
+	QuotaExhaustedSignal,
 	SpawnCommand,
 	SteeringMessage,
 } from "./types.ts";
@@ -99,4 +101,21 @@ export function commitExcludes(): readonly string[] {
  */
 export function providerErrorEnvelopeTypes(): readonly string[] {
 	return union((adapter) => adapter.terminalErrorEnvelopeTypes);
+}
+
+/**
+ * Ask every adapter whether the provider ended this run on a spent usage
+ * window (namphuongtran/warren#74). Reap reads the persisted event log without
+ * the run's runtime id in hand (the row's `runtime_id` is often null), so this
+ * reads the union, like {@link providerErrorEnvelopeTypes}. The first adapter
+ * that recognizes its own envelope answers.
+ */
+export function detectQuotaExhausted(
+	events: readonly EventEnvelopeInput[],
+): QuotaExhaustedSignal | null {
+	for (const adapter of allAdapters()) {
+		const signal = adapter.detectQuotaExhausted?.(events) ?? null;
+		if (signal !== null) return signal;
+	}
+	return null;
 }

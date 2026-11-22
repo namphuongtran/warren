@@ -94,7 +94,8 @@ export type CloneKind = (typeof CLONE_KINDS)[number];
  *     (`text` / `thinking` / `tool_use` on stdout) ⇒ `no_model_response`
  *     (typically a credential/auth failure — the warren-5165 symptom was
  *     claude-code exiting with "Not logged in" before any assistant turn;
- *     also covers rate-limit and provider-network failures).
+ *     also covers non-quota rate-limit and provider-network failures).
+ *   - `quota_exhausted` (namphuongtran/warren#74): usage window spent; precedence in reap/quota.ts.
  *   - `running` on entry with model output ⇒ `crashed` (agent ran and
  *     hit an unrecoverable error mid-conversation).
  *   - `timed_out` (warren-285d) is set by the heartbeat watchdog
@@ -108,13 +109,11 @@ export type CloneKind = (typeof CLONE_KINDS)[number];
  *     runtime backend has no record of the run — a burrow 404 (local) or a
  *     pod vanished from the API with no cancel intent (K8s). A pod warren
  *     deleted itself is NOT lost: cancel intent wins → `cancelled` (warren-fe9b).
- *   - `sandbox_unreachable` (warren-af76) means burrow stayed up but
- *     unresponsive — the socket probe timed out, so the bridge errored
- *     with `sandboxRunMissing:false` and reconnected with no forward
- *     progress past `BRIDGE_STALL_CEILING` consecutive attempts. The
- *     reconnect loop gives up and finalizes the warren row `failed` with
- *     this reason instead of spinning forever (the run otherwise wedges
- *     in `running`). Distinct from `sandbox_run_lost`, which is a clean
+ *   - `sandbox_unreachable` (warren-af76) means burrow stayed up but unresponsive — the socket
+ *     probe timed out, so the bridge errored with `sandboxRunMissing:false` and reconnected with
+ *     no forward progress past `BRIDGE_STALL_CEILING` consecutive attempts. The reconnect loop
+ *     gives up and finalizes the warren row `failed` with this reason instead of spinning forever
+ *     (the run otherwise wedges in `running`). Distinct from `sandbox_run_lost`, which is a clean
  *     404; here burrow never answered at all.
  *   - `dropped_commit` (warren-72b9) means reap's `git push` landed zero
  *     commits ahead of the base (`reap.empty_push`) AND the workspace was
@@ -217,6 +216,7 @@ export const RUN_FAILURE_REASONS = [
 	"preempted",
 	"duration_exceeded",
 	"handoff_missing",
+	"quota_exhausted",
 ] as const;
 export type RunFailureReason = (typeof RUN_FAILURE_REASONS)[number];
 

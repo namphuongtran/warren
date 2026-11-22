@@ -8,6 +8,7 @@ import { classifyInfraLoss, infraLossEventPayload, REAP_INFRA_LOSS_KIND } from "
 import { createPipelineState, runReapPipeline } from "./pipeline.ts";
 import { detectTerminalProviderError, providerErrorEventPayload } from "./provider-error.ts";
 import { recordQualityGateOutcome } from "./quality-gate.ts";
+import { detectRunQuotaExhausted, recordQuotaExhausted } from "./quota.ts";
 import {
 	salvageLocalWorkspace,
 	surfacePodSalvage,
@@ -58,14 +59,20 @@ export async function reapRun(input: ReapRunInput): Promise<ReapRunResult> {
 		fallbackModel: run.model,
 	});
 	const providerErrorMessage = providerError?.message ?? null;
-	const failedFromProviderError = providerError !== null && input.outcome !== "cancelled";
+	// namphuongtran/warren#74: a spent usage window fails the run (precedence: ./quota.ts).
+	const quota =
+		input.outcome === "cancelled" ? null : await detectRunQuotaExhausted(input.repos, run.id);
+	const failedFromProviderError =
+		providerError !== null && input.outcome !== "cancelled" && quota === null;
 	// warren-cbd3: seed-close / preview / auto-dispatch stay gated on
 	// `outcome === "succeeded"`, so thread the overridden outcome in so a
 	// provider-error run skips them — same posture as a bridge-failed run.
 	// `providerErrorPr` is the PR-open exception: pushed work still gets a PR.
 	const pipelineInput: ReapRunInput = failedFromProviderError
 		? { ...input, outcome: "failed", providerErrorPr: { message: providerErrorMessage } }
-		: input;
+		: quota !== null
+			? { ...input, outcome: "failed" }
+			: input;
 
 	// `run.projectId` is null when the project was deleted while the run
 	// existed (warren-5f19): the FK is `ON DELETE SET NULL`, so the run
@@ -205,6 +212,7 @@ export async function reapRun(input: ReapRunInput): Promise<ReapRunResult> {
 	const effectiveOutcome: RunTerminalState =
 		state.droppedCommit ||
 		noChangesFailure ||
+		quota !== null ||
 		failedFromProviderError ||
 		finalizeFailed ||
 		handoffFailure
@@ -226,7 +234,9 @@ export async function reapRun(input: ReapRunInput): Promise<ReapRunResult> {
 			})
 		: null;
 	const blamesProvider = failedFromProviderError && infraLoss === null;
-	if (infraLoss !== null) {
+	if (quota !== null) {
+		await recordQuotaExhausted(emit, quota, run);
+	} else if (infraLoss !== null) {
 		await emit(REAP_INFRA_LOSS_KIND, infraLossEventPayload(infraLoss, providerErrorMessage));
 	} else if (blamesProvider && providerError !== null) {
 		// warren-4001: structured provider-error surface (provider/model/status).
@@ -263,7 +273,10 @@ export async function reapRun(input: ReapRunInput): Promise<ReapRunResult> {
 		failureReason = "handoff_missing";
 	} else if (effectiveOutcome === "failed") {
 		failureReason =
-			input.failureReason ?? (await inferFailureReason(input.repos, run.id, stateOnEntry));
+			input.failureReason ??
+			(quota !== null
+				? "quota_exhausted"
+				: await inferFailureReason(input.repos, run.id, stateOnEntry));
 	}
 
 	// warren-cd3b: salvage-before-destroy. The finalize branch push never
