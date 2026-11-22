@@ -45,6 +45,10 @@ FROM oven/bun:1.2
 # set, so it cannot use this same binary to climb back (verified live on GKE
 # Autopilot / containerd 2.1.7). DockerProvider runs pin
 # `--security-opt no-new-privileges` so the caps stay inert there too.
+#
+# procps ships ps/pgrep/pkill. Without them an agent cannot tell a slow gate
+# from a dead one: a claude-code run found no `ps`, judged its running pytest
+# gone, re-ran the gate in the background, ended its turn, and lost the work.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         git \
@@ -56,6 +60,7 @@ RUN apt-get update \
         python3-venv \
         util-linux \
         libcap2-bin \
+        procps \
     && setcap cap_setuid,cap_setgid+ep "$(command -v setpriv)" \
     && getcap "$(command -v setpriv)" \
     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
