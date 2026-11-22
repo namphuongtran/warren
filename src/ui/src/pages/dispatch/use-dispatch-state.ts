@@ -140,8 +140,15 @@ export function useDispatchState(): useDispatchStateResult {
 		}
 		const cost =
 			costCapResult !== null && "value" in costCapResult ? costCapResult.value : undefined;
-		spawn.mutate(buildCreateRunInput({ draft, routeState: initialState, maxCostUsd: cost }));
-	}, [spawn, draft, costCapError, costCapResult, initialState]);
+		spawn.mutate(
+			buildCreateRunInput({
+				draft,
+				providerTouched: patch.touched.provider,
+				routeState: initialState,
+				maxCostUsd: cost,
+			}),
+		);
+	}, [spawn, draft, patch.touched.provider, costCapError, costCapResult, initialState]);
 
 	const agentDefaultFrom =
 		defaults?.defaultRole !== undefined && defaults.defaultRole === draft.agent

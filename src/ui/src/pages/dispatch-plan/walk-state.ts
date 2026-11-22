@@ -242,8 +242,14 @@ export function useWalkState(): WalkStateResult {
 
 	const submit = useCallback((): void => {
 		if (dispatch.isPending || !valid) return;
-		dispatch.mutate(buildCreatePlanRunInput({ draft, maxCostUsd: costValueOf(costCapResult) }));
-	}, [dispatch, valid, costCapResult, draft]);
+		dispatch.mutate(
+			buildCreatePlanRunInput({
+				draft,
+				providerTouched: patch.touched.provider,
+				maxCostUsd: costValueOf(costCapResult),
+			}),
+		);
+	}, [dispatch, valid, costCapResult, draft, patch.touched.provider]);
 
 	return {
 		initialState,
