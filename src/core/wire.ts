@@ -54,8 +54,7 @@ export function isTerminalRunState(state: RunState): state is RunTerminalState {
 export const RUN_MODES = ["batch"] as const;
 export type RunMode = (typeof RUN_MODES)[number];
 
-// The GET /whoami actor vocabulary (warren-3754) lives in ./wire-actor.ts.
-export * from "./wire-actor.ts";
+export * from "./wire-actor.ts"; // GET /whoami actor vocabulary (warren-3754)
 export * from "./wire-approach.ts"; // run approach note (namphuongtran/warren#33)
 export * from "./wire-cost.ts"; // cost-basis vocabulary (warren-f3c3)
 export * from "./wire-handoff.ts"; // run handoff report (namphuongtran/warren#21)
@@ -69,6 +68,7 @@ export * from "./wire-quality-gate.ts"; // gate outcomes (namphuongtran/warren#3
 // The runtime-id vocabulary (warren-c4be) lives in ./wire-runtime.ts
 // (file-size budget); re-exported for one canonical home.
 export * from "./wire-runtime.ts";
+export * from "./wire-tool-stall.ts"; // stalled tool call (namphuongtran/warren#83)
 // The IssueTracker seam vocabulary (warren-6c29) lives in ./wire-tracker.ts.
 export * from "./wire-tracker.ts";
 

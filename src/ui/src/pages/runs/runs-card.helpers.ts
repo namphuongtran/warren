@@ -27,10 +27,28 @@ export interface RunStateCell {
 	readonly label: string;
 }
 
+/**
+ * The state a runs row shows: the run state, except `stalled` for a running
+ * run stuck on a tool call the watchdog warned about (namphuongtran/warren#83).
+ */
+export function displayStateOf(row: RunRow): RunRow["state"] | "stalled" {
+	return isStalled(row) ? "stalled" : row.state;
+}
+
+function isStalled(row: RunRow): boolean {
+	return row.state === "running" && row.toolStall !== null && row.toolStall !== undefined;
+}
+
+/** "stuck in Bash" for a stalled run, else null. Shared by the card and the table. */
+export function stuckInOf(row: RunRow): string | null {
+	return isStalled(row) ? `stuck in ${row.toolStall?.toolName ?? "a tool"}` : null;
+}
+
 /** State cell (tone + short word), per the mock's state column. */
 export function stateCellOf(row: RunRow): RunStateCell {
 	switch (row.state) {
 		case "running":
+			if (isStalled(row)) return { tone: "warning", label: "stalled" };
 			return { tone: "info", label: "running" };
 		case "queued":
 			return { tone: "warning", label: "queued" };
@@ -89,11 +107,16 @@ function contextualExtraOf(row: RunRow): string | null {
 		}
 		return null;
 	}
-	if (row.state === "running" || row.state === "queued") {
-		const pct = capPctOf(row);
-		if (pct !== null) return `cap ${pct}%`;
-	}
+	if (row.state === "running" || row.state === "queued") return liveExtraOf(row);
 	return null;
+}
+
+/** A live run's extra: the tool it is stuck in, else the cap percent near budget. */
+function liveExtraOf(row: RunRow): string | null {
+	const stuck = stuckInOf(row);
+	if (stuck !== null) return stuck;
+	const pct = capPctOf(row);
+	return pct === null ? null : `cap ${pct}%`;
 }
 
 /** Cost-vs-cap percentage, rounded, when a cap is known and spend is near it. */

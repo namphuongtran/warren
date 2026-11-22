@@ -40,6 +40,12 @@ export interface WatchdogConfig {
 	 * `toolStallWarnMinutes` overrides it per run.
 	 */
 	readonly toolStallWarnMs: number;
+	/**
+	 * How long one tool call may stay open before the watchdog force-fails the
+	 * run (namphuongtran/warren#83). `0` (the default) never kills. A project's
+	 * `toolStallKillMinutes` overrides it per run.
+	 */
+	readonly toolStallKillMs: number;
 }
 
 interface WatchdogEnvLike {
@@ -49,6 +55,7 @@ interface WatchdogEnvLike {
 	readonly WARREN_RUN_TERMINAL_RECONCILE_GRACE_MS?: string;
 	readonly WARREN_RUN_CANCEL_RECONCILE_GRACE_MS?: string;
 	readonly WARREN_TOOL_STALL_WARN_MS?: string;
+	readonly WARREN_TOOL_STALL_KILL_MS?: string;
 }
 
 /**
@@ -85,6 +92,11 @@ export function loadWatchdogConfigFromEnv(env: WatchdogEnvLike): WatchdogConfig 
 		"WARREN_TOOL_STALL_WARN_MS",
 		DEFAULT_TOOL_STALL_WARN_MS,
 	);
+	const toolStallKillMs = parseNonNegativeInt(
+		env.WARREN_TOOL_STALL_KILL_MS,
+		"WARREN_TOOL_STALL_KILL_MS",
+		0,
+	);
 	const optedOut = parseDisabledFlag(env.WARREN_WATCHDOG_DISABLED);
 	return {
 		enabled: !optedOut && heartbeatTimeoutMs > 0,
@@ -93,6 +105,7 @@ export function loadWatchdogConfigFromEnv(env: WatchdogEnvLike): WatchdogConfig 
 		terminalReconcileGraceMs,
 		cancelReconcileGraceMs,
 		toolStallWarnMs,
+		toolStallKillMs,
 	};
 }
 

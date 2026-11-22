@@ -157,10 +157,10 @@ describe("tickWatchdog tool-stall warning", () => {
 			toolUseId: TOOL_USE_ID,
 			heartbeats: 40,
 		});
-		const resolveToolStallWarnMs = async () => 30 * 60_000;
+		const resolveToolStallLimits = async () => ({ warnMs: 30 * 60_000 });
 
 		const result = await tickWatchdog(
-			deps(isoPlus(TOOL_USE_AT, 20 * 60_000), { resolveToolStallWarnMs }),
+			deps(isoPlus(TOOL_USE_AT, 20 * 60_000), { resolveToolStallLimits }),
 		);
 
 		expect(result.stalled).toEqual([]);
@@ -173,20 +173,23 @@ describe("projectToolStallResolver", () => {
 		return { get, invalidate: () => {}, clear: () => {}, size: () => 0 };
 	}
 
-	test("reads toolStallWarnMinutes from the run's project config, in ms", async () => {
+	test("reads both stall thresholds from the run's project config, in ms", async () => {
 		const runId = await seedRunningRun(repos, STARTED_AT);
 		const seen: string[] = [];
 		const resolve = projectToolStallResolver({
 			repos,
 			warrenConfigs: cacheReturning(async (projectId) => {
 				seen.push(projectId);
-				return { defaults: { toolStallWarnMinutes: 30 } } as Awaited<
+				return { defaults: { toolStallWarnMinutes: 30, toolStallKillMinutes: 60 } } as Awaited<
 					ReturnType<WarrenConfigCache["get"]>
 				>;
 			}),
 		});
 
-		expect(await resolve(await repos.runs.require(runId))).toBe(30 * 60_000);
+		expect(await resolve(await repos.runs.require(runId))).toEqual({
+			warnMs: 30 * 60_000,
+			killMs: 60 * 60_000,
+		});
 		expect(seen).toEqual([PROJECT_ID]);
 	});
 
@@ -199,6 +202,6 @@ describe("projectToolStallResolver", () => {
 			}),
 		});
 
-		expect(await resolve(await repos.runs.require(runId))).toBeUndefined();
+		expect(await resolve(await repos.runs.require(runId))).toEqual({});
 	});
 });

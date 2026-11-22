@@ -24,6 +24,7 @@ import {
 	SpendPanel,
 } from "@/pages/run-detail/side-panels.tsx";
 import { CancelRunButton, SteerForm } from "@/pages/run-detail/steering-panel.tsx";
+import { ToolStallAlert } from "@/pages/run-detail/tool-stall-alert.tsx";
 import {
 	extractQuotaHold,
 	extractReapSummary,
@@ -397,6 +398,8 @@ export function RunDetailPage() {
 					at about {formatTimestamp(quotaHold.releaseAt)}.
 				</Alert>
 			) : null}
+
+			<ToolStallAlert stall={r.state === "running" ? r.toolStall : null} />
 
 			{bridgeStalled ? (
 				<Alert variant="warning" title="Agent infrastructure unreachable">

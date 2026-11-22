@@ -380,8 +380,7 @@ export const DefaultsConfigSchema = z
 		// home is `.warren/preview.yaml` (post-warren-5840); this nested field is
 		// still accepted for migration — when both exist, `preview.yaml` wins.
 		preview: PreviewConfigSchema.optional(),
-		// warren-8f4c: per-project agent-runtime knobs (only `skipGitHooks`
-		// today). Missing block → defaults apply.
+		// warren-8f4c: per-project agent-runtime knobs; missing block → defaults apply.
 		agent: AgentConfigSchema.optional(),
 		// warren-b802: override of the burrow runtime backing interactive built-in
 		// agents. Precedence: config override > agent frontmatter.runtime > name.
@@ -396,8 +395,9 @@ export const DefaultsConfigSchema = z
 		// src/runs/cost-cap.ts and src/runs/duration-limit.ts; enforced mid-run by the event bridge.
 		maxCostUsd: MaxCostUsdSchema.optional(),
 		maxDurationMinutes: positiveLimit("maxDurationMinutes").optional(),
-		// namphuongtran/warren#83: watchdog tool-stall warning threshold, over WARREN_TOOL_STALL_WARN_MS.
+		// namphuongtran/warren#83: tool-stall warn/kill, over WARREN_TOOL_STALL_{WARN,KILL}_MS.
 		toolStallWarnMinutes: positiveLimit("toolStallWarnMinutes").optional(),
+		toolStallKillMinutes: positiveLimit("toolStallKillMinutes").optional(),
 		// warren-05ea: opt-in polling CI-fixer; missing block → poller skips it.
 		ciFixer: CiFixerConfigSchema.optional(),
 		// warren-3db0: opt-in closed-loop healer; missing block → intake skips it.

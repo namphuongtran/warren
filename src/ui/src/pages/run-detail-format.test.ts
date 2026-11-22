@@ -13,6 +13,7 @@ import {
 	readCostTotal,
 	readNumber,
 	readString,
+	toolStallSummary,
 	truncateSummary,
 } from "./run-detail-format.ts";
 
@@ -181,5 +182,28 @@ describe("extractQuotaHold", () => {
 
 	test("returns null for a run that was never held", () => {
 		expect(extractQuotaHold([event(1, "state_change")])).toBeNull();
+	});
+});
+
+describe("toolStallSummary", () => {
+	const stall = {
+		toolUseId: "toolu_1",
+		toolName: "Bash",
+		command: "uv run pytest -q",
+		openedAt: "2026-11-22T10:05:00.000Z",
+		warnedAt: "2026-11-22T10:20:00.000Z",
+	};
+	const at = (iso: string) => Date.parse(iso);
+
+	test("names the tool and how long it has been open, in whole minutes", () => {
+		expect(toolStallSummary(stall, at("2026-11-22T10:30:40.000Z"))).toBe(
+			"Bash has been running for 25 min with no result.",
+		);
+	});
+
+	test("falls back to a generic subject when the harness gave no tool name", () => {
+		expect(toolStallSummary({ ...stall, toolName: null }, at("2026-11-22T11:05:00.000Z"))).toBe(
+			"A tool call has been running for 60 min with no result.",
+		);
 	});
 });

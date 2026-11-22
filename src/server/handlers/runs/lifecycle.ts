@@ -1,5 +1,4 @@
 import { ValidationError } from "../../../core/errors.ts";
-import type { DispatchFacts } from "../../../db/repos/dispatch-context.ts";
 import { readProviderFrontmatter } from "../../../registry/index.ts";
 import type { RunRow } from "../../../runs/index.ts";
 import {
@@ -8,6 +7,7 @@ import {
 	hydrateRunsUsage,
 	hydrateRunUsage,
 } from "../../../runs/index.ts";
+import { currentToolStalls } from "../../../runs/tool-stall-view.ts";
 import { isPublicOnly, pickFields } from "../../projection.ts";
 import { jsonResponse } from "../../response.ts";
 import type { Actor, RouteHandler, ServerDeps } from "../../types.ts";
@@ -211,25 +211,24 @@ export function parseRunsPagination(ctx: { url: URL }): { limit: number; offset:
  * (warren-f8a2): `maxCostUsd` is the per-run USD cap the mobile runs card
  * uses for its near-cap tint. A spectator gets no caps at all, so the cap
  * never reaches the public projection — same posture as the list's
- * `costTotalUsd`.
+ * `costTotalUsd`. `toolStall` (namphuongtran/warren#83) rides the same
+ * operator-only overlay: the call a running run is stuck on, else null.
  */
 async function projectRunsWithCaps(
 	deps: ServerDeps,
 	runs: readonly RunRow[],
 	actor: Actor | undefined,
 ): Promise<unknown[]> {
-	const publicOnly = isPublicOnly(actor);
-	const facts = publicOnly
-		? new Map<string, DispatchFacts>()
-		: await deps.repos.dispatchContext.getDispatchFactsByRunIds(runs.map((r) => r.id));
+	if (isPublicOnly(actor)) return runs.map((run) => projectRun(run, actor));
+	const facts = await deps.repos.dispatchContext.getDispatchFactsByRunIds(runs.map((r) => r.id));
+	const stalls = await currentToolStalls(deps.repos, runs);
 	return runs.map((run) => {
-		const projected = projectRun(run, actor);
-		if (publicOnly) return projected;
 		const fact = facts.get(run.id);
 		return {
-			...projected,
+			...projectRun(run, actor),
 			maxCostUsd: fact?.maxCostUsd ?? null,
 			runtimeBackend: fact?.runtimeBackend ?? null,
+			toolStall: stalls.get(run.id) ?? null,
 		};
 	});
 }
@@ -290,8 +289,13 @@ export function getRunHandler(deps: ServerDeps): RouteHandler {
 		// gets no caps at all, so the cap never reaches the public projection.
 		if (!isPublicOnly(ctx.actor)) {
 			const fact = await deps.repos.dispatchContext.getByRunId(id);
+			const stall = (await currentToolStalls(deps.repos, [run])).get(id) ?? null;
 			return jsonResponse(200, {
-				run: { ...projectRun(run, ctx.actor), maxCostUsd: fact?.maxCostUsd ?? null },
+				run: {
+					...projectRun(run, ctx.actor),
+					maxCostUsd: fact?.maxCostUsd ?? null,
+					toolStall: stall,
+				},
 			});
 		}
 		// warren-7d84: detail GETs wrap the resource, matching POST /runs

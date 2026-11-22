@@ -1,5 +1,9 @@
 import type { ReapCompletedPayload, RunEvent, RunRow } from "@/api/types.ts";
-import { QUOTA_HOLD_EVENTS, type QuotaHoldView } from "../../../core/wire.ts";
+import {
+	QUOTA_HOLD_EVENTS,
+	type QuotaHoldView,
+	type RunToolStallView,
+} from "../../../core/wire.ts";
 
 /**
  * Pull the latest `reap.completed` payload off the stream so the header
@@ -138,4 +142,14 @@ export function findFirstText(content: unknown): string | null {
 		if (typeof obj.text === "string") return obj.text;
 	}
 	return null;
+}
+
+/**
+ * The run page's stalled-call line (namphuongtran/warren#83): which tool has
+ * been open, and for how many whole minutes as of `nowMs`.
+ */
+export function toolStallSummary(stall: RunToolStallView, nowMs: number): string {
+	const minutes = Math.max(0, Math.floor((nowMs - Date.parse(stall.openedAt)) / 60_000));
+	const subject = stall.toolName ?? "A tool call";
+	return `${subject} has been running for ${minutes} min with no result.`;
 }
