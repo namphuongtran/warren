@@ -164,8 +164,18 @@ export function resolvePollTarget(forge: Forge, prUrl: string): PollTarget {
 	return { kind: "resolved", ref, pr };
 }
 
-/** Map the provider-neutral lifecycle onto the gate's poll vocabulary. */
-function mapLifecycle(state: PullRequestState): PrMergePollResult {
+/** The poll results a successful lifecycle read can map to. */
+export type PrLifecyclePollResult = Extract<
+	PrMergePollResult,
+	{ kind: "merged" | "open" | "closed_unmerged" }
+>;
+
+/**
+ * Map the provider-neutral lifecycle onto the gate's poll vocabulary.
+ * Exported so the CI-fixer poller records the same `merged` shape the
+ * merge watcher does (namphuongtran/warren#59).
+ */
+export function mapLifecycle(state: PullRequestState): PrLifecyclePollResult {
 	if (state.lifecycle === "merged") {
 		// mergedAt non-null is the truth source (GitHubForge only reports
 		// `merged` when it is set); the Date.now fallback covers a provider

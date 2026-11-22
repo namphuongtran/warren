@@ -1,5 +1,11 @@
 import { describe, expect, test } from "bun:test";
-import type { CheckRun, ForgeCapabilities, ForgeResult, RepoRef } from "../forge/contract.ts";
+import type {
+	CheckRun,
+	ForgeCapabilities,
+	ForgeResult,
+	PullRequestRef,
+	RepoRef,
+} from "../forge/contract.ts";
 import { FakeForge } from "../forge/fake/fake-forge.ts";
 import {
 	type CiFixerCandidate,
@@ -10,7 +16,8 @@ import {
 
 const NOW = new Date("2026-05-29T12:00:00.000Z");
 const PREFIX = "burrow";
-const PR_URL = "fake://o/r/pulls/3";
+/** The fake forge numbers PRs from 1; the harness opens #1 on HEAD_REF. */
+const PR_URL = "fake://o/r/pulls/1";
 const HEAD_REF = `${PREFIX}/run_opener`;
 
 const FAILING: CheckRun[] = [
@@ -29,19 +36,37 @@ const PASSING: CheckRun[] = [
 interface Harness {
 	forge: FakeForge;
 	spawnCalls: CiFixerSpawnInput[];
+	recorded: { runId: string; lifecycle: string; mergedAt: string | null }[];
 	input: PollProjectCiFixerInput;
 }
 
-function harness(
-	over: Partial<PollProjectCiFixerInput> = {},
-	checks: CheckRun[] = FAILING,
-): Harness {
-	const forge = new FakeForge();
+function repoRef(forge: FakeForge): RepoRef {
 	const ref = forge.parseRepoRef("fake://o/r");
 	if (ref === null) throw new Error("fake forge must own fake:// urls");
-	forge.setChecks(ref, HEAD_REF, checks);
+	return ref;
+}
+
+async function openPr(forge: FakeForge, headBranch: string): Promise<PullRequestRef> {
+	const opened = await forge.openPullRequest(repoRef(forge), {
+		title: "t",
+		body: "b",
+		headBranch,
+		baseBranch: "main",
+	});
+	if (!opened.ok) throw new Error("fake forge must open the PR");
+	return opened.value;
+}
+
+async function harness(
+	over: Partial<PollProjectCiFixerInput> = {},
+	checks: CheckRun[] = FAILING,
+): Promise<Harness> {
+	const forge = new FakeForge();
+	forge.setChecks(repoRef(forge), HEAD_REF, checks);
+	await openPr(forge, HEAD_REF);
 
 	const spawnCalls: CiFixerSpawnInput[] = [];
+	const recorded: Harness["recorded"] = [];
 	const candidates: readonly CiFixerCandidate[] = over.candidates ?? [
 		{ runId: "run_opener", prUrl: PR_URL },
 	];
@@ -55,11 +80,14 @@ function harness(
 			spawnCalls.push(i);
 			return { runId: "run_fixer" };
 		},
+		recordTerminal: async (runId, lifecycle, mergedAt) => {
+			recorded.push({ runId, lifecycle, mergedAt });
+		},
 		now: NOW,
 		logTailLines: 0,
 		...over,
 	};
-	return { forge, spawnCalls, input };
+	return { forge, spawnCalls, recorded, input };
 }
 
 /** Override capability flags on a forge (test seam — the flags are readonly). */
@@ -72,7 +100,7 @@ function withCapabilities(forge: FakeForge, over: Partial<ForgeCapabilities>): F
 
 describe("pollProjectCiFixer", () => {
 	test("dispatches a fixer for a failing PR, back-linked to the opener", async () => {
-		const { spawnCalls, input } = harness();
+		const { spawnCalls, input } = await harness();
 		const results = await pollProjectCiFixer(input);
 
 		expect(results).toEqual([
@@ -92,7 +120,7 @@ describe("pollProjectCiFixer", () => {
 	});
 
 	test("splices the CI log tail into the prompt when logTailLines > 0", async () => {
-		const { forge, spawnCalls, input } = harness({ logTailLines: 50 });
+		const { forge, spawnCalls, input } = await harness({ logTailLines: 50 });
 		const logCalls: { jobId: string; maxBytes: number }[] = [];
 		forge.fetchJobLogTail = (async (_ref: RepoRef, jobId: string, maxBytes: number) => {
 			logCalls.push({ jobId, maxBytes });
@@ -109,7 +137,7 @@ describe("pollProjectCiFixer", () => {
 	});
 
 	test("falls back to the check-name-only prompt when the log fetch yields null", async () => {
-		const { forge, spawnCalls, input } = harness({ logTailLines: 50 });
+		const { forge, spawnCalls, input } = await harness({ logTailLines: 50 });
 		forge.fetchJobLogTail = (async () => ({
 			ok: true,
 			value: null,
@@ -123,7 +151,7 @@ describe("pollProjectCiFixer", () => {
 	});
 
 	test("does not fetch a log when logTailLines is 0", async () => {
-		const { forge, input } = harness({ logTailLines: 0 });
+		const { forge, input } = await harness({ logTailLines: 0 });
 		let called = false;
 		forge.fetchJobLogTail = (async () => {
 			called = true;
@@ -134,14 +162,14 @@ describe("pollProjectCiFixer", () => {
 	});
 
 	test("skips with not_failing when CI is green", async () => {
-		const { spawnCalls, input } = harness({}, PASSING);
+		const { spawnCalls, input } = await harness({}, PASSING);
 		const results = await pollProjectCiFixer(input);
 		expect(results).toEqual([{ kind: "skipped", prUrl: PR_URL, reason: "not_failing" }]);
 		expect(spawnCalls).toHaveLength(0);
 	});
 
 	test("skips with disabled when the project hasn't opted in", async () => {
-		const { spawnCalls, input } = harness({
+		const { spawnCalls, input } = await harness({
 			settings: { enabled: false, maxRetries: 2, cooldownMinutes: 10 },
 		});
 		const results = await pollProjectCiFixer(input);
@@ -150,7 +178,7 @@ describe("pollProjectCiFixer", () => {
 	});
 
 	test("skips with max_retries when the per-PR cap is hit", async () => {
-		const { spawnCalls, input } = harness({
+		const { spawnCalls, input } = await harness({
 			history: async () => ({ attempts: 2, lastAttemptAt: null }),
 		});
 		const results = await pollProjectCiFixer(input);
@@ -160,7 +188,7 @@ describe("pollProjectCiFixer", () => {
 
 	test("skips with cooldown when the last fixer ran too recently", async () => {
 		const lastAttemptAt = new Date(NOW.getTime() - 5 * 60_000).toISOString();
-		const { spawnCalls, input } = harness({
+		const { spawnCalls, input } = await harness({
 			history: async () => ({ attempts: 1, lastAttemptAt }),
 		});
 		const results = await pollProjectCiFixer(input);
@@ -169,7 +197,7 @@ describe("pollProjectCiFixer", () => {
 	});
 
 	test("captures an unparseable PR url as a per-candidate error", async () => {
-		const { spawnCalls, input } = harness({
+		const { spawnCalls, input } = await harness({
 			candidates: [{ runId: "run_opener", prUrl: "not-a-pr-url" }],
 		});
 		const results = await pollProjectCiFixer(input);
@@ -179,7 +207,7 @@ describe("pollProjectCiFixer", () => {
 	});
 
 	test("captures a forge failure as a per-candidate error without throwing", async () => {
-		const { forge, spawnCalls, input } = harness();
+		const { forge, spawnCalls, input } = await harness();
 		forge.listChecks = (async () => ({
 			ok: false,
 			error: { kind: "network", detail: "boom" },
@@ -191,7 +219,7 @@ describe("pollProjectCiFixer", () => {
 	});
 
 	test("processes each candidate independently — one dispatch, one skip", async () => {
-		const { forge, spawnCalls, input } = harness({
+		const { forge, spawnCalls, input } = await harness({
 			candidates: [
 				{ runId: "run_a", prUrl: PR_URL },
 				{ runId: "run_b", prUrl: PR_URL },
@@ -209,9 +237,67 @@ describe("pollProjectCiFixer", () => {
 	});
 });
 
+describe("pollProjectCiFixer open-only rule (namphuongtran/warren#59)", () => {
+	test("dispatches only for the open PR and reads no checks for merged or closed PRs", async () => {
+		const { forge, spawnCalls, recorded, input } = await harness({
+			candidates: [
+				{ runId: "run_opener", prUrl: PR_URL },
+				{ runId: "run_merged", prUrl: "fake://o/r/pulls/2" },
+				{ runId: "run_closed", prUrl: "fake://o/r/pulls/3" },
+			],
+		});
+		const ref = repoRef(forge);
+		// The merged PR's branch survived the merge with red checks — the
+		// case that would dispatch a fixer onto a merged PR without the rule.
+		forge.setChecks(ref, `${PREFIX}/run_merged`, FAILING);
+		forge.setChecks(ref, `${PREFIX}/run_closed`, FAILING);
+		forge.markMerged(ref, await openPr(forge, `${PREFIX}/run_merged`));
+		forge.markClosed(ref, await openPr(forge, `${PREFIX}/run_closed`));
+		const listed: string[] = [];
+		const listChecks = forge.listChecks.bind(forge);
+		forge.listChecks = (async (r: RepoRef, commit: string) => {
+			listed.push(commit);
+			return listChecks(r, commit);
+		}) as FakeForge["listChecks"];
+
+		const results = await pollProjectCiFixer(input);
+
+		expect(results).toEqual([
+			{ kind: "dispatched", prUrl: PR_URL, runId: "run_fixer", parentRunId: "run_opener" },
+			{ kind: "skipped", prUrl: "fake://o/r/pulls/2", reason: "not_open" },
+			{ kind: "skipped", prUrl: "fake://o/r/pulls/3", reason: "not_open" },
+		]);
+		expect(spawnCalls.map((c) => c.parentRunId)).toEqual(["run_opener"]);
+		expect(listed).toEqual([HEAD_REF]);
+		expect(recorded.map((r) => [r.runId, r.lifecycle])).toEqual([
+			["run_merged", "merged"],
+			["run_closed", "closed_unmerged"],
+		]);
+		expect(recorded[0]?.mergedAt).not.toBeNull();
+		expect(recorded[1]?.mergedAt).toBeNull();
+	});
+
+	test("a failed lifecycle read is a per-candidate error and reads no checks", async () => {
+		const { forge, spawnCalls, input } = await harness({
+			candidates: [{ runId: "run_gone", prUrl: "fake://o/r/pulls/99" }],
+		});
+		let listCalls = 0;
+		forge.listChecks = (async () => {
+			listCalls += 1;
+			return { ok: true, value: { runs: [] } };
+		}) as unknown as FakeForge["listChecks"];
+
+		const results = await pollProjectCiFixer(input);
+
+		expect(results[0]?.kind).toBe("error");
+		expect(listCalls).toBe(0);
+		expect(spawnCalls).toHaveLength(0);
+	});
+});
+
 describe("pollProjectCiFixer §5 capability degradations", () => {
 	test("capabilities.checkRuns false skips every candidate as unsupported without calling the forge", async () => {
-		const { forge, spawnCalls, input } = harness();
+		const { forge, spawnCalls, input } = await harness();
 		let listCalls = 0;
 		forge.listChecks = (async () => {
 			listCalls += 1;
@@ -227,7 +313,7 @@ describe("pollProjectCiFixer §5 capability degradations", () => {
 	});
 
 	test("a defensive unsupported error from listChecks also skips as unsupported", async () => {
-		const { forge, spawnCalls, input } = harness();
+		const { forge, spawnCalls, input } = await harness();
 		forge.listChecks = (async (): Promise<ForgeResult<never>> => ({
 			ok: false,
 			error: { kind: "unsupported", detail: "PAT cannot reach the Checks API" },
@@ -240,7 +326,7 @@ describe("pollProjectCiFixer §5 capability degradations", () => {
 	});
 
 	test("capabilities.jobLogs false keeps the no-log prompt fallback and never fetches", async () => {
-		const { forge, spawnCalls, input } = harness({ logTailLines: 50 });
+		const { forge, spawnCalls, input } = await harness({ logTailLines: 50 });
 		let logCalls = 0;
 		forge.fetchJobLogTail = (async () => {
 			logCalls += 1;
@@ -259,7 +345,7 @@ describe("pollProjectCiFixer §5 capability degradations", () => {
 		const noJob: CheckRun[] = [
 			{ name: "test", status: "completed", conclusion: "failure", jobId: null, detailsUrl: null },
 		];
-		const { forge, spawnCalls, input } = harness({ logTailLines: 50 }, noJob);
+		const { forge, spawnCalls, input } = await harness({ logTailLines: 50 }, noJob);
 		let logCalls = 0;
 		forge.fetchJobLogTail = (async () => {
 			logCalls += 1;

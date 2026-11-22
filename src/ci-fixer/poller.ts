@@ -6,10 +6,13 @@
  * scheduler tick (`src/triggers/tick.ts`) drives every cycle for projects
  * with `ciFixer.enabled`:
  *
- *   1. For each PR candidate (one open-PR per `runs.pr_url`, surfaced by
- *      `RunsRepo.listPrCandidatesByProject`), reconstruct the PR head ref
- *      from the opener run's branch (`${prefix}/${runId}` via
- *      `composeRunBranch`) — no extra forge round-trip to resolve the head.
+ *   1. For each PR candidate (one per `runs.pr_url` not already recorded
+ *      terminal, surfaced by `RunsRepo.listPrCandidatesByProject`), read
+ *      the PR lifecycle with `forge.getPullRequest`. A merged or closed PR
+ *      is recorded on the opener run (`runs.pr_state`) and skipped as
+ *      `not_open` with no check-run request (namphuongtran/warren#59).
+ *      For an open PR, reconstruct the head ref from the opener run's
+ *      branch (`${prefix}/${runId}` via `composeRunBranch`).
  *   2. `forge.listChecks` + `classifyCheckRuns` decide whether CI is failing.
  *   3. `fixAttemptHistoryByPrUrl` feeds `decideDispatch`'s cooldown +
  *      max-retries gates.
@@ -34,8 +37,9 @@
  *     fallback. The capability gap never blocks a dispatch.
  */
 
-import type { Forge, RepoRef } from "../forge/contract.ts";
+import type { Forge, PullRequestLifecycle, RepoRef } from "../forge/contract.ts";
 import { composeRunBranch } from "../runs/branch.ts";
+import { mapLifecycle, type PollTarget, resolvePollTarget } from "../runs/pr-merge.ts";
 import { type CheckRun, classifyCheckRuns, tailLogLines } from "./check-runs.ts";
 import { buildFixerPrompt, type CiFixerSettings, decideDispatch } from "./dispatch.ts";
 
@@ -79,18 +83,37 @@ export interface CiFixerSpawnInput {
 
 export type CiFixerSpawnFn = (input: CiFixerSpawnInput) => Promise<{ runId: string }>;
 
+/** A lifecycle the forge reports for a PR that will never take a fix. */
+export type TerminalPrLifecycle = Exclude<PullRequestLifecycle, "open">;
+
+/**
+ * Persist a terminal PR lifecycle onto the opener run (`runs.pr_state`), so
+ * the candidate query drops the PR on later ticks without a forge request
+ * (namphuongtran/warren#59). `mergedAt` is ISO, null unless merged.
+ */
+export type RecordPrTerminalFn = (
+	runId: string,
+	lifecycle: TerminalPrLifecycle,
+	mergedAt: string | null,
+) => Promise<void>;
+
 /**
  * `unsupported` (warren-0b49, §5): the forge cannot read check runs at all
  * (`capabilities.checkRuns === false`, or a defensive `unsupported` error
  * from `listChecks`). Distinct from a transient fetch failure — the pass
  * layer rate-limits it to one notice per project.
+ *
+ * `not_open` (namphuongtran/warren#59): the forge reports the PR merged or
+ * closed. The poller records that state, so the PR leaves the candidate set
+ * and the skip is logged once, not every tick.
  */
 export type CiFixerSkipReason =
 	| "disabled"
 	| "not_failing"
 	| "cooldown"
 	| "max_retries"
-	| "unsupported";
+	| "unsupported"
+	| "not_open";
 
 export type CiFixerPollResult =
 	| {
@@ -115,6 +138,7 @@ export interface PollProjectCiFixerInput {
 	readonly forge: Forge;
 	readonly history: FixAttemptHistoryFn;
 	readonly spawn: CiFixerSpawnFn;
+	readonly recordTerminal: RecordPrTerminalFn;
 	readonly now: Date;
 	/** Max CI-log lines to splice into the fixer prompt (warren-a993).
 	 * `ciFixer.logTailLines` from project config. `<= 0` disables the fetch. */
@@ -148,8 +172,8 @@ async function pollCandidate(
 	input: PollProjectCiFixerInput,
 	candidate: CiFixerCandidate,
 ): Promise<CiFixerPollResult> {
-	const ref = input.forge.parseRepoRef(candidate.prUrl);
-	if (ref === null) {
+	const target = resolvePollTarget(input.forge, candidate.prUrl);
+	if (target.kind === "unparseable") {
 		return { kind: "error", prUrl: candidate.prUrl, reason: "unparseable PR url" };
 	}
 
@@ -159,6 +183,13 @@ async function pollCandidate(
 		return { kind: "skipped", prUrl: candidate.prUrl, reason: "unsupported" };
 	}
 
+	// Open-only rule (namphuongtran/warren#59): read the lifecycle before
+	// any check-run request, so a merged or closed PR costs no `listChecks`
+	// and can never take a fixer onto a branch that outlived its merge.
+	const notOpen = await gateOnOpen(input, candidate, target);
+	if (notOpen !== null) return notOpen;
+
+	const ref = target.ref;
 	const headRef = composeRunBranch(input.branchPrefix, candidate.runId);
 	const fetched = await input.forge.listChecks(ref, headRef);
 	if (!fetched.ok) {
@@ -196,6 +227,33 @@ async function pollCandidate(
 		runId: spawned.runId,
 		parentRunId: candidate.runId,
 	};
+}
+
+/**
+ * Read the PR's lifecycle. Returns null for an open PR (keep polling it),
+ * a `not_open` skip for a merged or closed PR after recording that state on
+ * the opener run, or an `error` when the read or the record fails. The
+ * forge's own retries are not repeated here: the next tick reads again.
+ */
+async function gateOnOpen(
+	input: PollProjectCiFixerInput,
+	candidate: CiFixerCandidate,
+	target: Extract<PollTarget, { kind: "resolved" }>,
+): Promise<CiFixerPollResult | null> {
+	const read = await input.forge.getPullRequest(target.ref, target.pr);
+	if (!read.ok) {
+		return { kind: "error", prUrl: candidate.prUrl, reason: read.error.detail };
+	}
+	const polled = mapLifecycle(read.value);
+	if (polled.kind === "open") return null;
+	const mergedAt = polled.kind === "merged" ? polled.mergedAt : null;
+	try {
+		await input.recordTerminal(candidate.runId, polled.kind, mergedAt);
+	} catch (err) {
+		const detail = err instanceof Error ? err.message : String(err);
+		return { kind: "error", prUrl: candidate.prUrl, reason: `recording PR state: ${detail}` };
+	}
+	return { kind: "skipped", prUrl: candidate.prUrl, reason: "not_open" };
 }
 
 /**

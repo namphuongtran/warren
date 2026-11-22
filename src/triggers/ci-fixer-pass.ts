@@ -3,7 +3,9 @@
  *
  * Extracted from `tick.ts` to keep that module under the file-size budget.
  * `runCiFixerPass` ties the pure `pollProjectCiFixer` helper (warren-05ea)
- * into one per-project pass: it enumerates the project's open-PR candidates,
+ * into one per-project pass: it enumerates the project's PR candidates (PRs
+ * not yet recorded merged or closed; the poller reads each one's lifecycle
+ * before any check-run request, namphuongtran/warren#59),
  * feeds each verdict + attempt history through the poller's guard rails, and
  * stamps a durable `ci_fixer.dispatched` system event on the PR's opener run
  * for every fixer it dispatches. No-op unless the deployment wired the
@@ -122,6 +124,11 @@ export async function runCiFixerPass(input: RunCiFixerPassInput): Promise<void> 
 		forge: ciFixer.forge,
 		history: (prUrl) => repos.runs.fixAttemptHistoryByPrUrl(prUrl),
 		spawn,
+		// namphuongtran/warren#59: a merged or closed PR is recorded on the
+		// opener run, so the candidate query drops it from the next tick on.
+		recordTerminal: async (runId, lifecycle, mergedAt) => {
+			await repos.runs.setPrState(runId, lifecycle, mergedAt);
+		},
 		now,
 		logTailLines: settings.logTailLines,
 		...(input.maxDispatches !== undefined ? { maxDispatches: input.maxDispatches } : {}),

@@ -7,6 +7,7 @@
 
 import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
 import type { SqliteDrizzleDb } from "../client.ts";
+import type { PullRequestLifecycle } from "../schema.ts";
 import type { DrizzleAdapter } from "./drizzle-adapter.ts";
 
 /**
@@ -18,6 +19,13 @@ import type { DrizzleAdapter } from "./drizzle-adapter.ts";
  * oldest keeps the head ref stable. Ordered most-recent-PR-first and capped
  * so a project with a long PR history doesn't fan out into an unbounded
  * number of GitHub calls per tick.
+ *
+ * A PR is dropped when ANY run carrying its URL has a terminal `pr_state`
+ * (`merged` / `closed_unmerged`), written by the merge watcher or by the
+ * poller's own lifecycle read (namphuongtran/warren#59). The filter runs
+ * before the cap, so the per-tick cost follows the open PRs and old
+ * terminal PRs never crowd an open one out of the window. NULL and `open`
+ * stay in: the poller re-reads the lifecycle before any check-run request.
  */
 export async function listPrCandidatesByProject(
 	adapter: DrizzleAdapter,
@@ -29,21 +37,24 @@ export async function listPrCandidatesByProject(
 	const rows = await adapter.pickAll<{
 		id: string;
 		prUrl: string | null;
-		startedAt: string | null;
+		prState: PullRequestLifecycle | null;
 	}>(
 		db
-			.select({ id: runs.id, prUrl: runs.prUrl, startedAt: runs.startedAt })
+			.select({ id: runs.id, prUrl: runs.prUrl, prState: runs.prState })
 			.from(runs)
 			.where(and(eq(runs.projectId, projectId), isNotNull(runs.prUrl)))
 			.orderBy(asc(runs.startedAt), asc(runs.id)),
 	);
 	const openerByUrl = new Map<string, string>();
+	const terminalUrls = new Set<string>();
 	for (const r of rows) {
-		if (r.prUrl !== null && !openerByUrl.has(r.prUrl)) {
-			openerByUrl.set(r.prUrl, r.id);
-		}
+		if (r.prUrl === null) continue;
+		if (!openerByUrl.has(r.prUrl)) openerByUrl.set(r.prUrl, r.id);
+		if (r.prState === "merged" || r.prState === "closed_unmerged") terminalUrls.add(r.prUrl);
 	}
-	const candidates = [...openerByUrl].map(([prUrl, runId]) => ({ runId, prUrl }));
+	const candidates = [...openerByUrl]
+		.filter(([prUrl]) => !terminalUrls.has(prUrl))
+		.map(([prUrl, runId]) => ({ runId, prUrl }));
 	// Most-recent PR first: the opener map preserves oldest-opener insertion
 	// order (asc startedAt), so reverse to surface the freshest PRs, then cap.
 	candidates.reverse();

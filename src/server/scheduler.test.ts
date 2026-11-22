@@ -338,12 +338,20 @@ describe("bootScheduler", () => {
 			trigger: "manual",
 		});
 		await repos.runs.markRunning(opener.id, NOW);
-		await repos.runs.setPrUrl(opener.id, "fake://x/y/pulls/9");
+		// The fake forge numbers PRs from 1; the poller reads the PR's
+		// lifecycle before its checks (namphuongtran/warren#59), so open it.
+		await repos.runs.setPrUrl(opener.id, "fake://x/y/pulls/1");
 
 		const { DEFAULT_RUN_BRANCH_PREFIX } = await import("../runs/branch.ts");
 		const forge = new FakeForge();
-		const ref = forge.parseRepoRef("fake://x/y/pulls/9");
+		const ref = forge.parseRepoRef("fake://x/y/pulls/1");
 		if (ref === null) throw new Error("fake forge must own fake:// urls");
+		await forge.openPullRequest(ref, {
+			title: "t",
+			body: "b",
+			headBranch: `${DEFAULT_RUN_BRANCH_PREFIX}/${opener.id}`,
+			baseBranch: "main",
+		});
 		forge.setChecks(ref, `${DEFAULT_RUN_BRANCH_PREFIX}/${opener.id}`, [
 			{
 				name: "test",

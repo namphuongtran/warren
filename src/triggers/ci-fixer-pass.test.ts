@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { openDatabase, type WarrenDb } from "../db/client.ts";
 import { createRepos, type Repos } from "../db/repos/index.ts";
 import { agents } from "../db/schema.ts";
-import type { ForgeCapabilities } from "../forge/contract.ts";
+import type { ForgeCapabilities, PullRequestRef } from "../forge/contract.ts";
 import { FakeForge } from "../forge/fake/fake-forge.ts";
 import { DEFAULT_RUN_BRANCH_PREFIX } from "../runs/branch.ts";
 import type { LoadedWarrenConfig } from "../warren-config/index.ts";
@@ -77,7 +77,10 @@ describe("runCiFixerPass (via runTick)", () => {
 		await db.close();
 	});
 
-	async function openPr(): Promise<string> {
+	/** The fake forge numbers PRs from 1; `openForgePr` opens #1. */
+	const PR_URL = "fake://x/y/pulls/1";
+
+	async function openPr(prUrl = PR_URL): Promise<string> {
 		const opener = await repos.runs.create({
 			agentName: "claude-code",
 			projectId,
@@ -86,8 +89,22 @@ describe("runCiFixerPass (via runTick)", () => {
 			trigger: "manual",
 		});
 		await repos.runs.markRunning(opener.id, NOW);
-		await repos.runs.setPrUrl(opener.id, "fake://x/y/pulls/9");
+		await repos.runs.setPrUrl(opener.id, prUrl);
 		return opener.id;
+	}
+
+	/** Open the opener run's PR on the fake forge, as reap's pr_open would. */
+	async function openForgePr(forge: FakeForge, openerId: string): Promise<PullRequestRef> {
+		const ref = forge.parseRepoRef(PR_URL);
+		if (ref === null) throw new Error("fake forge must own fake:// urls");
+		const opened = await forge.openPullRequest(ref, {
+			title: "t",
+			body: "b",
+			headBranch: `${DEFAULT_RUN_BRANCH_PREFIX}/${openerId}`,
+			baseBranch: "main",
+		});
+		if (!opened.ok) throw new Error("fake forge must open the PR");
+		return opened.value;
 	}
 
 	test("dispatches a fixer for a failing PR and stamps a system event", async () => {
@@ -97,7 +114,8 @@ describe("runCiFixerPass (via runTick)", () => {
 		// `fake://` urls and reports the seeded check runs for the head ref
 		// (`${DEFAULT_RUN_BRANCH_PREFIX}/${runId}`).
 		const forge = new FakeForge();
-		const ref = forge.parseRepoRef("fake://x/y/pulls/9");
+		await openForgePr(forge, openerId);
+		const ref = forge.parseRepoRef(PR_URL);
 		if (ref === null) throw new Error("fake forge must own fake:// urls");
 		forge.setChecks(ref, `${DEFAULT_RUN_BRANCH_PREFIX}/${openerId}`, [
 			{
@@ -134,7 +152,62 @@ describe("runCiFixerPass (via runTick)", () => {
 		expect(events[0]?.kind).toBe("ci_fixer.dispatched");
 		expect(events[0]?.stream).toBe("system");
 		const payload = events[0]?.payloadJson as { prUrl: string; fixerRunId: string };
-		expect(payload).toEqual({ prUrl: "fake://x/y/pulls/9", fixerRunId: "run_fixer" });
+		expect(payload).toEqual({ prUrl: PR_URL, fixerRunId: "run_fixer" });
+	});
+
+	// namphuongtran/warren#59: a merged PR whose branch survived with red
+	// checks costs one lifecycle read, one info line, and nothing after.
+	test("records a merged PR once, logs not_open at info, and skips it on later ticks", async () => {
+		const openerId = await openPr();
+		const forge = new FakeForge();
+		const ref = forge.parseRepoRef(PR_URL);
+		if (ref === null) throw new Error("fake forge must own fake:// urls");
+		forge.markMerged(ref, await openForgePr(forge, openerId));
+		forge.setChecks(ref, `${DEFAULT_RUN_BRANCH_PREFIX}/${openerId}`, [
+			{ name: "test", status: "completed", conclusion: "failure", jobId: "1", detailsUrl: null },
+		]);
+		const forgeCalls: string[] = [];
+		const getPullRequest = forge.getPullRequest.bind(forge);
+		forge.getPullRequest = ((r, pr) => {
+			forgeCalls.push("getPullRequest");
+			return getPullRequest(r, pr);
+		}) as FakeForge["getPullRequest"];
+		forge.listChecks = (async () => {
+			forgeCalls.push("listChecks");
+			throw new Error("listChecks must not be called for a merged PR");
+		}) as FakeForge["listChecks"];
+		const logs: { level: string; msg: string | undefined; reason: unknown }[] = [];
+		const log =
+			(level: string) =>
+			(obj: Record<string, unknown>, msg?: string): void => {
+				logs.push({ level, msg, reason: obj.reason });
+			};
+		let spawned = 0;
+		const tick = () =>
+			runTick({
+				repos,
+				now: () => NOW,
+				loadWarrenConfig: async () => ciFixerConfig(),
+				spawn: async () => ({ runId: "unused" }),
+				logger: { info: log("info"), warn: log("warn"), error: log("error") },
+				ciFixer: {
+					forge,
+					spawn: async () => {
+						spawned += 1;
+						return { runId: "run_fixer" };
+					},
+				},
+			});
+
+		await tick();
+		await tick();
+
+		expect(forgeCalls).toEqual(["getPullRequest"]);
+		expect(spawned).toBe(0);
+		expect(logs.filter((l) => l.msg?.startsWith("scheduler.ci_fixer"))).toEqual([
+			{ level: "info", msg: "scheduler.ci_fixer_skipped", reason: "not_open" },
+		]);
+		expect((await repos.runs.require(openerId)).prState).toBe("merged");
 	});
 
 	test("is a no-op when the project hasn't opted in", async () => {
