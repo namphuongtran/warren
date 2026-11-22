@@ -12,6 +12,17 @@ Releases **0.9.10 and earlier** live in
 
 ### Added
 
+- **Reviewer verdict in the handoff report (namphuongtran/warren#18).** The handoff
+  report gains an optional `review` block (`verdict`, `summary`, `findings`),
+  validated at reap: `request_changes` must name at least one finding. The
+  `reviewer` built-in writes its verdict there instead of a tagged block at
+  the end of its transcript. The campaign controller's review policy reads
+  `handoff.review` from `GET /runs/:id` first, checks its shape and caps
+  again, and falls back to the transcript block on a warren that predates
+  the report. A review with neither fails closed as `handoff_missing` or
+  `handoff_invalid`. The reviewer prompt change touches
+  `src/registry/builtins/`, so it needs human review under Article IX.
+
 - **Run handoff report (namphuongtran/warren#21).** Every built-in agent
   now writes `.warren/handoff.json` before it ends: `status` (`done`,
   `partial`, `blocked`), `summary`, `verification`, `howToTry`, and

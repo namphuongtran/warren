@@ -299,6 +299,51 @@ async function client0Dispatch(fake: FakeWarrenServer): Promise<{ id: string }> 
 	return { id: run.id };
 }
 
+describe("WarrenClient.getRun handoff (namphuongtran/warren#21)", () => {
+	async function runWithHandoff(handoff: unknown) {
+		const fake = makeFake();
+		const client = makeClient(fake);
+		const { id } = await client.dispatchRun(DISPATCH);
+		fake.setRunState(id, { state: "succeeded", handoff });
+		return client.getRun(id);
+	}
+
+	test("carries a recorded report's review block", async () => {
+		const review = { verdict: "approve", summary: "Safe.", findings: [] };
+		const run = await runWithHandoff({
+			state: "recorded",
+			handoff: { status: "done", summary: "Reviewed.", review },
+		});
+		expect(run.handoff).toEqual({ state: "recorded", reason: null, review });
+	});
+
+	test("carries a recorded report without a review block as review null", async () => {
+		const run = await runWithHandoff({
+			state: "recorded",
+			handoff: { status: "done", summary: "Built it." },
+		});
+		expect(run.handoff).toEqual({ state: "recorded", reason: null, review: null });
+	});
+
+	test("carries the reason a report is invalid", async () => {
+		const run = await runWithHandoff({
+			state: "invalid",
+			reason: "summary must be a non-empty string",
+		});
+		expect(run.handoff).toEqual({
+			state: "invalid",
+			reason: "summary must be a non-empty string",
+			review: null,
+		});
+	});
+
+	test("reads an absent or unrecognized handoff as null", async () => {
+		expect((await runWithHandoff(null)).handoff).toBeNull();
+		expect((await runWithHandoff({ state: "exploded" })).handoff).toBeNull();
+		expect((await runWithHandoff("recorded")).handoff).toBeNull();
+	});
+});
+
 describe("terminal-state facts", () => {
 	test("readTerminalFacts refuses a nonterminal run", async () => {
 		const fake = makeFake();

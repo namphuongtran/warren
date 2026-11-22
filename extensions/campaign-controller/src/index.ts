@@ -306,6 +306,8 @@ export {
 	REVIEW_VERDICT_OPEN,
 	type ReviewFinding,
 	type ReviewVerdict,
+	readReviewVerdict,
+	type VerdictFailureReason,
 	type VerdictParseResult,
 } from "./review/verdict.ts";
 export { ActionStore, type SettleActionInput } from "./store/actions.ts";
@@ -364,6 +366,8 @@ export {
 	WarrenEnvelopeError,
 	WarrenRateLimitError,
 	WarrenRejectedError,
+	type WarrenRunHandoff,
+	type WarrenRunHandoffState,
 	type WarrenRunView,
 	type WarrenTerminalFacts,
 	WarrenUnreachableError,

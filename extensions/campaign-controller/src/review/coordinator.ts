@@ -81,7 +81,7 @@ import {
 } from "../warren-client.ts";
 import { decideRound, type SeatResult } from "./quorum.ts";
 import { type ReviewCommentSeat, renderReviewComment, renderReviewPrompt } from "./render.ts";
-import { extractReviewVerdict, type ReviewVerdict } from "./verdict.ts";
+import { type ReviewVerdict, readReviewVerdict } from "./verdict.ts";
 
 /** Action types whose live run will move the PR head; a new review waits for them. */
 const HEAD_MOVING_ACTION_TYPES: ReadonlySet<string> = new Set([
@@ -392,7 +392,8 @@ export class ReviewCoordinator {
 			});
 			return;
 		}
-		const parsed = extractReviewVerdict(await this.#readAllEvents(seat.runId));
+		const runId = seat.runId;
+		const parsed = await readReviewVerdict(run.handoff, () => this.#readAllEvents(runId));
 		if (!parsed.ok) {
 			this.#store.reviews.settleSeat(seat.id, { state: "failed", failureReason: parsed.reason });
 			return;

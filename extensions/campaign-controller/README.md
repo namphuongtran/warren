@@ -210,9 +210,11 @@ opt-in merge gate driven by a commit status —
   head SHA of each open campaign PR. It dispatches a read-only `reviewer`
   run over `POST /runs` pinned to that SHA with `baseCommit` (under the
   policy's agent/provider/model, so a different model reviews than the
-  one that built), reads the run's verdict from `GET /runs/:id/events`
-  ([`verdict.ts`](src/review/verdict.ts): a tagged JSON block in the
-  agent's own `text` events, size-capped), and publishes it as a commit
+  one that built), reads the run's verdict from the `review` block of its
+  handoff report on `GET /runs/:id` ([`verdict.ts`](src/review/verdict.ts):
+  shape-checked again and size-capped; on a warren that predates the
+  handoff report, a tagged JSON block in the agent's own `text` events on
+  `GET /runs/:id/events`), and publishes it as a commit
   status (`warren/review` by default) plus a COMMENT review with the
   findings. A verdict is bound to its SHA: a push supersedes any live
   review on the old SHA and starts a new one with a `pending` status.

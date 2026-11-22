@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { isKnownRuntimeId } from "../../core/wire.ts";
+import { isKnownRuntimeId, parseRunHandoff } from "../../core/wire.ts";
 import { openDatabase, type WarrenDb } from "../../db/client.ts";
 import { AgentsRepo } from "../../db/repos/agents.ts";
 import { DrizzleAdapter } from "../../db/repos/drizzle-adapter.ts";
@@ -40,14 +40,29 @@ describe("BUILTIN_AGENTS", () => {
 		expect(BUILTIN_AGENT_NAMES.has("reviewer")).toBe(true);
 	});
 
-	// namphuongtran/warren#18: the controller parses this exact block from the
-	// reviewer's final message (extensions/campaign-controller/src/review/verdict.ts).
-	test("reviewer is read-only and ends with the tagged verdict block (namphuongtran/warren#18)", () => {
+	// namphuongtran/warren#18: the controller reads the verdict from the
+	// handoff's `review` block (extensions/campaign-controller/src/review/verdict.ts),
+	// so every example the prompt shows must validate as a recorded review.
+	test("reviewer is read-only and writes its verdict into the handoff report (namphuongtran/warren#18)", () => {
 		const system = REVIEWER_BUILTIN.sections.system ?? "";
-		expect(system).toContain("<warren-review-verdict>");
-		expect(system).toContain("</warren-review-verdict>");
-		expect(system).toContain('"approve"');
-		expect(system).toContain('"request_changes"');
+		const examples = [...system.matchAll(/```json\n([\s\S]*?)\n```/g)]
+			.map((match) => match[1] ?? "")
+			.filter((body) => body.includes('"review"'));
+		expect(examples.map((body) => parseRunHandoff(body))).toEqual([
+			expect.objectContaining({
+				state: "recorded",
+				handoff: expect.objectContaining({
+					review: expect.objectContaining({ verdict: "approve" }),
+				}),
+			}),
+			expect.objectContaining({
+				state: "recorded",
+				handoff: expect.objectContaining({
+					review: expect.objectContaining({ verdict: "request_changes" }),
+				}),
+			}),
+		]);
+		expect(system).not.toContain("<warren-review-verdict>");
 		expect(system).toContain("Do not edit, create, or delete files");
 		expect(system).toContain("Do not run `git commit`");
 		expect(system).not.toContain("$WARREN_QUALITY_GATE");

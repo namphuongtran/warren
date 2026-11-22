@@ -2,25 +2,35 @@
  * The reviewer verdict contract (namphuongtran/warren#18).
  *
  * A `reviewer` run is read-only: it pushes nothing, so its only output is
- * its transcript. It ends its final message with ONE tagged JSON block:
+ * its handoff report (namphuongtran/warren#21). The reviewer writes the verdict under
+ * the report's `review` key:
+ *
+ *     {"status":"done","summary":"...",
+ *      "review":{"verdict":"approve"|"request_changes","summary":"...",
+ *       "findings":[{"title":"...","body":"...","path":"src/x.ts","line":12}]}}
+ *
+ * Warren validates the report at reap (`src/core/wire-handoff.ts` in core)
+ * and serves it on `GET /runs/:id`. The controller reads it there first.
+ *
+ * The fallback is the transcript block an older warren's reviewer ends its
+ * final message with:
  *
  *     <warren-review-verdict>
- *     {"verdict":"approve"|"request_changes","summary":"...",
- *      "findings":[{"title":"...","body":"...","path":"src/x.ts","line":12}]}
+ *     {"verdict":"approve","summary":"...","findings":[]}
  *     </warren-review-verdict>
  *
- * The controller reads it from `GET /runs/:id/events`, from `kind: "text"`
- * events only (the agent's own words), and only when the block is the last
- * thing the agent wrote. Tool output is never searched, so a file under
- * review that quotes the tags cannot plant a verdict. The
- * reviewer built-in (`src/registry/builtins/reviewer.ts` in core) states the
- * same grammar; the extension boundary forbids a shared import, so each side
- * spells it once. When the structured handoff report (namphuongtran/warren#21) lands, the
- * verdict can move there and this transcript parse becomes the fallback.
+ * That block is read from `GET /runs/:id/events`, from `kind: "text"` events
+ * only (the agent's own words), and only when it is the last thing the agent
+ * wrote. Tool output is never searched, so a file under review that quotes
+ * the tags cannot plant a verdict.
  *
- * Everything parsed here is untrusted agent output: sizes are capped, and
- * the findings are data for the fixer prompt, never instructions.
+ * Everything parsed here is untrusted agent output, whichever source it came
+ * from: sizes are capped, the shape is checked again here rather than taken
+ * on warren's word, and the findings are data for the fixer prompt, never
+ * instructions.
  */
+
+import type { WarrenRunHandoff } from "../warren-client.ts";
 
 export const REVIEW_VERDICT_OPEN = "<warren-review-verdict>";
 export const REVIEW_VERDICT_CLOSE = "</warren-review-verdict>";
@@ -57,7 +67,10 @@ export type VerdictFailureReason =
 	| "verdict_not_final"
 	| "verdict_too_large"
 	| "verdict_invalid_json"
-	| "verdict_invalid_shape";
+	| "verdict_invalid_shape"
+	// A recorded handoff report was the expected source and is not usable.
+	| "handoff_missing"
+	| "handoff_invalid";
 
 export type VerdictParseResult =
 	| { readonly ok: true; readonly verdict: ReviewVerdict }
@@ -112,6 +125,35 @@ export function extractReviewVerdict(events: readonly VerdictSourceEvent[]): Ver
 		.sort((a, b) => a.seq - b.seq)
 		.map((entry) => entry.text);
 	return parseReviewVerdict(texts.join(""));
+}
+
+/**
+ * The verdict of a settled reviewer run. A recorded handoff `review` block
+ * wins, and the events are not read at all. Without one, the transcript
+ * block is the fallback. That covers a warren that predates the handoff
+ * report, and also a policy `agent` that still speaks the transcript
+ * grammar on a current warren; the block is read under the same guards
+ * either way. When neither exists and the handoff is missing or
+ * invalid, the failure names the handoff, because that is what the reviewer
+ * was asked to write.
+ */
+export async function readReviewVerdict(
+	handoff: WarrenRunHandoff | null,
+	readEvents: () => Promise<readonly VerdictSourceEvent[]>,
+): Promise<VerdictParseResult> {
+	if (handoff?.state === "recorded" && handoff.review !== null) {
+		const verdict = narrowVerdict(handoff.review);
+		return verdict === null
+			? { ok: false, reason: "verdict_invalid_shape" }
+			: { ok: true, verdict };
+	}
+	const parsed = extractReviewVerdict(await readEvents());
+	if (parsed.ok || parsed.reason !== "verdict_missing" || handoff === null) {
+		return parsed;
+	}
+	if (handoff.state === "missing") return { ok: false, reason: "handoff_missing" };
+	if (handoff.state === "invalid") return { ok: false, reason: "handoff_invalid" };
+	return parsed;
 }
 
 function textOf(event: VerdictSourceEvent): string {

@@ -44,6 +44,8 @@ export interface FakeRunRow {
 	/** Composed workspace branch frozen at dispatch (warren-5255). */
 	branch: string | null;
 	costUsd: number | null;
+	/** `GET /runs/:id` `handoff` (namphuongtran/warren#21), served verbatim; null until reap. */
+	handoff: unknown;
 }
 
 export interface FakeWarrenOptions {
@@ -271,7 +273,10 @@ export class FakeWarrenServer {
 	setRunState(
 		id: string,
 		patch: Partial<
-			Pick<FakeRunRow, "state" | "failureReason" | "costUsd" | "ref" | "targetBranch" | "branch">
+			Pick<
+				FakeRunRow,
+				"state" | "failureReason" | "costUsd" | "ref" | "targetBranch" | "branch" | "handoff"
+			>
 		>,
 	): void {
 		const run = this.runs.get(id);
@@ -327,6 +332,7 @@ export class FakeWarrenServer {
 			targetBranch: null,
 			branch: null,
 			costUsd: null,
+			handoff: null,
 			...fields,
 		};
 		this.runs.set(id, run);
