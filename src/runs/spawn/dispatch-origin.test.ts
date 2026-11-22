@@ -19,6 +19,8 @@ describe("DISPATCH_ORIGINS (warren-9ce3)", () => {
 			"plan_run",
 			"retry_infra_lost",
 			"retry_provider",
+			// namphuongtran/warren#30: the quota auto-resume.
+			"resume_quota",
 		]);
 	});
 

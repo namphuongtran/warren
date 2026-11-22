@@ -55,6 +55,7 @@ export const DISPATCH_ORIGINS = [
 	"plan_run",
 	"retry_infra_lost",
 	"retry_provider",
+	"resume_quota",
 ] as const;
 export type DispatchOrigin = (typeof DISPATCH_ORIGINS)[number];
 

@@ -37,6 +37,7 @@ import {
 	listByIds,
 	listByProject,
 	listByState,
+	listFailedSince,
 	listForAnalytics,
 	listWithUnresolvedPr,
 } from "./runs-queries.ts";
@@ -58,8 +59,7 @@ export function assertRunTransition(from: RunState, to: RunState): void {
 	}
 }
 
-// Preview-transition guard + input shape live in runs-preview.ts (file-size
-// split); re-exported here so existing import sites keep working.
+// Preview-transition guard + input shape live in runs-preview.ts (file-size split).
 export { type AttachPreviewInput, assertPreviewTransition } from "./runs-preview.ts";
 
 export interface CreateRunInput {
@@ -75,11 +75,7 @@ export interface CreateRunInput {
 	workerId?: string | null;
 	/** Seeds issue back-link (pl-bb70 step 3); null = no seed. */
 	seedId?: string | null;
-	/**
-	 * Run mode (pl-0344 step 1 / warren-67b6). `batch` (default) is the
-	 * historical single-shot run; `interactive` is the respawn-per-turn
-	 * primitive (warren-1117). Fixed at run-create time.
-	 */
+	/** Run mode (pl-0344 / warren-67b6): `batch` (default) or `interactive`; fixed at create. */
 	mode?: RunMode;
 	/** Continuation/replicate back-link (warren-4b11 / warren-e96f); null for root runs. */
 	parentRunId?: string | null;
@@ -93,8 +89,7 @@ export interface CreateRunInput {
 	ref?: string | null;
 	/** Base-commit pin (warren-aaf7): 40-hex SHA the workspace is cut at; null = none. */
 	baseCommit?: string | null;
-	/** Declared provider/model frozen at dispatch (warren-2ede); null = none declared. */
-	provider?: string | null;
+	provider?: string | null; // declared provider/model frozen at dispatch (warren-2ede)
 	model?: string | null;
 	qualityGate?: string | null; // frozen at dispatch (namphuongtran/warren#36); null = unconfigured
 	/** Cost basis (warren-f3c3); defaults to `api`. */
@@ -279,6 +274,11 @@ export class RunsRepo {
 	/** Non-terminal runs from automatic triggers only. */
 	countNonTerminalAutomatic(): Promise<number> {
 		return countNonTerminalAutomatic(this.adapter);
+	}
+
+	/** Failed runs with `failureReason` that ended since an ISO instant (namphuongtran/warren#30). */
+	listFailedSince(failureReason: RunFailureReason, endedSince: string): Promise<RunRow[]> {
+		return listFailedSince(this.adapter, failureReason, endedSince);
 	}
 
 	/** The retry a `sandbox_run_lost` original spawned (warren-4af7); body in runs-queries.ts. */

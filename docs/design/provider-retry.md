@@ -140,9 +140,9 @@ bound that never decided anything, because the classifier never ran. The
 order is also the cheaper one. The signal sits in the events the handler
 already read, and the bound reads chain rows.
 
-## 4. The three retries beside each other
+## 4. The automatic retries beside each other
 
-Warren has three automatic retries. They do not overlap, and each one
+Warren has four automatic retries. They do not overlap, and each one
 stands down where another owns the case.
 
 | | Cause | Bound | Where the budget lives |
@@ -150,11 +150,47 @@ stands down where another owns the case.
 | Provider retry (this record) | `provider_error`, transient | `MAX_PROVIDER_RETRIES` | `spawn.provider_retry` stamps on the lineage |
 | Infra-lost retry (`src/runs/retry/infra-lost-retry.ts`) | `sandbox_run_lost`, `preempted` | one | the `runs.retry_of` link itself |
 | Plan-run child retry ([coordinator](./plan-run-coordinator.md)) | a retryable child failure cause | `MAX_CHILD_RETRIES` | `plan_run_children.retry_count` |
+| Quota auto-resume (`src/runs/retry/quota-resume.ts`) | `quota_exhausted` | `MAX_QUOTA_RESUMES` | `spawn.quota_resume` stamps on the lineage |
 
 The infra-lost retry also inherits the original run's cost cap minus what
 the first attempt spent, so the two attempts share one shrinking ceiling.
 The provider retry has no equivalent, because the failure it answers
 happens before the agent burns the budget it was given.
+
+### Quota auto-resume (namphuongtran/warren#30)
+
+A rate limit stays durable for this record, because an immediate redispatch
+hits the same limiter. A run the provider refused because the credential's
+usage window is spent reaps `quota_exhausted` instead, and a separate
+consumer waits for the reset rather than retrying at once.
+
+The `post_reap` hook writes `reap.quota_resume_scheduled` on the failed run.
+Its `resumeAt` is the window's `resetsAt` plus 60 seconds and up to 120
+seconds of jitter. A 60-second worker dispatches each due resume. The
+successor builds on the stopped run's pushed commits when there are any, and
+otherwise re-dispatches its config from the same base. It reads the pushed
+branch from `runs.branch`: a `continue` clone for the run's own composed
+branch, a clone cut from a `newBranch` name, and the same `targetBranch` for a
+run that pushed to an operator branch. Its dispatch origin is
+`resume_quota`. No table holds the schedule. The newest decision event on the
+failed run is the state, so a pending resume survives a restart. The worker
+writes a `reap.quota_resume_started` claim before it spawns, so a process
+that dies mid-dispatch never spawns a second successor.
+
+A due resume that the dispatch guard still refuses (a newer report moved the
+reset) is scheduled again at the new reset and keeps its attempt. Plan-run
+children are skipped, because the coordinator already defers a child that the
+guard refuses.
+
+| Kind | Stream | Payload |
+|---|---|---|
+| `reap.quota_resume_scheduled` | the failed run | `resumeAt`, `resetsAt`, `attempt`, `maxAttempts`, `mode` |
+| `reap.quota_resume_started` | the failed run | `attempt` |
+| `reap.quota_resume_dispatched` | the failed run | `newRunId`, `attempt`, `mode` |
+| `reap.quota_resume_failed` | the failed run | `error` |
+| `reap.quota_resume_exhausted` | the failed run | `attempts`, `maxAttempts` |
+| `reap.quota_resume_skipped` | the failed run | `reason`: `plan_run_child`, `no_project`, `reset_unknown` |
+| `spawn.quota_resume` | the successor | `resumedFromRunId`, `attempt`, `mode` |
 
 ### A killed agent is not a provider error (warren-a757)
 

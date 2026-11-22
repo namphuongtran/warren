@@ -1,5 +1,5 @@
 /**
- * Bridge-boot + provider-retry wiring (warren-339d).
+ * Bridge-boot + automatic-retry wiring (warren-339d, namphuongtran/warren#30).
  *
  * `main/index.ts` boots the run-stream bridge registry, logs the
  * resume/skip summary, and then registers the run-level provider-error
@@ -18,7 +18,7 @@ import type { SpawnFn } from "../../projects/clone.ts";
 import type { ProjectsConfig } from "../../projects/config.ts";
 import type { RunEventBroker } from "../../runs/events.ts";
 import { reapRun } from "../../runs/index.ts";
-import type { LifecycleBus, LifecycleRegistration } from "../../runs/lifecycle-bus.ts";
+import type { LifecycleBus } from "../../runs/lifecycle-bus.ts";
 import type { RuntimeProvider } from "../../runtime/contract.ts";
 import type { SeedsCliDeps } from "../../seeds-cli/index.ts";
 import type { IssueTracker } from "../../tracker/contract.ts";
@@ -26,6 +26,7 @@ import type { WarrenConfigCache } from "../../warren-config/index.ts";
 import { type BootBridgesResult, bootBridges, type CreateBridgeRegistryInput } from "../bridges.ts";
 import type { Logger } from "../types.ts";
 import { wireProviderRetry } from "./provider-retry-wiring.ts";
+import { wireQuotaResume } from "./quota-resume-wiring.ts";
 
 /** Input bag for {@link bindReapWithBootDeps}. */
 export interface ReapBindingDeps {
@@ -75,18 +76,24 @@ export interface BridgesWiringInput {
 	readonly now?: () => Date;
 }
 
+/** The automatic-retry consumers started after the bridge boot. */
+export interface RetryWorkersHandle {
+	/** Detach both consumers and wait for a quota-resume tick in flight (server `stop()`). */
+	stop(): Promise<void>;
+}
+
 export interface BridgesWiringResult {
 	readonly bridgesBoot: BootBridgesResult;
-	/** Detach handle for the provider-retry consumer (server `stop()`). */
-	readonly providerRetryRegistration: LifecycleRegistration;
+	/** The provider-retry consumer and the quota auto-resume (namphuongtran/warren#30). */
+	readonly retryWorkers: RetryWorkersHandle;
 }
 
 /**
- * Boot the bridge registry, log the resume/skip summary, and register
- * the provider-retry lifecycle consumer. Returns the bridge boot result
- * (the registry + resume bookkeeping) and the retry registration.
+ * Boot the bridge registry, log the resume/skip summary, and start the
+ * automatic-retry consumers (provider retry, quota auto-resume). Returns the
+ * bridge boot result (the registry + resume bookkeeping) and their handle.
  */
-export async function bootBridgesAndProviderRetry(
+export async function bootBridgesAndRetries(
 	input: BridgesWiringInput,
 ): Promise<BridgesWiringResult> {
 	const bridgesBoot = await bootBridges(input.bridges);
@@ -122,5 +129,12 @@ export async function bootBridgesAndProviderRetry(
 		...(input.now !== undefined ? { now: input.now } : {}),
 	});
 
-	return { bridgesBoot, providerRetryRegistration };
+	const quotaResume = wireQuotaResume({ ...input, bridges: bridgesBoot.registry });
+	const retryWorkers: RetryWorkersHandle = {
+		async stop() {
+			providerRetryRegistration.unregister();
+			await quotaResume.stop();
+		},
+	};
+	return { bridgesBoot, retryWorkers };
 }

@@ -21,7 +21,7 @@ import {
 	sql,
 } from "drizzle-orm";
 import type { SqliteDrizzleDb } from "../client.ts";
-import type { RunRow, RunState } from "../schema.ts";
+import type { RunFailureReason, RunRow, RunState } from "../schema.ts";
 import type { DrizzleAdapter } from "./drizzle-adapter.ts";
 
 type RunsTable = DrizzleAdapter["schema"]["runs"];
@@ -225,6 +225,34 @@ export async function listByState(
 	const runs = adapter.schema.runs;
 	const where = Array.isArray(state) ? inArray(runs.state, state) : eq(runs.state, state);
 	return adapter.pickAll(db.select().from(runs).where(where).orderBy(asc(runs.id)));
+}
+
+/**
+ * Failed runs with one failure reason that ended at or after `endedSince`
+ * (ISO8601), oldest first. The quota auto-resume tick
+ * (namphuongtran/warren#30) scans its candidates with it; `runs_state_idx`
+ * narrows the scan to failed rows.
+ */
+export async function listFailedSince(
+	adapter: DrizzleAdapter,
+	failureReason: RunFailureReason,
+	endedSince: string,
+): Promise<RunRow[]> {
+	const db = adapter.drizzle as SqliteDrizzleDb;
+	const runs = adapter.schema.runs;
+	return adapter.pickAll(
+		db
+			.select()
+			.from(runs)
+			.where(
+				and(
+					eq(runs.state, "failed"),
+					eq(runs.failureReason, failureReason),
+					gte(runs.endedAt, endedSince),
+				),
+			)
+			.orderBy(asc(runs.endedAt), asc(runs.id)),
+	);
 }
 
 /**
