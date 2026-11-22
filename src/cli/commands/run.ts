@@ -23,6 +23,9 @@
  * rejection, an ECONNRESET mid-stream) is not a run failure (gh #1305): the
  * CLI names the run id and the tail error on stderr, then falls back to
  * polling with the longer {@link TAIL_FAILED_TERMINAL_TIMEOUT_MS} budget.
+ * Once the run is terminal it replays the events after the last seq it
+ * printed (namphuongtran/warren#45), so the agent's final message still
+ * lands on stdout before `run.terminal`.
  *
  * SIGINT during a live tail aborts the local stream but does **not**
  * cancel the remote run — cancellation is `POST /runs/:id/cancel` (the
@@ -31,7 +34,7 @@
  */
 
 import { WarrenClientError } from "../../client/errors.ts";
-import type { WaitForRunOptions } from "../../client/index.ts";
+import type { RunEvent, WaitForRunOptions } from "../../client/index.ts";
 import type { RunRow } from "../../client/types.ts";
 import { isTerminalRunState, type RunTerminalState } from "../../core/wire.ts";
 import type { CliContext } from "../output.ts";
@@ -190,29 +193,22 @@ async function tailUntilTerminal(
 	deps: RunDeps,
 	runId: string,
 ): Promise<RunResult> {
+	// Last seq printed: the replay cursor after a failed tail
+	// (namphuongtran/warren#45). Seqs arrive ascending, so anything at or
+	// below it is a repeat and is skipped.
+	let lastSeq: number | undefined;
+	const printEvent = (event: RunEvent): void => {
+		if (lastSeq !== undefined && event.seq <= lastSeq) return;
+		writeRunEvent(context, runId, event);
+		lastSeq = event.seq;
+	};
 	const outcome = await tailWithDetach({
 		context,
 		detachHint:
 			`warren: detaching from run ${runId} (the remote run keeps going; ` +
 			`cancel it with POST /runs/${runId}/cancel). Ctrl-C again to exit.\n`,
 		stream: (signal) => deps.client.streamRunEvents(runId, { follow: true, signal }),
-		onEvent: (event) => {
-			const mode = outputMode(context);
-			if (mode === "pretty") {
-				context.stdio.stdout.write(`${renderEventLine(event)}\n`);
-				return;
-			}
-			if (mode === "json") return; // stream suppressed; one final document
-			writeJsonLine(context.stdio.stdout, {
-				event: "run.event",
-				runId,
-				seq: event.seq,
-				ts: event.ts,
-				kind: event.kind,
-				stream: event.stream,
-				payload: event.payload,
-			});
-		},
+		onEvent: printEvent,
 		onSigint: deps.onSigint,
 		exit: deps.exit,
 	});
@@ -227,10 +223,66 @@ async function tailUntilTerminal(
 			`warren: event tail for run ${runId} failed (${formatError(outcome.err)}); ` +
 				"polling for the terminal state instead\n",
 		);
-		return resolveTerminal(context, deps, runId, "tail_failed");
+		return resolveTerminal(context, deps, runId, "tail_failed", () =>
+			replayMissedEvents(context, deps, runId, () => lastSeq, printEvent),
+		);
 	}
 
 	return resolveTerminal(context, deps, runId, "await_terminal_timeout");
+}
+
+/** Print one streamed run event in the active output mode. */
+function writeRunEvent(context: CliContext, runId: string, event: RunEvent): void {
+	const mode = outputMode(context);
+	if (mode === "pretty") {
+		context.stdio.stdout.write(`${renderEventLine(event)}\n`);
+		return;
+	}
+	if (mode === "json") return; // stream suppressed; one final document
+	writeJsonLine(context.stdio.stdout, {
+		event: "run.event",
+		runId,
+		seq: event.seq,
+		ts: event.ts,
+		kind: event.kind,
+		stream: event.stream,
+		payload: event.payload,
+	});
+}
+
+/**
+ * After a failed tail and a terminal poll, print the events the tail never
+ * delivered (namphuongtran/warren#45) with non-follow reads of
+ * `GET /runs/:id/events?since=<cursor>`. The server bounds each read to one
+ * snapshot page, so this reads again from the advanced cursor until a page
+ * prints nothing new. `print` skips seqs it already printed and advances
+ * `cursor`. json mode prints no events, so it skips the reads. A failed
+ * replay is reported on stderr and does not change the exit code.
+ */
+async function replayMissedEvents(
+	context: CliContext,
+	deps: RunDeps,
+	runId: string,
+	cursor: () => number | undefined,
+	print: (event: RunEvent) => void,
+): Promise<void> {
+	if (outputMode(context) === "json") return;
+	try {
+		for (;;) {
+			const since = cursor();
+			const page = deps.client.streamRunEvents(
+				runId,
+				since !== undefined ? { sinceSeq: since } : {},
+			);
+			for await (const event of page) print(event);
+			if (cursor() === since) return;
+		}
+	} catch (err) {
+		context.stdio.stderr.write(
+			`warren: could not replay the missed events for run ${runId} (${formatError(err)}); ` +
+				`read them from GET /runs/${runId}/events\n`,
+		);
+	}
 }
 
 /**
@@ -238,13 +290,15 @@ async function tailUntilTerminal(
  * the state to an exit code (warren-22cf). Stream close alone is not enough:
  * reap.* can land after the follow stream ends (warren-7bff). On timeout the
  * CLI emits a distinct `run.stream_ended` line and exits 1 without pretending
- * the run finished.
+ * the run finished. `beforeTerminal` runs once the run is terminal, ahead of
+ * the `run.terminal` line (the namphuongtran/warren#45 replay).
  */
 async function resolveTerminal(
 	context: CliContext,
 	deps: RunDeps,
 	runId: string,
 	reason: StreamEndedReason,
+	beforeTerminal?: () => Promise<void>,
 ): Promise<RunResult> {
 	const waitOpts: WaitForRunOptions = {
 		timeoutMs:
@@ -253,6 +307,7 @@ async function resolveTerminal(
 	};
 	try {
 		const run = await deps.client.waitForRun(runId, waitOpts);
+		await beforeTerminal?.();
 		return emitTerminal(context, runId, run);
 	} catch (err) {
 		if (isWaitTimeout(err)) {
