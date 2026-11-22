@@ -25,6 +25,7 @@
  */
 
 import { PREVIEW_FRAGMENT_END, PREVIEW_FRAGMENT_START, type PrCommit, type PrSeed } from "./pr.ts";
+import { defaultAgentReport } from "./pr-agent-report.ts";
 
 /**
  * The fixed set of recognized fragment names. Order is the body order
@@ -37,6 +38,7 @@ export const PR_FRAGMENT_NAMES = [
 	"title",
 	"summary",
 	"agent_notes",
+	"agent_report",
 	"run",
 	"seeds",
 	"preview_url_or_placeholder",
@@ -111,6 +113,12 @@ export interface PrFragmentContext {
 	 * whitespace-only / undefined → the fragment is omitted entirely.
 	 */
 	readonly agentNotes?: string;
+	/**
+	 * The run's final assistant message, rendered into a fenced, size-capped
+	 * `## Agent report` section (namphuongtran/warren#42). Undefined or
+	 * whitespace-only → the fragment is omitted entirely.
+	 */
+	readonly agentReport?: string;
 	/**
 	 * warren-cbd3: the terminal provider-error message when the run ended in
 	 * one after committing and pushing. Renders an `Outcome` bullet in the
@@ -289,6 +297,8 @@ function defaultRender(name: PrFragmentName, ctx: PrFragmentContext): string | n
 			return defaultSummary(ctx);
 		case "agent_notes":
 			return ctx.agentNotes !== undefined ? defaultAgentNotes(ctx.agentNotes) : null;
+		case "agent_report":
+			return ctx.agentReport !== undefined ? defaultAgentReport(ctx.agentReport) : null;
 		case "run":
 			return defaultRun(ctx);
 		case "seeds":

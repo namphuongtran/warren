@@ -5,6 +5,7 @@ import type { IssueTracker } from "../../tracker/contract.ts";
 import type { AutoMergeConfig } from "../../warren-config/pr-config.ts";
 import { type AutoOpenPrConfig, type BuildPrContentInput, buildPrContent } from "../pr.ts";
 import type { PrTemplateOverrides } from "../pr-template.ts";
+import { loadAgentReport } from "./agent-report.ts";
 import { runAutoMergeArm } from "./auto-merge-arm.ts";
 import type { ReapPipelineContext, ReapPipelineState } from "./pipeline.ts";
 import { type CloneFetchConfig, gatherPrContext, type PrContext } from "./pr-context.ts";
@@ -87,6 +88,11 @@ export interface TryOpenPrInput {
 	readonly prContext: PrContext;
 	readonly previewOptedIn: boolean;
 	/**
+	 * The run's final assistant message for the `## Agent report` section
+	 * (namphuongtran/warren#42); null/undefined renders no section.
+	 */
+	readonly agentReport?: string | null;
+	/**
 	 * warren-cbd3: the terminal provider-error message when the run failed
 	 * with one AFTER committing and pushing. Labels the PR body's `run`
 	 * fragment so a reviewer sees the run itself did not finish cleanly;
@@ -94,6 +100,21 @@ export interface TryOpenPrInput {
 	 */
 	readonly providerError?: string | null;
 	readonly prTemplate?: PrTemplateOverrides;
+}
+
+/**
+ * The agent's own handoff text for the PR body: the final commit body
+ * (`## Agent notes`, warren-5e86) and the final assistant message
+ * (`## Agent report`, namphuongtran/warren#42). Absent sources are omitted.
+ */
+function handoffFields(
+	finalCommitBody: string | null,
+	agentReport: string | null | undefined,
+): Pick<BuildPrContentInput, "agentNotes" | "agentReport"> {
+	return {
+		...(finalCommitBody !== null ? { agentNotes: finalCommitBody } : {}),
+		...(agentReport !== null && agentReport !== undefined ? { agentReport } : {}),
+	};
 }
 
 export async function tryOpenPr(input: TryOpenPrInput): Promise<TryOpenPrResult> {
@@ -118,9 +139,7 @@ export async function tryOpenPr(input: TryOpenPrInput): Promise<TryOpenPrResult>
 			? { warrenBaseUrl: input.autoOpen.warrenBaseUrl }
 			: {}),
 		...(input.prContext.seed !== null ? { seed: input.prContext.seed } : {}),
-		...(input.prContext.finalCommitBody !== null
-			? { agentNotes: input.prContext.finalCommitBody }
-			: {}),
+		...handoffFields(input.prContext.finalCommitBody, input.agentReport),
 		...(input.run.startedAt !== null ? { startedAt: input.run.startedAt } : {}),
 		...(input.run.endedAt !== null ? { endedAt: input.run.endedAt } : {}),
 		...(input.run.costUsd !== null ? { costUsd: input.run.costUsd } : {}),
@@ -207,6 +226,8 @@ export interface RunPrOpenInput {
 	readonly issueTracker?: IssueTracker;
 	/** warren-cbd3: terminal provider-error message; labels the PR body. */
 	readonly providerError?: string | null;
+	/** The run's final assistant message (namphuongtran/warren#42). */
+	readonly agentReport?: string | null;
 	/** Injected sleep for tests; defaults to real setTimeout-based sleep. */
 	readonly sleep?: (ms: number) => Promise<void>;
 	/**
@@ -296,6 +317,7 @@ export async function runPrOpen(input: RunPrOpenInput): Promise<OpenedPr | null>
 			prContext,
 			previewOptedIn: input.previewOptedIn,
 			providerError: input.providerError,
+			agentReport: input.agentReport,
 			...(input.prTemplate !== undefined ? { prTemplate: input.prTemplate } : {}),
 		};
 		const sleep = input.sleep ?? defaultSleep;
@@ -391,6 +413,7 @@ export async function prOpenStep(
 		fail: (step, err) => ctx.fail(step, err),
 		setPrUrl: (id, url) => ctx.input.repos.runs.setPrUrl(id, url),
 		providerError: ctx.input.providerErrorPr?.message,
+		agentReport: await loadAgentReport(ctx.input.repos.events, ctx.run.id),
 		...(ctx.input.prTemplate !== undefined ? { prTemplate: ctx.input.prTemplate } : {}),
 		...(ctx.input.prAutoMerge !== undefined ? { prAutoMerge: ctx.input.prAutoMerge } : {}),
 		...(ctx.input.sleep !== undefined ? { sleep: ctx.input.sleep } : {}),
