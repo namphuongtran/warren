@@ -25,6 +25,7 @@ function run(overrides: Partial<RunRow>): RunRow {
 		filesChanged: null,
 		insertions: null,
 		deletions: null,
+		qualityGateOutcome: null,
 		prompt: "",
 		trigger: "manual",
 		prUrl: null,

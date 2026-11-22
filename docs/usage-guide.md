@@ -187,7 +187,14 @@ admission:
 ### 4.4 Help the agent do better work
 
 - Add an `AGENTS.md` or `CLAUDE.md` that describes how to build, test, and the repo conventions.
-- Add a fast check command, and set it in `qualityGate`.
+- Add a fast check command, and set it in `qualityGate`. Warren freezes it onto each run. At
+  reap, Warren reads the agent's tool calls and records whether the gate ran and passed. The
+  result is `qualityGateOutcome` on `GET /runs/:id` and the runs list, plus a
+  `quality.gate_outcome` event. The values are `unconfigured`, `not_run`, `passed`, `failed`,
+  `stale` (files edited after a pass), and `unknown`. Warren never runs the gate itself.
+- The agent should run the gate as `$WARREN_QUALITY_GATE` or as the exact configured command.
+  A pipe or `; echo` hides the exit status, so such a command should print `exit=$?`.
+  Otherwise the outcome reads `unknown`.
 - Optional: a `.seeds/` directory for the issue tracker, and `.mulch/` for agent memory across
   runs. Warren detects these directories when they exist.
 

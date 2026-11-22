@@ -78,6 +78,15 @@ export interface AgentRuntimeAdapter {
 	 * that way, so a run on it is never failed by the provider-error net.
 	 */
 	readonly terminalErrorEnvelopeTypes: readonly string[];
+	/**
+	 * Tool names whose successful call changes a file in the workspace
+	 * (namphuongtran/warren#36). The quality-gate outcome reads a passing gate
+	 * as `stale` when one of these lands after it. Shell commands that edit
+	 * files (`sed -i`, `git apply`) are invisible here by design: the command
+	 * text cannot say what it touched. Optional so a test double need not
+	 * declare it; absent means no edit is ever detected for that harness.
+	 */
+	readonly fileEditToolNames?: readonly string[];
 
 	/* ------------------------------------------------------------------ */
 	/* Phase-2 harness capabilities (warren-7933, plan pl-3007). Source-  */

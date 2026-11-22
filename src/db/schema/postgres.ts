@@ -50,6 +50,7 @@ import {
 	RUN_COST_BASES,
 	RUN_FAILURE_REASONS,
 	RUN_MODES,
+	RUN_QUALITY_GATE_OUTCOMES,
 	RUN_STATES,
 	TABLE_NAMES,
 } from "./columns.ts";
@@ -171,6 +172,9 @@ export const runs = pgTable(
 		filesChanged: integer("files_changed"),
 		insertions: integer("insertions"),
 		deletions: integer("deletions"),
+		// Mirror of sqlite quality_gate/quality_gate_outcome (namphuongtran/warren#36).
+		qualityGate: text("quality_gate"),
+		qualityGateOutcome: text("quality_gate_outcome", { enum: RUN_QUALITY_GATE_OUTCOMES }),
 	},
 	(t) => [
 		index(INDEX_NAMES.runsState).on(t.state),

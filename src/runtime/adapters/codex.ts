@@ -106,6 +106,8 @@ export const codexAdapter: AgentRuntimeAdapter = {
 	 * carries no `stopReason`, so the classifier ignores it as before.
 	 */
 	terminalErrorEnvelopeTypes: ["result"],
+	// Codex writes files only through `apply_patch` items (namphuongtran/warren#36).
+	fileEditToolNames: ["apply_patch"],
 	cliBinaries: [CODEX_BIN],
 
 	envPassthrough(): readonly string[] {

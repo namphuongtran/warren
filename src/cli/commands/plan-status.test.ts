@@ -97,6 +97,7 @@ function runRow(over: Partial<RunRow> = {}): RunRow {
 		filesChanged: null,
 		insertions: null,
 		deletions: null,
+		qualityGateOutcome: null,
 		startedAt: "2026-06-21T08:00:00.000Z",
 		workspaceReadyAt: null,
 		agentReadyAt: null,

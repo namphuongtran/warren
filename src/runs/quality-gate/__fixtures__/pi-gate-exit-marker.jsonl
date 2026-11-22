@@ -1,0 +1,6 @@
+{"type":"agent_start"}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"toolu_01PiMark1","name":"bash","arguments":{"command":"bun run check:all --bail > /tmp/gate.log 2>&1; echo \"exit=$?\""}}],"api":"anthropic-messages","provider":"anthropic","model":"claude-haiku-4-5","stopReason":"toolUse","timestamp":1780853740000}}
+{"type":"message_end","message":{"role":"toolResult","toolCallId":"toolu_01PiMark1","toolName":"bash","content":[{"type":"text","text":"exit=1"}],"isError":false,"timestamp":1780853741000}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"toolu_01PiTail1","name":"bash","arguments":{"command":"grep -n FAIL /tmp/gate.log | head"}}],"api":"anthropic-messages","provider":"anthropic","model":"claude-haiku-4-5","stopReason":"toolUse","timestamp":1780853742000}}
+{"type":"message_end","message":{"role":"toolResult","toolCallId":"toolu_01PiTail1","toolName":"bash","content":[{"type":"text","text":"41:test FAIL"}],"isError":false,"timestamp":1780853743000}}
+{"type":"agent_end","messages":[]}

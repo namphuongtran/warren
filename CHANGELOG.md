@@ -10,6 +10,19 @@ Releases **0.9.10 and earlier** live in
 
 ## [Unreleased]
 
+### Added
+
+- **Per-run quality-gate outcome (namphuongtran/warren#36).** Dispatch
+  freezes the project's `qualityGate` onto the run. At reap, Warren reads
+  the agent's tool calls and records `qualityGateOutcome`: `unconfigured`,
+  `not_run`, `passed`, `failed`, `stale` (files edited after a pass), or
+  `unknown` (the exit status was masked or never recorded). The outcome is
+  served on `GET /runs/:id` and the runs list, and announced as a
+  `quality.gate_outcome` event. The gate command itself stays operator-only.
+  Adds two nullable `runs` columns (SQLite 0057, Postgres 0052). A run
+  dispatched before the upgrade but reaped after it reads `unconfigured`,
+  because no gate was frozen onto it.
+
 ### Changed
 
 - **Campaign-controller review fix loop (namphuongtran/warren#18).** The

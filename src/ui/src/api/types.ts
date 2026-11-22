@@ -52,6 +52,7 @@ import type {
 	RunCostBasis,
 	RunFailureReason,
 	RunMode,
+	RunQualityGateOutcome,
 	RunState,
 } from "../../../core/wire.ts";
 
@@ -151,6 +152,7 @@ export interface RunRow {
 	filesChanged: number | null;
 	insertions: number | null;
 	deletions: number | null;
+	qualityGateOutcome: RunQualityGateOutcome | null; // reap-derived (namphuongtran/warren#36)
 	prompt: string;
 	trigger: string;
 	/**
