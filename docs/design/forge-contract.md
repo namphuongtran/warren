@@ -517,6 +517,43 @@ permanent peer and never a legacy path. That claim survives only if the domain
 reads a flag and degrades. It does not survive a `hasApp` check scattered
 through the CI-fixer.
 
+### 5.1 CI-fixer poller: open pull requests only (namphuongtran/warren#59)
+
+The CI fixer works only on open pull requests. A merged or closed pull
+request costs no check-run request and never gets a fixer run, even when
+its branch survived the merge with red checks.
+
+Every scheduler tick (60 seconds by default) runs one pass for each project
+with `ciFixer.enabled`:
+
+1. `listPrCandidatesByProject` returns one candidate per Warren pull
+   request URL, newest first, capped at 25. It leaves out any URL where a
+   run carrying it has `pr_state` set to `merged` or `closed_unmerged`.
+   The merge watcher writes that column, and so does step 2. The filter
+   runs before the cap, so old terminal pull requests never push an open
+   one out of the window.
+2. For each candidate, the poller calls `getPullRequest` before anything
+   else. A merged or closed pull request is written to the opener run's
+   `pr_state` and returned as a `skipped` result with reason `not_open`.
+   The pass logs that once, at info. From the next tick on, step 1 leaves
+   the pull request out, so it costs no more requests.
+3. Only an open pull request goes on to `listChecks` against the
+   `${prefix}/${runId}` branch, then to the retry and cooldown gates, and
+   possibly to one dispatch.
+
+The poller does not trust a stored `pr_state` of `open`. The merge watcher
+polls at most every 15 minutes and gives up after 7 days, so `open` can be
+stale. A pull request merged with red checks inside that window would
+otherwise get a fixer run.
+
+**Per-tick cost.** A project with N open Warren pull requests (N ≤ 25) costs
+2N forge reads per tick in the steady state: N lifecycle reads and N
+check-run reads. A failing pull request that dispatches adds log-tail reads.
+Each terminal pull request costs one lifecycle read, once, and nothing after
+that. A `getPullRequest` error is an `error` result, logged as a
+`scheduler.ci_fixer_failed` warn, and the next tick reads that pull request
+again.
+
 ---
 
 ## 6. Corrections this contract bakes in (from ground truth)

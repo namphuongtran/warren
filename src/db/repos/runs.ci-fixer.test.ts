@@ -66,6 +66,35 @@ function suite(dialect: "sqlite" | "postgres"): void {
 			}
 		});
 
+		test("listPrCandidatesByProject drops a PR any of its runs recorded merged or closed", async () => {
+			const { handle, repo, agentName, projectId } = await open();
+			try {
+				const merged = await spawn(repo, agentName, projectId);
+				const mergedFixer = await spawn(repo, agentName, projectId, { trigger: "ci-fixer" });
+				const closed = await spawn(repo, agentName, projectId);
+				const open = await spawn(repo, agentName, projectId);
+				const unknown = await spawn(repo, agentName, projectId);
+				await repo.setPrUrl(merged.id, "https://github.com/x/y/pull/1");
+				await repo.setPrUrl(mergedFixer.id, "https://github.com/x/y/pull/1");
+				await repo.setPrUrl(closed.id, "https://github.com/x/y/pull/2");
+				await repo.setPrUrl(open.id, "https://github.com/x/y/pull/3");
+				await repo.setPrUrl(unknown.id, "https://github.com/x/y/pull/4");
+				// The merge watcher settles whichever run reaped last — here
+				// the fixer, not the opener — so the filter keys on the URL.
+				await repo.setPrState(mergedFixer.id, "merged", "2026-01-02T00:00:00.000Z");
+				await repo.setPrState(closed.id, "closed_unmerged", null);
+				await repo.setPrState(open.id, "open", null);
+
+				const candidates = await repo.listPrCandidatesByProject(projectId);
+				expect(candidates.map((c) => c.prUrl).sort()).toEqual([
+					"https://github.com/x/y/pull/3",
+					"https://github.com/x/y/pull/4",
+				]);
+			} finally {
+				await handle.close();
+			}
+		});
+
 		test("fixAttemptHistoryByPrUrl counts ci-fixer runs and reports the latest completion", async () => {
 			const { handle, repo, agentName, projectId } = await open();
 			try {
