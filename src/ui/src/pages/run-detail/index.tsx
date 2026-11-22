@@ -12,7 +12,7 @@ import { Spinner } from "@/components/ui/spinner.tsx";
 import { useEventStream } from "@/hooks/use-event-stream.ts";
 import { formatError } from "@/lib/format-error.ts";
 import { formatPullRequestLifecycle } from "@/lib/labels.ts";
-import { cn } from "@/lib/utils.ts";
+import { cn, formatTimestamp } from "@/lib/utils.ts";
 import type { DispatchRouteState } from "@/pages/dispatch/dispatch-draft.ts";
 import { EventTail } from "@/pages/run-detail/event-tail.tsx";
 import { PhaseRail, PhaseRailStrip } from "@/pages/run-detail/phase-rail.tsx";
@@ -24,7 +24,11 @@ import {
 	SpendPanel,
 } from "@/pages/run-detail/side-panels.tsx";
 import { CancelRunButton, SteerForm } from "@/pages/run-detail/steering-panel.tsx";
-import { extractReapSummary, isBridgeStalled } from "@/pages/run-detail-format.ts";
+import {
+	extractQuotaHold,
+	extractReapSummary,
+	isBridgeStalled,
+} from "@/pages/run-detail-format.ts";
 import { projectLabel } from "@/pages/runs/runs-format.ts";
 import { formatRunElapsed } from "./run-detail-format.ts";
 
@@ -364,6 +368,7 @@ export function RunDetailPage() {
 	const r = run.data;
 	const reap = extractReapSummary(stream.events);
 	const bridgeStalled = !isTerminal && isBridgeStalled(stream.events);
+	const quotaHold = r.state === "queued" ? extractQuotaHold(stream.events) : null;
 	const projectName =
 		r.projectId === null
 			? "deleted project"
@@ -385,6 +390,13 @@ export function RunDetailPage() {
 				reap={reap}
 				onCancelSettled={() => void qc.invalidateQueries({ queryKey: ["runs"] })}
 			/>
+
+			{quotaHold !== null ? (
+				<Alert variant="info" title="Deferred: provider quota">
+					The provider's usage limit is reached. This run starts on its own after the limit resets,
+					at about {formatTimestamp(quotaHold.releaseAt)}.
+				</Alert>
+			) : null}
 
 			{bridgeStalled ? (
 				<Alert variant="warning" title="Agent infrastructure unreachable">

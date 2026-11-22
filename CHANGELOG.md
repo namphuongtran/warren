@@ -12,6 +12,18 @@ Releases **0.9.10 and earlier** live in
 
 ### Added
 
+- **Held dispatches on a spent provider quota (namphuongtran/warren#30).**
+  `POST /runs` takes `onQuotaExhausted: "hold"` (`warren run
+  --hold-on-quota`, SDK `CreateRunInput.onQuotaExhausted`). While the
+  credential's usage window is spent, such a dispatch answers 202 with the run
+  `queued`, `sandbox: null` and `quotaHold` (`resetsAt`, `releaseAt`) instead
+  of 429. A 60-second releaser launches the held run as the same row a minute
+  or two after the reset, and holds it again if the reset moved. The run
+  detail page shows "Deferred: provider quota" meanwhile. The state lives in
+  `dispatch.quota_*` events on the run, so a hold survives a restart and
+  cancels like any queued run. The default stays the 429. `SpawnRunResponse.
+  sandbox` is now nullable in the SDK. No schema change.
+
 - **Quota auto-resume (namphuongtran/warren#30, Phase 2).** A run that reaps
   `quota_exhausted` is now resumed after its usage window resets, instead of
   waiting for an operator. Reap schedules the resume for `resetsAt` plus a

@@ -23,18 +23,21 @@
  * of scope for V1.
  */
 
+import type { QuotaHoldView } from "../core/wire.ts";
 import type { RunRow } from "../db/schema.ts";
 
 /** Default dedupe window: 10 minutes, comfortably covering retry storms. */
 export const DEFAULT_IDEMPOTENCY_TTL_MS = 10 * 60 * 1000;
 
 /**
- * The cached `POST /runs` 201 body. Mirrors the shape the handler returns
- * so a replay is byte-identical to the original response.
+ * The cached `POST /runs` body. Mirrors the shape the handler returns
+ * so a replay is byte-identical to the original response. A held run
+ * (namphuongtran/warren#30) has no sandbox yet and carries `quotaHold`.
  */
 export interface IdempotentDispatch {
 	readonly run: RunRow;
-	readonly sandbox: { readonly id: string; readonly workspacePath: string };
+	readonly sandbox: { readonly id: string; readonly workspacePath: string } | null;
+	readonly quotaHold?: QuotaHoldView;
 }
 
 interface Entry {

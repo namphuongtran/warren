@@ -1,5 +1,6 @@
 /**
- * Quota auto-resume wiring (namphuongtran/warren#30 Phase 2).
+ * Quota auto-resume wiring (namphuongtran/warren#30 Phase 2), plus the
+ * releaser that launches held dispatches once their window reopens.
  *
  * The `post_reap` consumer records each `quota_exhausted` run's resume, and
  * the worker dispatches the due ones (`src/runs/retry/quota-resume.ts`). Both
@@ -13,6 +14,7 @@ import type { SpawnFn } from "../../projects/clone.ts";
 import type { ProjectsConfig } from "../../projects/config.ts";
 import type { RunEventBroker } from "../../runs/events.ts";
 import {
+	createQuotaHoldReleaser,
 	createQuotaResumeLifecycleExtension,
 	createQuotaResumer,
 	startQuotaResumeWorker,
@@ -55,7 +57,7 @@ export function wireQuotaResume(input: QuotaResumeWiringInput): QuotaResumeWirin
 		warn: (obj, msg) => logger.warn(obj, msg),
 		error: (obj, msg) => logger.error(obj, msg),
 	};
-	const resumer = createQuotaResumer({
+	const deps = {
 		repos: input.repos,
 		runtimeProvider: input.runtimeProvider,
 		bridges: input.bridges,
@@ -71,13 +73,20 @@ export function wireQuotaResume(input: QuotaResumeWiringInput): QuotaResumeWirin
 			: {}),
 		...(input.now !== undefined ? { now: input.now } : {}),
 		logger: resumeLogger,
-	});
+	};
+	const resumer = createQuotaResumer(deps);
 	const registration = input.bus.register(createQuotaResumeLifecycleExtension(resumer));
 	const worker = startQuotaResumeWorker({ resumer, logger: resumeLogger });
+	// namphuongtran/warren#30: held dispatches launch on these deps after the reset.
+	const releaser = startQuotaResumeWorker({
+		resumer: createQuotaHoldReleaser(deps),
+		logger: resumeLogger,
+		name: "quota-hold",
+	});
 	return {
 		async stop() {
 			registration.unregister();
-			await worker.stop();
+			await Promise.all([worker.stop(), releaser.stop()]);
 		},
 	};
 }

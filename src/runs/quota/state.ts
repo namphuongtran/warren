@@ -29,6 +29,16 @@ type QuotaRepos = Pick<Repos, "providerQuota">;
 /** The dispatch was refused because the credential's usage window is spent. */
 export class ProviderQuotaExhaustedError extends RuntimeAdmissionError {
 	override readonly code = PROVIDER_QUOTA_EXHAUSTED;
+	/** When the window reopens, unix seconds, exactly as the stored report says. */
+	readonly resetsAt: number;
+
+	constructor(
+		message: string,
+		options: ConstructorParameters<typeof RuntimeAdmissionError>[1] & { resetsAt: number },
+	) {
+		super(message, options);
+		this.resetsAt = options.resetsAt;
+	}
 }
 
 export interface RecordQuotaObservationInput {
@@ -81,13 +91,15 @@ export async function assertProviderQuotaOpen(
 	const row = await repos.providerQuota.get(key.provider, key.credentialFingerprint);
 	const retryAfterSeconds = row === undefined ? null : secondsUntilReset(row, input.now);
 	if (row === undefined || retryAfterSeconds === null) return;
-	const resetsAt = new Date((row.resetsAt ?? 0) * 1000).toISOString();
+	const resetsAtSeconds = row.resetsAt ?? 0;
+	const resetsAt = new Date(resetsAtSeconds * 1000).toISOString();
 	const window = row.rateLimitType ?? "usage";
 	throw new ProviderQuotaExhaustedError(
 		`the ${key.provider} credential's ${window} window is spent until ${resetsAt}`,
 		{
 			reason: PROVIDER_QUOTA_EXHAUSTED,
 			retryAfterSeconds,
+			resetsAt: resetsAtSeconds,
 			recoveryHint: `retry after ${resetsAt}, or dispatch with force: true to run anyway`,
 		},
 	);

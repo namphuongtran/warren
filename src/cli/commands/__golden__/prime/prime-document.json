@@ -69,6 +69,10 @@
           "description": "re-dispatch a salvaged run's recovered work off its warren/rescue/<runId> branch"
         },
         {
+          "flags": "--hold-on-quota",
+          "description": "on a spent provider quota, hold the run until the reset"
+        },
+        {
           "flags": "--url <url>",
           "description": "warren server base URL (env WARREN_BASE_URL)"
         },

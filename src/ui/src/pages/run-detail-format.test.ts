@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { RunEvent, RunRow } from "@/api/types.ts";
 import {
+	extractQuotaHold,
 	extractReapSummary,
 	findFirstText,
 	findToolUseName,
@@ -145,5 +146,40 @@ describe("findToolUseName / findFirstText", () => {
 		expect(findFirstText([{ type: "text", text: "hello" }, "alt"])).toBe("hello");
 		expect(findFirstText([{ type: "text" }])).toBe(null);
 		expect(findFirstText(null)).toBe(null);
+	});
+});
+
+describe("extractQuotaHold", () => {
+	const event = (seq: number, kind: string, payload: unknown = {}): RunEvent => ({
+		id: seq,
+		runId: "run-held",
+		seq,
+		ts: "2026-11-22T08:50:43.000Z",
+		kind,
+		stream: "system",
+		payload,
+	});
+	const held = event(1, "dispatch.quota_held", {
+		reason: "provider_quota_exhausted",
+		resetsAt: 1795338600,
+		releaseAt: "2026-11-22T09:11:30.000Z",
+	});
+
+	test("reads the release time of a run still held", () => {
+		expect(extractQuotaHold([held])).toEqual({ releaseAt: "2026-11-22T09:11:30.000Z" });
+	});
+
+	test("returns null once the hold is released", () => {
+		expect(extractQuotaHold([held, event(2, "dispatch.quota_released")])).toBeNull();
+	});
+
+	test("returns null for a held payload without a readable release time", () => {
+		for (const payload of [null, "held", { releaseAt: 1795338720 }]) {
+			expect(extractQuotaHold([event(1, "dispatch.quota_held", payload)])).toBeNull();
+		}
+	});
+
+	test("returns null for a run that was never held", () => {
+		expect(extractQuotaHold([event(1, "state_change")])).toBeNull();
 	});
 });

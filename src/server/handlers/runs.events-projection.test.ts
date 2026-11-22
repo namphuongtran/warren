@@ -283,6 +283,25 @@ describe("projectEvent (warren-1cb7)", () => {
 		expect(projectEvent(spawn, undefined)).toBe(spawn);
 	});
 
+	test("dispatch.quota_held keeps the hold but drops the stored request (namphuongtran/warren#30)", () => {
+		const held = {
+			kind: "dispatch.quota_held",
+			payloadJson: {
+				reason: "provider_quota_exhausted",
+				resetsAt: 1795338600,
+				releaseAt: "2026-11-22T09:11:30.000Z",
+				request: { prompt: "go", metadata: { ticket: "INT-7" }, dispatcherHandle: "ops-bot" },
+			},
+		};
+		const projected = projectEvent(held, ANONYMOUS_ACTOR);
+		expect(projected?.payloadJson as unknown).toEqual({
+			reason: "provider_quota_exhausted",
+			resetsAt: 1795338600,
+			releaseAt: "2026-11-22T09:11:30.000Z",
+		});
+		expect(projectEvent(held, undefined)).toBe(held);
+	});
+
 	test("a failure payload with no path/message survives sanitize untouched", () => {
 		const reap = { kind: "reap_failed", payloadJson: { step: "seed_close" } };
 		expect(projectEvent(reap, ANONYMOUS_ACTOR)?.payloadJson).toEqual({ step: "seed_close" });

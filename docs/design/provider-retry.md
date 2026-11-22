@@ -193,6 +193,37 @@ pushed commits is retried as a `continue` clone of its branch.
 | `reap.quota_resume_skipped` | the failed run | `reason`: `plan_run_child`, `no_project`, `reset_unknown` |
 | `spawn.quota_resume` | the successor | `resumedFromRunId`, `attempt`, `mode` |
 
+### Held dispatches (namphuongtran/warren#30)
+
+A new dispatch into a spent window answers 429 by default. A `POST /runs`
+with `onQuotaExhausted: "hold"` (`warren run --hold-on-quota`) is held
+instead. `spawnOrHoldRun` creates the run row `queued` with no workload and
+answers 202 with `quotaHold` (`reason`, `resetsAt`, `releaseAt`) and
+`sandbox: null`. The client keeps the run id and can tail it as usual. A
+`dispatch.quota_held` event on the run carries the dispatch request without
+any credential, and the run detail page shows "Deferred: provider quota"
+until the release.
+
+The quota hold releaser (`src/runs/quota/hold-release.ts`) ticks every 60
+seconds beside the resume worker. It launches each held run whose
+`releaseAt` has passed (the reset plus the same delay and jitter as a
+resume) as the same row. `launchHeldRun` replays the stored request through
+the same preparation as `spawnRun` (`src/runs/spawn/prepare.ts`) and mints a
+fresh git credential. The state is on the stream again: the
+`dispatch.quota_release_started` claim stops a restart mid-launch from
+launching twice. When the guard still refuses (a newer report moved the
+reset), the release writes a new `dispatch.quota_held` at the new reset. A
+held run cancels like any queued run, and the releaser never launches a run
+that is no longer `queued` with no workload. Any other launch failure fails
+the row `never_started`.
+
+| Kind | Stream | Payload |
+|---|---|---|
+| `dispatch.quota_held` | the held run | `reason`, `resetsAt`, `releaseAt`, `request` |
+| `dispatch.quota_release_started` | the held run | none |
+| `dispatch.quota_released` | the held run | `sandboxId` |
+| `dispatch.quota_release_failed` | the held run | `error` |
+
 ### A killed agent is not a provider error (warren-a757)
 
 An agent that dies without its own terminal envelope gets a synthesized

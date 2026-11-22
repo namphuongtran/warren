@@ -6,29 +6,20 @@
  * `failed`/`never_started`. Dispatch-context (warren-d6ca) snapshots right after.
  */
 
-import { NotFoundError, ValidationError } from "../../core/errors.ts";
+import { ValidationError } from "../../core/errors.ts";
 import { resolveRunCostBasis } from "../../core/providers.ts";
+import type { QuotaHoldView } from "../../core/wire.ts";
+import type { RunRow } from "../../db/schema.ts";
 import { withProjectCloneLock } from "../../projects/clone-lock.ts";
-import { refreshProject } from "../../projects/manage.ts";
-import {
-	readProviderFrontmatter,
-	readRuntimeId,
-	withMaxCostUsdOverride,
-	withProviderOverrides,
-} from "../../registry/schema.ts";
+import { readRuntimeId } from "../../registry/schema.ts";
 import type { RunHandle, RunSpec, RuntimeProvider } from "../../runtime/contract.ts";
 import { interactiveRuntimeOverride } from "../../warren-config/schema.ts";
 import { composeRunBranch, resolveRunBranchPrefix } from "../branch.ts";
-import { parseBurrowConfig } from "../burrow-config.ts";
-import { resolveCapOverride } from "../cost-cap.ts";
-import { withDurationLimit } from "../duration-limit.ts";
 import { lifecycleBus } from "../lifecycle-bus.ts";
 import { QUALITY_GATE_ENV_VAR } from "../quality-gate/command.ts";
-import { buildSeedFiles } from "../seed.ts";
-import { validateTargetBranch } from "../target-branch.ts";
-import { readCachedAgent, readProjectDefaults, resolveOverride } from "./agent-cache.ts";
+import { heldDispatchRequest, recordQuotaHold, requireHeldRunPending } from "../quota/hold.ts";
+import { ProviderQuotaExhaustedError } from "../quota/state.ts";
 import { injectWarrenCallbackEnv } from "./callback-env.ts";
-import { resolveContinuationRef, resolveDispatchBranches } from "./continuation.ts";
 import { writeDispatchContext } from "./dispatch-context.ts";
 import { injectGitIdentityEnv, warnIfGitIdentityUnconfigured } from "./git-identity.ts";
 import {
@@ -37,8 +28,7 @@ import {
 	runDispatchMigrationPreflight,
 } from "./migration-preflight.ts";
 import { recordModelSelectionWarnings } from "./model-selection.ts";
-import { gateAgentPrompts, withMulchArm } from "./prompt-capabilities.ts";
-import { assertNoKnownProviderModelMismatch, resolveDispatchProvider } from "./provider-model.ts";
+import { type PreparedDispatch, prepareDispatch } from "./prepare.ts";
 import { assertDispatchQuotaOpen } from "./quota-guard.ts";
 import {
 	bindRunLogger,
@@ -61,141 +51,93 @@ import type { SpawnRunInput, SpawnRunResult } from "./types.ts";
 const WORKER_PLACEMENT_LABEL = "local";
 
 export async function spawnRun(input: SpawnRunInput): Promise<SpawnRunResult> {
-	if (input.prompt.trim() === "") {
-		throw new ValidationError("prompt cannot be empty");
-	}
+	assertPromptPresent(input);
 	// warren-232d: serialize the per-project dispatch critical section — the
 	// clone refresh (`checkout --force` / `reset --hard`), the working-tree
 	// defaults read, and the provider's worktree materialization all mutate or
 	// read the SAME shared host clone, so two concurrent dispatches on one
 	// project with different base refs must not interleave. Different projects
 	// dispatch in parallel; see src/projects/clone-lock.ts.
-	return withProjectCloneLock(input.projectId, () => dispatchRun(input));
+	return withProjectCloneLock(input.projectId, async () => {
+		const prepared = await prepareDispatch(input);
+		// namphuongtran/warren#30: refuse a spent quota once the provider is known.
+		await assertDispatchQuotaOpen(input, prepared.declaredProvider);
+		return launchRun(input, prepared, await createRunRow(input, prepared));
+	});
 }
 
-async function dispatchRun(input: SpawnRunInput): Promise<SpawnRunResult> {
-	const agentRow = await input.repos.agents.get(input.agentName);
-	if (!agentRow) {
-		throw new NotFoundError(`agent not found: ${input.agentName}`);
-	}
-	const project = await input.repos.projects.require(input.projectId);
-	// warren-3a75: `targetBranch` is a push target the finalize step writes to
-	// directly, with no PR and therefore no Article IX gate. Enforce the ref
-	// grammar and refuse the project default branch BEFORE any side effect (no
-	// clone refresh, no run row). Repair runs targeting an existing PR head
-	// branch are unaffected.
-	const targetBranch = validateTargetBranch(input.targetBranch, project.defaultBranch);
-	// warren-326f: the explicit opt-in to run on an EXISTING branch. Shape-validated
-	// and fail-closed against the push remote BEFORE any side effect, then folded
-	// into the repair-run pattern (branch = base ref = push target); see
-	// resolveDispatchBranches (#58: newBranch too). Downstream keeps reading `ref`/`targetBranch`, so
-	// providers and reap need no special-casing and default dispatches are
-	// byte-identical.
-	const { existingBranch, newBranch } = await resolveDispatchBranches(input, project);
-	const baseRefField = existingBranch ?? input.ref;
-	const pushTarget = existingBranch ?? targetBranch;
+export type SpawnOrHoldResult =
+	| { readonly kind: "dispatched"; readonly result: SpawnRunResult }
+	| { readonly kind: "held"; readonly run: RunRow; readonly hold: QuotaHoldView };
 
-	const baseAgent = readCachedAgent(agentRow.renderedJson, agentRow.name);
-	const burrowConfig = parseBurrowConfig(baseAgent.sections.burrow_config);
-
-	// warren-4b11: continuation runs ("re-run with follow-up") seed their
-	// workspace from the prior run's pushed branch instead of the project
-	// default branch. Resolve the parent's branch up front and feed it as the
-	// refresh ref so the local clone is checked out to the parent branch tip
-	// before burrow forks the new run branch off it. The parent link is also
-	// recorded on the new run row below so the UI can render a chain indicator
-	// and chain cost/token totals are derivable by walking the link.
-	const baseRef = input.baseCommit ?? (await resolveContinuationRef(input, project, pushTarget));
-
-	// warren-232d: a baseCommit dispatch NEVER moves the host clone's HEAD.
-	// The refresh runs in fetch-only mode (the pinned SHA's objects come
-	// down, HEAD/working tree untouched — see refreshProjectClone's
-	// `fetchCommit` leg) and the workspace is cut at the SHA directly by
-	// the provider (`git worktree add -b <runBranch> <ws> <sha>`), so the
-	// shared clone's checked-out branch never moves for a pinned replay.
-	const refreshed =
-		input.projectsConfig !== undefined && input.projectSpawn !== undefined
-			? await (input.refreshProjectFn ?? refreshProject)({
-					repo: input.repos.projects,
-					config: input.projectsConfig,
-					id: project.id,
-					...(input.baseCommit !== undefined
-						? { fetchCommit: input.baseCommit }
-						: baseRef !== undefined
-							? { ref: baseRef }
-							: {}),
-					gitCredential: input.gitCredential,
-					spawn: input.projectSpawn,
-					...(input.now !== undefined ? { now: input.now } : {}),
-					...(input.warrenConfigs !== undefined ? { warrenConfigs: input.warrenConfigs } : {}),
-				})
-			: null;
-	const projectAfterRefresh = refreshed?.project ?? project;
-
-	// warren-618b: fold per-project provider/model defaults onto the agent
-	// frontmatter, operator per-run override winning. Order: operator
-	// override > .warren/defaults.json > agent frontmatter, all riding the
-	// same `withProviderOverrides` path onto frozen `rendered_agent_json`.
-	const projectDefaults = await readProjectDefaults(
-		input.warrenConfigs,
-		projectAfterRefresh.id,
-		projectAfterRefresh.localPath,
-	);
-	// namphuongtran/warren#43: a model-only override drops an incompatible inherited provider.
-	const providerChoice = resolveDispatchProvider(input, projectDefaults?.defaultProvider);
-	const effectiveProvider = providerChoice.provider;
-	const effectiveModel = resolveOverride(input.modelOverride, projectDefaults?.defaultModel);
-	// warren-a63d: fold the per-dispatch spend cap on top. The full chain
-	// (override > agent frontmatter > project default, with malformed agent
-	// values still failing open) lives in resolveCapOverride — cost-cap.ts
-	// owns the semantics, this site only feeds it the three sources.
-	const capOverride = resolveCapOverride({
-		...(input.maxCostUsdOverride !== undefined ? { overrideUsd: input.maxCostUsdOverride } : {}),
-		frontmatter: baseAgent.frontmatter,
-		...(projectDefaults?.maxCostUsd !== undefined
-			? { projectDefaultUsd: projectDefaults.maxCostUsd }
-			: {}),
+/**
+ * `spawnRun`, except that a dispatch the provider-quota guard refuses becomes
+ * a held run (namphuongtran/warren#30): the row is created `queued` with no
+ * workload, and a `dispatch.quota_held` event records the request and when
+ * the quota hold releaser launches it.
+ */
+export async function spawnOrHoldRun(input: SpawnRunInput): Promise<SpawnOrHoldResult> {
+	assertPromptPresent(input);
+	return withProjectCloneLock(input.projectId, async () => {
+		const prepared = await prepareDispatch(input);
+		try {
+			await assertDispatchQuotaOpen(input, prepared.declaredProvider);
+		} catch (err) {
+			if (!(err instanceof ProviderQuotaExhaustedError)) throw err;
+			const run = await createRunRow(input, prepared);
+			const hold = await recordQuotaHold(input.repos, {
+				runId: run.id,
+				request: heldDispatchRequest(input),
+				resetsAt: err.resetsAt,
+				now: input.now?.() ?? new Date(),
+			});
+			bindRunLogger(input.logger, run.id, {}).info(
+				{ event: "spawn.quota_held", ...hold },
+				"spawn: held until the provider quota window resets",
+			);
+			return { kind: "held", run, hold };
+		}
+		const result = await launchRun(input, prepared, await createRunRow(input, prepared));
+		return { kind: "dispatched", result };
 	});
-	// namphuongtran/warren#10: the wall-clock limit rides the same chain (duration-limit.ts).
-	const durationSources = {
-		overrideMinutes: input.maxDurationMinutesOverride,
-		projectDefaultMinutes: projectDefaults?.maxDurationMinutes,
-	};
-	// warren-cb46: gate tracker/mulch prompt fragments on the project's real
-	// capabilities before anything freezes the agent (prompt-capabilities.ts).
-	const agent = gateAgentPrompts(
-		withMulchArm(
-			withMaxCostUsdOverride(
-				withProviderOverrides(withDurationLimit(baseAgent, durationSources), {
-					...(effectiveProvider !== undefined ? { providerOverride: effectiveProvider } : {}),
-					...(effectiveModel !== undefined ? { modelOverride: effectiveModel } : {}),
-				}),
-				capOverride,
-			),
-			input.mulchArm,
-		),
-		projectAfterRefresh,
-		input.issueTracker,
-	);
-	// warren-bad5 / #30: once the override chain resolves, validate it and refuse a spent quota.
-	const { provider: declaredProvider, model: declaredModel } = readProviderFrontmatter(
-		agent.frontmatter,
-	);
-	assertNoKnownProviderModelMismatch(declaredProvider, declaredModel);
-	await assertDispatchQuotaOpen(input, declaredProvider);
+}
 
-	// Build the seed payload BEFORE creating the warren row so a malformed
-	// expertise_seed / pi_skills / pi_prompts section surfaces as a clean
-	// `RunSpawnError` with no half-spawned row to garbage-collect. Anything
-	// burrow rejects later still rolls back via the try/catch below.
-	const seedResult = buildSeedFiles(agent);
+/**
+ * Launch a held run as the same row once its window reopens
+ * (namphuongtran/warren#30). `input` is the held request replayed. A guard
+ * that still refuses throws {@link ProviderQuotaExhaustedError} and leaves
+ * the row held. Any other failure before the launch fails the row
+ * `never_started`, the same as a failed spawn.
+ */
+export async function launchHeldRun(
+	input: SpawnRunInput,
+	heldRunId: string,
+): Promise<SpawnRunResult> {
+	return withProjectCloneLock(input.projectId, async () => {
+		await requireHeldRunPending(input.repos, heldRunId);
+		let prepared: PreparedDispatch;
+		try {
+			prepared = await prepareDispatch(input);
+			await assertDispatchQuotaOpen(input, prepared.declaredProvider);
+		} catch (err) {
+			if (!(err instanceof ProviderQuotaExhaustedError)) {
+				await rollback(input, heldRunId, bindRunLogger(input.logger, heldRunId, {}), err);
+			}
+			throw err;
+		}
+		return launchRun(input, prepared, await requireHeldRunPending(input.repos, heldRunId));
+	});
+}
 
-	// warren-76c5 / warren-3743: multi-worker placement is retired — the
-	// self-host backend is a single local burrow. `runs.worker_id` is no longer
-	// written (the workers/sandboxes tables were dropped); it stays NULL for new
-	// runs and every reader (preview / proxy) treats NULL as the local worker.
-	logPlacement(input.logger, WORKER_PLACEMENT_LABEL, projectAfterRefresh.id);
+function assertPromptPresent(input: SpawnRunInput): void {
+	if (input.prompt.trim() === "") {
+		throw new ValidationError("prompt cannot be empty");
+	}
+}
 
+async function createRunRow(input: SpawnRunInput, prepared: PreparedDispatch): Promise<RunRow> {
+	const { agent, declaredProvider, declaredModel, projectDefaults, pushTarget } = prepared;
+	const { baseAgent, baseRefField, project: projectAfterRefresh } = prepared;
 	// warren-2ede / pl-103e: freeze the DECLARED provider/model onto real
 	// columns so analytics group-bys read the columns instead of re-parsing
 	// rendered_agent_json per query. This is the resolved frontmatter value
@@ -243,8 +185,21 @@ async function dispatchRun(input: SpawnRunInput): Promise<SpawnRunResult> {
 		declaredProvider,
 		declaredModel,
 		projectDefaults,
-		network: burrowConfig.network ?? "none",
+		network: prepared.burrowConfig.network ?? "none",
 	});
+	return run;
+}
+
+/** The runtime half of a dispatch: compose the spec, create the workload, attach it. */
+async function launchRun(
+	input: SpawnRunInput,
+	prepared: PreparedDispatch,
+	run: RunRow,
+): Promise<SpawnRunResult> {
+	const { agent, projectDefaults, pushTarget, newBranch, baseRef, burrowConfig } = prepared;
+	const projectAfterRefresh = prepared.project;
+	// warren-76c5 / warren-3743: multi-worker placement is retired; the label is a fixed log field.
+	logPlacement(input.logger, WORKER_PLACEMENT_LABEL, projectAfterRefresh.id);
 
 	// warren-9993/a993: burrow branch = `${prefix}/${run.id}` (prefix precedence
 	// project default > env > built-in "warren" default); a CI-fixer run's `targetBranch` pins it
@@ -272,7 +227,11 @@ async function dispatchRun(input: SpawnRunInput): Promise<SpawnRunResult> {
 	// warren-e7b7: warn once per dispatch when agent git identity is unset (K8s).
 	warnIfGitIdentityUnconfigured(log, input.serverEnv ?? process.env);
 	// namphuongtran/warren#7 / #43: warn about a dropped provider/model.
-	const selection = { ...providerChoice, provider: declaredProvider, model: declaredModel };
+	const selection = {
+		...prepared.providerChoice,
+		provider: prepared.declaredProvider,
+		model: prepared.declaredModel,
+	};
 	await recordModelSelectionWarnings(input, { runId: run.id, runtimeId, selection, log });
 	// Runtime-provider seam (warren-c42c: burrow-client eviction, bucket 2).
 	// `provider.create` collapses burrow's provision + dispatch (`sandboxUp` +
@@ -328,7 +287,7 @@ async function dispatchRun(input: SpawnRunInput): Promise<SpawnRunResult> {
 		metadata: composeBurrowMetadata(input.metadata, agent.frontmatter),
 		mode: input.mode ?? "batch",
 		network: burrowConfig.network ?? "none",
-		seedFiles: seedResult.files,
+		seedFiles: prepared.seedFiles,
 		env: runEnv,
 	};
 	// warren-c2c8: the handle `create` returned, kept so a failure AFTER a
@@ -348,7 +307,7 @@ async function dispatchRun(input: SpawnRunInput): Promise<SpawnRunResult> {
 		// the control plane. warren-232d: a baseCommit dispatch skips it — its
 		// host clone was never checked out onto the pinned base.
 		const collisionNote =
-			refreshed !== null &&
+			prepared.refreshed &&
 			input.baseCommit === undefined &&
 			baseRef !== undefined &&
 			baseRef !== projectAfterRefresh.defaultBranch &&

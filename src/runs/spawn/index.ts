@@ -12,7 +12,8 @@
  * posture) lives at the top of `./dispatch.ts`.
  */
 
-export { composeDispatchPrompt, spawnRun } from "./dispatch.ts";
+export type { SpawnOrHoldResult } from "./dispatch.ts";
+export { composeDispatchPrompt, launchHeldRun, spawnOrHoldRun, spawnRun } from "./dispatch.ts";
 export type {
 	JournalCollision,
 	MigrationPreflightFn,

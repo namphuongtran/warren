@@ -1,4 +1,5 @@
 import type { ReapCompletedPayload, RunEvent, RunRow } from "@/api/types.ts";
+import { QUOTA_HOLD_EVENTS, type QuotaHoldView } from "../../../core/wire.ts";
 
 /**
  * Pull the latest `reap.completed` payload off the stream so the header
@@ -33,6 +34,24 @@ export function isBridgeStalled(events: RunEvent[]): boolean {
 		if (k === "bridge_recovered") return false;
 	}
 	return false;
+}
+
+const QUOTA_HOLD_KINDS: readonly string[] = Object.values(QUOTA_HOLD_EVENTS);
+
+/**
+ * namphuongtran/warren#30: when the newest hold event says the run is still
+ * held on a spent provider quota, the time it is launched. Drives the
+ * "deferred: provider quota" banner.
+ */
+export function extractQuotaHold(events: RunEvent[]): Pick<QuotaHoldView, "releaseAt"> | null {
+	for (let i = events.length - 1; i >= 0; i--) {
+		const ev = events[i];
+		if (ev === undefined || !QUOTA_HOLD_KINDS.includes(ev.kind)) continue;
+		if (ev.kind !== QUOTA_HOLD_EVENTS.held) return null;
+		const releaseAt = (ev.payload as { releaseAt?: unknown } | null)?.releaseAt;
+		return typeof releaseAt === "string" ? { releaseAt } : null;
+	}
+	return null;
 }
 
 /**

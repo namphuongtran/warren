@@ -23,6 +23,7 @@ describe("provider quota over HTTP (namphuongtran/warren#30)", () => {
 	let handle: ServeHandle | null = null;
 	let projectId = "";
 	let resetsAt = 0;
+	let started: string[] = [];
 
 	beforeEach(async () => {
 		db = await openDatabase({ path: ":memory:" });
@@ -53,7 +54,14 @@ describe("provider quota over HTTP (namphuongtran/warren#30)", () => {
 			sourceRunId: "run_jy2cxd7cmg9f",
 			observedAt: new Date().toISOString(),
 		});
-		const bridges: BridgeRegistry = { start: () => {}, stopAll: async () => {}, size: () => 0 };
+		started = [];
+		const bridges: BridgeRegistry = {
+			start: (runId) => {
+				started.push(runId);
+			},
+			stopAll: async () => {},
+			size: () => 0,
+		};
 		const sandboxClient = makeSandboxClient(
 			{
 				sandboxId: "bur_quota0000000",
@@ -111,6 +119,36 @@ describe("provider quota over HTTP (namphuongtran/warren#30)", () => {
 
 	test("POST /runs refuses a force that is not a boolean", async () => {
 		const res = await post({ force: "yes" });
+
+		expect(res.status).toBe(400);
+	});
+
+	test("POST /runs with onQuotaExhausted: hold answers 202 with a held queued run", async () => {
+		const res = await post({ onQuotaExhausted: "hold" });
+
+		expect(res.status).toBe(202);
+		const body = (await res.json()) as {
+			run: { id: string; state: string };
+			sandbox: unknown;
+			quotaHold: { reason: string; resetsAt: number; releaseAt: string };
+		};
+		expect(body.run.state).toBe("queued");
+		expect(body.sandbox).toBeNull();
+		expect(body.quotaHold.reason).toBe("provider_quota_exhausted");
+		expect(body.quotaHold.resetsAt).toBe(resetsAt);
+		expect(Date.parse(body.quotaHold.releaseAt) / 1000).toBeGreaterThan(resetsAt);
+		expect(started).toEqual([]);
+	});
+
+	test("POST /runs with onQuotaExhausted: hold dispatches at once while the window is open", async () => {
+		const res = await post({ onQuotaExhausted: "hold", force: true });
+
+		expect(res.status).toBe(201);
+		expect(started.length).toBe(1);
+	});
+
+	test("POST /runs refuses an unknown onQuotaExhausted", async () => {
+		const res = await post({ onQuotaExhausted: "wait" });
 
 		expect(res.status).toBe(400);
 	});

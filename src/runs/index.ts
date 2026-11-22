@@ -162,6 +162,11 @@ export {
 	loadAutoOpenPrConfigFromEnv,
 } from "./pr.ts";
 export {
+	createQuotaHoldReleaser,
+	type QuotaHoldReleaser,
+	type QuotaHoldReleaserInput,
+} from "./quota/hold-release.ts";
+export {
 	mergeMulchFile,
 	type ReapExec,
 	type ReapFs,
@@ -212,8 +217,10 @@ export {
 export {
 	DISPATCH_ORIGINS,
 	type DispatchOrigin,
+	type SpawnOrHoldResult,
 	type SpawnRunInput,
 	type SpawnRunResult,
+	spawnOrHoldRun,
 	spawnRun,
 } from "./spawn/index.ts";
 export { type SteerRunInput, type SteerRunResult, steerRun } from "./steer.ts";

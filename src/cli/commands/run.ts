@@ -35,9 +35,9 @@
 
 import { WarrenClientError } from "../../client/errors.ts";
 import type { RunEvent, WaitForRunOptions } from "../../client/index.ts";
-import type { RunRow } from "../../client/types.ts";
+import type { RunRow, SpawnRunResponse } from "../../client/types.ts";
 import { isTerminalRunState, type RunTerminalState } from "../../core/wire.ts";
-import type { CliContext } from "../output.ts";
+import type { CliContext, OutputMode } from "../output.ts";
 import {
 	EXIT_RUN_FAILED,
 	EXIT_SERVER_UNREACHABLE,
@@ -99,6 +99,8 @@ export interface RunArgs {
 	 * overrides — the server inherits them from the salvaged source run.
 	 */
 	readonly rescueFrom?: string;
+	/** Hold the run on a spent provider quota instead of a 429 (namphuongtran/warren#30). */
+	readonly holdOnQuota?: boolean;
 }
 
 export interface RunDeps extends RemoteTailDeps {
@@ -159,28 +161,38 @@ export async function runRun(
 			...(args.existingBranch !== undefined ? { existingBranch: args.existingBranch } : {}),
 			...(args.newBranch !== undefined ? { newBranch: args.newBranch } : {}),
 			...(args.rescueFrom !== undefined ? { rescueFromRunId: args.rescueFrom } : {}),
+			...(args.holdOnQuota === true ? { onQuotaExhausted: "hold" as const } : {}),
 		});
 		runId = spawned.run.id;
-		if (mode === "ndjson") {
-			writeJsonLine(context.stdio.stdout, {
-				event: "run.spawned",
-				runId,
-				agent: spawned.run.agentName,
-				project: spawned.run.projectId,
-				sandboxId: spawned.sandbox.id,
-			});
-		} else if (mode === "pretty") {
-			context.stdio.stdout.write(
-				`▶ run ${runId} dispatched — agent ${spawned.run.agentName}, project ${spawned.run.projectId}\n`,
-			);
-		}
-		// json mode stays silent until the single final document.
+		reportDispatch(context, mode, spawned);
 	} catch (err) {
 		context.stdio.stderr.write(`warren: ${formatError(err)}\n`);
 		return { exitCode: exitCodeForError(err) };
 	}
 
 	return tailUntilTerminal(context, deps, runId);
+}
+
+/** The dispatch line; json mode stays silent until the single final document. */
+function reportDispatch(context: CliContext, mode: OutputMode, spawned: SpawnRunResponse): void {
+	const { run, quotaHold } = spawned;
+	if (mode === "ndjson") {
+		writeJsonLine(context.stdio.stdout, {
+			event: quotaHold !== undefined ? "run.held" : "run.spawned",
+			runId: run.id,
+			agent: run.agentName,
+			project: run.projectId,
+			...(quotaHold !== undefined ? quotaHold : { sandboxId: spawned.sandbox?.id ?? null }),
+		});
+	} else if (mode === "pretty") {
+		const what =
+			quotaHold !== undefined
+				? `held on a spent provider quota until ${quotaHold.releaseAt}`
+				: "dispatched";
+		context.stdio.stdout.write(
+			`▶ run ${run.id} ${what} — agent ${run.agentName}, project ${run.projectId}\n`,
+		);
+	}
 }
 
 /**
@@ -435,7 +447,8 @@ export function registerRunCommand(program: Command, context: CliContext): void 
 			.option(
 				"--rescue-from <runId>",
 				"re-dispatch a salvaged run's recovered work off its warren/rescue/<runId> branch",
-			),
+			)
+			.option("--hold-on-quota", "on a spent provider quota, hold the run until the reset"),
 	).action(
 		async (
 			agent: string | undefined,
@@ -452,6 +465,7 @@ export function registerRunCommand(program: Command, context: CliContext): void 
 				existingBranch?: string;
 				newBranch?: string;
 				rescueFrom?: string;
+				holdOnQuota?: boolean;
 			} & RemoteOpts,
 		) => {
 			const { client, context: ctx } = resolveCommandClient(context, opts);
@@ -474,6 +488,7 @@ export function registerRunCommand(program: Command, context: CliContext): void 
 					...(opts.existingBranch !== undefined ? { existingBranch: opts.existingBranch } : {}),
 					...(opts.newBranch !== undefined ? { newBranch: opts.newBranch } : {}),
 					...(opts.rescueFrom !== undefined ? { rescueFrom: opts.rescueFrom } : {}),
+					...(opts.holdOnQuota === true ? { holdOnQuota: true } : {}),
 				},
 			);
 			process.exit(result.exitCode);
