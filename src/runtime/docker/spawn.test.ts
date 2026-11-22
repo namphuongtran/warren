@@ -117,6 +117,43 @@ describe("chownDockerMounts", () => {
 });
 
 describe("makeDockerSpawn", () => {
+	// namphuongtran/warren#68: `--env NAME` passthrough takes its value from the env of the docker
+	// CLI. Bun.spawn with no `env` uses the env the server booted with, so a key `warren up` loaded
+	// from ~/.warren/env afterwards reached the container empty.
+	async function spawnEnvOf(deps: { env?: Record<string, string | undefined> }) {
+		const seen: Array<Record<string, string | undefined> | undefined> = [];
+		const spawn = makeDockerSpawn({
+			...deps,
+			tmpRoot: tmpRoot(),
+			hostIdentity: { uid: 0, gid: 0 },
+			chownPath: () => {},
+			spawn: (argv, opts) => {
+				seen.push(opts.env);
+				const proc = makeFakeProc(argv);
+				proc.resolveExit(0);
+				return proc.subprocess;
+			},
+			runDocker: () => Promise.resolve({ exitCode: 0, stdout: "false" }),
+		});
+		await (await spawn(makeProfile(), { argv: ["claude", "--print"] })).exited;
+		return seen[0];
+	}
+
+	test("runs docker with the env it was given, where --env passthrough values come from", async () => {
+		const env = { NODE_AUTH_TOKEN: "token-from-warren-env", PATH: "/usr/bin" };
+		expect(await spawnEnvOf({ env })).toBe(env);
+	});
+
+	test("runs docker with the live process env, including keys set after boot", async () => {
+		const key = "WARREN_TEST_LATE_PASSTHROUGH";
+		process.env[key] = "set-after-boot";
+		try {
+			expect((await spawnEnvOf({}))?.[key]).toBe("set-after-boot");
+		} finally {
+			delete process.env[key];
+		}
+	});
+
 	test("spawns docker run with the container argv and writes the env file", async () => {
 		const procs: FakeProc[] = [];
 		const chowned: Array<{ path: string; uid: number; gid: number }> = [];

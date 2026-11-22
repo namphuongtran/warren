@@ -41,11 +41,22 @@ export interface DockerSpawnDeps {
 	/** Process spawn — defaults to `Bun.spawn`. */
 	readonly spawn?: (
 		argv: string[],
-		opts: { stdin: "pipe" | "ignore"; stdout: "pipe"; stderr: "pipe" },
+		opts: {
+			stdin: "pipe" | "ignore";
+			stdout: "pipe";
+			stderr: "pipe";
+			env: Readonly<Record<string, string | undefined>>;
+		},
 	) => Bun.Subprocess;
 	/** One-shot docker invocation (inspect / rm). Defaults to `Bun.spawn` + await. */
 	readonly runDocker?: (argv: string[]) => Promise<{ exitCode: number; stdout: string }>;
-	/** Env the config resolver reads — defaults to `process.env`. */
+	/**
+	 * Env the config resolver reads and the docker CLI runs with — defaults to
+	 * `process.env`. The CLI env is where `--env NAME` passthrough values come
+	 * from, so it must be the live env, not the one the server booted with:
+	 * `warren up` loads ~/.warren/env into `process.env` after boot, and
+	 * `Bun.spawn` with no `env` passes only the boot env (namphuongtran/warren#68).
+	 */
 	readonly env?: Readonly<Record<string, string | undefined>>;
 	/** Root for the private env-file dir — defaults to `os.tmpdir()`. */
 	readonly tmpRoot?: string;
@@ -149,6 +160,7 @@ async function spawnInContainer(
 		stdin: wantsStdin ? "pipe" : "ignore",
 		stdout: "pipe",
 		stderr: "pipe",
+		env: deps.env ?? process.env,
 	});
 	await writeStringStdin(proc, command.stdin, command.holdStdin ?? false);
 
