@@ -19,6 +19,7 @@ import { rmSync } from "node:fs";
 import {
 	FollowUpCoordinator,
 	findingsFingerprint,
+	followUpStoreOf,
 	UNTRUSTED_FINDINGS_BANNER,
 } from "../follow-up/coordinator.ts";
 import {
@@ -278,15 +279,8 @@ async function runFollowUp(
 	const warren = (manifestRaw as { warren: { project: string; agent: string } }).warren;
 	const calls: { prompt: string; existingBranch: string }[] = [];
 	const coordinator = new FollowUpCoordinator({
-		store: {
-			listFeedback: (cid) => h.store.events.listFeedback(cid),
-			listActionsForWorkItem: (wid) => h.store.actions.listActionsForWorkItem(wid),
-			beginAction: (input) => h.store.actions.beginAction(input),
-			markExecuting: (id) => h.store.actions.markExecuting(id),
-			settleAction: (id, input) => h.store.actions.settleAction(id, input),
-			addAttention: (input) => h.store.events.addAttention(input),
-			followUps: h.store.followUps,
-		},
+		store: followUpStoreOf(h.store),
+
 		dispatch: async (input) => {
 			calls.push({ prompt: input.prompt, existingBranch: input.existingBranch });
 			const view = await h.deps.warrenClient.dispatchRun(input);

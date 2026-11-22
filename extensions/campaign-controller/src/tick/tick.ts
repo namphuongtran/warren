@@ -27,6 +27,10 @@
  * 5b. **review** (namphuongtran/warren#18, opt-in) — with a policy `review` block and a wired
  *    review publisher, each open PR head is reviewed by a read-only
  *    reviewer run and the verdict is published as a commit status.
+ *    With `mutations.followUpPush` on, the **follow_up** stage wraps it:
+ *    live fixer runs settle before the review, and unaddressed findings
+ *    (a `request_changes` verdict's among them) start a fixer run on the
+ *    PR branch after it.
  * 6. **settle/report** — campaign status settles, and the tick returns the
  *    stage trace plus a budget/work-item/attention report.
  *
@@ -61,6 +65,7 @@ import { composeDispatchPrompt, validateRepositoryPolicy } from "../repository-p
 import type { CampaignStateStore } from "../store/state-store.ts";
 import type { CampaignRow, CampaignStatus, WorkItemRow } from "../store/types.ts";
 import { runPushedBranch, type WarrenClient } from "../warren-client.ts";
+import { dispatchFollowUps, reconcileFollowUpRuns } from "./follow-up-stage.ts";
 import { runReviewStage } from "./review-stage.ts";
 
 /** A concurrent tick holds the campaign lease. */
@@ -100,6 +105,7 @@ export type TickStage =
 	| "pr_intent"
 	| "pr_execute"
 	| "github_reconcile"
+	| "follow_up"
 	| "review"
 	| "settle";
 
@@ -131,8 +137,9 @@ export interface TickResult {
 	readonly campaignId: string;
 	/**
 	 * False only when a policy-gated writer is wired: the PR creator (Phase 2,
-	 * warren-84da), which executes a journaled cross-fork PR intent, or the
-	 * review publisher (namphuongtran/warren#18), which posts review statuses and comments.
+	 * warren-84da), which executes a journaled cross-fork PR intent, the
+	 * review publisher (namphuongtran/warren#18), which posts review statuses and comments,
+	 * or `mutations.followUpPush`, whose fixer runs push to the PR branch.
 	 * Everything else stays read-only.
 	 */
 	readonly dryRun: boolean;
@@ -274,11 +281,20 @@ async function runLeasedTick(
 		}
 	}
 	stages.push(...(await reconcileUpstreamPrs(deps, campaign)));
+	const followUpPolicy = followUpPolicyOf(deps);
+	const followUpDeps = followUpPolicy === null ? null : { ...deps, policy: followUpPolicy };
+	if (followUpDeps !== null) {
+		stages.push(...(await reconcileFollowUpRuns(followUpDeps, campaign, manifest)));
+	}
 	stages.push(...(await reviewOpenPrs(deps, campaign, manifest)));
+	if (followUpDeps !== null) {
+		stages.push(...(await dispatchFollowUps(followUpDeps, campaign, manifest)));
+	}
 	const campaignStatus = settleCampaign(store, campaign.id);
 	return {
 		campaignId: campaign.id,
-		dryRun: deps.prCreator === undefined && deps.reviewPublisher === undefined,
+		dryRun:
+			deps.prCreator === undefined && deps.reviewPublisher === undefined && followUpPolicy === null,
 		stages,
 		restart: {
 			expiredLeases: restart.expiredLeases,
@@ -725,6 +741,23 @@ async function reviewOpenPrs(
 		campaign,
 		manifest,
 	);
+}
+
+/**
+ * The validated policy when it enables `mutations.followUpPush`, else null:
+ * the follow-up stage is then absent. A policy that no longer validates
+ * fails closed to absent, the same way admission refuses it.
+ */
+function followUpPolicyOf(deps: TickDeps): RepositoryPolicy | null {
+	try {
+		const { policy } = validateRepositoryPolicy(deps.policy, { nowMs: deps.clock.nowMs() });
+		return policy.mutations.followUpPush ? policy : null;
+	} catch (error) {
+		if (error instanceof ValidationError) {
+			return null;
+		}
+		throw error;
+	}
 }
 
 /** Stage 6: settle campaign status from work-item states. */

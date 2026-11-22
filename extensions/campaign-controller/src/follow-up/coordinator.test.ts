@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { FixedClock, SequentialIdGenerator } from "../clock.ts";
 import { CampaignStateStore } from "../store/state-store.ts";
+import { DispatchUncertainError } from "../warren-client.ts";
 import {
 	DEFAULT_MAX_FOLLOW_UPS_PER_PR,
 	FOLLOW_UP_ACTION_TYPE,
@@ -13,6 +14,7 @@ import {
 	type FollowUpPolicy,
 	type FollowUpStoreDeps,
 	type FollowUpWorkItemContext,
+	followUpStoreOf,
 	renderFollowUpPrompt,
 } from "./coordinator.ts";
 
@@ -41,15 +43,7 @@ beforeEach(() => {
 		position: 1,
 		issueRef: "issue://42",
 	}).id;
-	deps = {
-		listFeedback: (cid) => store.events.listFeedback(cid),
-		listActionsForWorkItem: (wid) => store.actions.listActionsForWorkItem(wid),
-		beginAction: (input) => store.actions.beginAction(input),
-		markExecuting: (id) => store.actions.markExecuting(id),
-		settleAction: (id, input) => store.actions.settleAction(id, input),
-		addAttention: (input) => store.events.addAttention(input),
-		followUps: store.followUps,
-	};
+	deps = followUpStoreOf(store);
 });
 
 afterEach(() => {
@@ -146,6 +140,18 @@ describe("FollowUpCoordinator", () => {
 		expect(calls).toHaveLength(1);
 	});
 
+	test("skips findings raised against an older head SHA", async () => {
+		addFinding("warren_review", { message: "stale", headSha: "a".repeat(40) });
+		const current = addFinding("warren_review", { message: "current", headSha: "b".repeat(40) });
+		const upstream = addFinding("needs_test", { file: "a.ts" });
+		const calls: { prompt: string; existingBranch: string }[] = [];
+		const coordinator = new FollowUpCoordinator({ store: deps, dispatch: fakeDispatch(calls) });
+		const outcome = await coordinator.coordinate(ctx({ headSha: "b".repeat(40) }), policy());
+		expect(outcome.status).toBe("dispatched");
+		expect([...outcome.feedbackIds].sort()).toEqual([current, upstream].sort());
+		expect(calls[0]?.prompt).not.toContain("stale");
+	});
+
 	test("iteration cap opens attention instead of dispatching", async () => {
 		for (let i = 0; i < DEFAULT_MAX_FOLLOW_UPS_PER_PR; i += 1) {
 			const action = deps.beginAction({
@@ -212,6 +218,84 @@ describe("FollowUpCoordinator", () => {
 		expect(action?.state).toBe("permanent_failure");
 		// The active slot is cleared: the stop is journaled, not left open.
 		expect(deps.followUps.getProgress(workItemId)?.activeActionId).toBeNull();
+	});
+
+	test("stops once on a re-tick after a refused dispatch, and still dispatches new findings", async () => {
+		addFinding("needs_test");
+		let attempts = 0;
+		const coordinator = new FollowUpCoordinator({
+			store: deps,
+			dispatch: async () => {
+				attempts += 1;
+				if (attempts === 1) throw new Error("dispatch rejected");
+				return { runId: `run-${attempts}` };
+			},
+		});
+		expect((await coordinator.coordinate(ctx(), policy())).status).toBe("dispatch_failed");
+		// The same evidence is never re-sent: the next two ticks stop without a POST.
+		expect((await coordinator.coordinate(ctx(), policy())).status).toBe("previous_attempt_failed");
+		expect((await coordinator.coordinate(ctx(), policy())).status).toBe("previous_attempt_failed");
+		expect(attempts).toBe(1);
+		const stops = store.events
+			.listOpenAttention(campaignId)
+			.filter((a) => a.reason === FOLLOW_UP_STOPPED_REASON);
+		expect(stops).toHaveLength(1);
+		// A fresh finding is fresh evidence: it dispatches.
+		addFinding("needs_docs");
+		const next = await coordinator.coordinate(ctx(), policy());
+		expect(next.status).toBe("dispatched");
+		expect(attempts).toBe(2);
+	});
+
+	test("settles an ambiguous dispatch uncertain, never failed", async () => {
+		addFinding("needs_test");
+		const coordinator = new FollowUpCoordinator({
+			store: deps,
+			dispatch: async () => {
+				throw new DispatchUncertainError("response lost");
+			},
+		});
+		const outcome = await coordinator.coordinate(ctx(), policy());
+		expect(outcome.status).toBe("dispatch_failed");
+		expect(store.actions.getAction(outcome.actionId as string)?.state).toBe("uncertain");
+	});
+
+	test("flags a human once when the fixer left the reviewed head unchanged", async () => {
+		const head = "c".repeat(40);
+		addFinding("warren_review", { message: "fix me", headSha: head });
+		const coordinator = new FollowUpCoordinator({ store: deps, dispatch: fakeDispatch() });
+		expect((await coordinator.coordinate(ctx({ headSha: head }), policy())).status).toBe(
+			"dispatched",
+		);
+		coordinator.reconcilePushedFollowUp({ workItemId, pushedBranch: "warren/issue-42" });
+		// The fixer "pushed" but the PR head is still the reviewed SHA.
+		for (let tick = 0; tick < 2; tick += 1) {
+			const outcome = await coordinator.coordinate(ctx({ headSha: head }), policy());
+			expect(outcome.status).toBe("head_unchanged");
+		}
+		const stops = store.events
+			.listOpenAttention(campaignId)
+			.filter((a) => a.reason === FOLLOW_UP_STOPPED_REASON);
+		expect(stops).toHaveLength(1);
+		// Once the head moves, the addressed findings are simply done.
+		const moved = await coordinator.coordinate(ctx({ headSha: "d".repeat(40) }), policy());
+		expect(moved.status).toBe("no_actionable_feedback");
+	});
+
+	test("marks addressed only the findings recorded before the fixer was dispatched", async () => {
+		const seen = addFinding("needs_test", { file: "a.ts" });
+		const coordinator = new FollowUpCoordinator({ store: deps, dispatch: fakeDispatch() });
+		expect((await coordinator.coordinate(ctx(), policy())).status).toBe("dispatched");
+		clock.advance(1_000);
+		const later = addFinding("needs_docs", { file: "b.md" });
+		const settled = coordinator.reconcilePushedFollowUp({
+			workItemId,
+			pushedBranch: "warren/issue-42",
+		});
+		expect(settled?.addressedFeedbackIds).toContain(seen);
+		expect(settled?.addressedFeedbackIds).not.toContain(later);
+		const next = await coordinator.coordinate(ctx(), policy());
+		expect(next.feedbackIds).toEqual([later]);
 	});
 
 	test("reconcilePushedFollowUp settles the run and marks the feedback addressed", async () => {

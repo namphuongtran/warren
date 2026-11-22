@@ -227,12 +227,17 @@ repository policy, the tick has no `review` stage and nothing below runs.
    `reviewer` built-in's default (the opus tier). The reviewer dispatches
    on the `pi` runtime, so the warren deployment needs that provider's
    credential.
-2. Import and approve a campaign bound to the new policy digest. The block
+2. To close the fix loop, also set `mutations.followUpPush: true` in the
+   same snapshot. Each change request then starts a follow-up run on the
+   PR branch under the manifest's agent, provider, and model, and the
+   pushed head is reviewed again. Without it, a change request stops at a
+   `failure` status and the findings on the PR.
+3. Import and approve a campaign bound to the new policy digest. The block
    changes the digest, so no earlier approval carries over.
-3. Set `GITHUB_TOKEN` to a credential that can write commit statuses and
+4. Set `GITHUB_TOKEN` to a credential that can write commit statuses and
    pull-request reviews on the upstream repository. The reviewer run never
    receives it.
-4. On the upstream repository, add a branch-protection rule (or ruleset)
+5. On the upstream repository, add a branch-protection rule (or ruleset)
    for the default branch that **requires the status check** named by
    `statusContext` (`warren/review` unless you set another). That rule is
    the merge gate. Warren's own auto-merge arming needs no change: it
@@ -245,7 +250,8 @@ repository policy, the tick has no `review` stage and nothing below runs.
 | none | The head moved and no tick has reviewed it yet | Wait for the next tick |
 | `pending` | A reviewer run is working on this exact SHA | None |
 | `success` | The reviewer approved this SHA | None; a new push resets it |
-| `failure` | Changes requested; findings recorded for the fixer | Run the fixer (see Known limits) |
+| `failure` | Changes requested; findings recorded for the fixer | With `followUpPush`, none: a fixer run is on its way. Without it, fix by hand |
+| `failure` + `follow_up_stopped` attention | The fixer run failed, pushed elsewhere, left the head unchanged, or its dispatch was refused or unconfirmed | Read the run; push a fix by hand (the new head is reviewed) |
 | `failure` + `review_needs_human` attention | The fix loop hit `maxRounds` | Take the PR over by hand |
 | `error` + `review_failed` attention | The run failed, or ended without a valid verdict | Read the run; push again or fix by hand |
 
@@ -262,13 +268,15 @@ SHA; a new push gets a new review.
   journaled without a work item, so they never collide with the
   one-active-attempt rule. Find them with `journal --campaign <id>`; the
   review round ties each one back to its work item.
-- The fixer half of the loop is the follow-up coordinator
-  (`src/follow-up/coordinator.ts`, gated by `mutations.followUpPush`). The
-  review stage records `request_changes` findings as `review_feedback`
-  rows (category `warren_review`) for it, but the tick does not call the
-  follow-up coordinator yet. Until it does, a change request leaves a
-  `failure` status and the findings on the PR for a human or a separately
-  driven fixer run; `maxRounds` still bounds how many rounds are handed on.
-  Each finding row carries the `headSha` it was raised against. Whoever
-  wires the follow-up coordinator in must skip rows whose SHA is no longer
-  the head, or the fixer acts on stale findings.
+- The fixer half of the loop is the tick's `follow_up` stage
+  (`src/tick/follow-up-stage.ts` over `src/follow-up/coordinator.ts`),
+  present only with `mutations.followUpPush`. It also acts on findings the
+  upstream reconcile classified from review bots, not only on the
+  reviewer's. A finding raised against a head SHA that is no longer the PR
+  head is skipped.
+- The fixer runs under the campaign manifest's agent, not the `pr-fixer`
+  built-in, whose prompt expects CI failure logs. The operator approved
+  the manifest's agent identity, so no unapproved agent edits the branch.
+- A SHA is reviewed once. A fixer run that ends without moving the head
+  leaves the round's `failure` status in place and opens
+  `follow_up_stopped`. Push a fix by hand to get a new review.
