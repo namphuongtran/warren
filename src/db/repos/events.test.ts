@@ -163,6 +163,41 @@ function suite(dialect: "sqlite" | "postgres"): void {
 			}
 		});
 
+		test("newestActivityTs skips ignored kinds and payload types (namphuongtran/warren#83)", async () => {
+			const { handle, events, runId } = await open();
+			try {
+				const at = (seq: number) => new Date(2026, 4, 8, 12, 0, seq).toISOString();
+				const add = (seq: number, kind: string, payload: unknown) =>
+					events.append({
+						runId,
+						sandboxEventSeq: seq,
+						ts: at(seq),
+						kind,
+						stream: "stdout",
+						payload,
+					});
+				expect(await events.newestActivityTs(runId, {})).toBeNull();
+				await add(1, "tool_use", { type: "tool_use", id: "t1" });
+				await add(2, "text", { text: "no type field" });
+				await add(3, "text", { type: "tool_progress", heartbeat: true });
+				await add(4, "watchdog.tool_stalled", { toolUseId: "t1" });
+				await add(5, "text", { type: "tool_progress", heartbeat: true });
+				const opts = {
+					ignoreKinds: ["watchdog.tool_stalled"],
+					ignorePayloadTypes: ["tool_progress"],
+				};
+				expect(await events.newestActivityTs(runId, opts)).toBe(at(2));
+				expect(await events.newestActivityTs(runId, {})).toBe(at(5));
+				expect(await events.newestActivityTs(runId, { ignoreKinds: ["text", "tool_use"] })).toBe(
+					at(4),
+				);
+				expect(await events.newestTsOfKind(runId, "tool_use")).toBe(at(1));
+				expect(await events.newestTsOfKind(runId, "tool_result")).toBeNull();
+			} finally {
+				await handle.close();
+			}
+		});
+
 		test("maxSeqForRun returns null when no events exist, else the max seq", async () => {
 			const { handle, events, runId } = await open();
 			try {

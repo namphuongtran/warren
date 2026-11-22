@@ -1,10 +1,12 @@
 import { describe, expect, test } from "bun:test";
 
 import { KNOWN_RUNTIME_IDS } from "../../core/wire.ts";
+import { claudeCodeAdapter } from "./claude-code.ts";
 import {
 	adapterFor,
 	allAdapters,
 	harnessStatePrefixes,
+	keepAliveEnvelopeTypes,
 	providerErrorEnvelopeTypes,
 	RUNTIME_ADAPTERS,
 } from "./index.ts";
@@ -70,5 +72,35 @@ describe("what the seam must not lose (warren-c80e)", () => {
 		// Empty is a claim backed by the per-adapter doc comment, never an
 		// accidental hole: `undefined` would type-error at the interface.
 		expect(adapterFor("claude-code").terminalErrorEnvelopeTypes).toEqual([]);
+	});
+});
+
+describe("keepAliveEnvelopeTypes (namphuongtran/warren#83)", () => {
+	test("covers the payload type the claude-code parser stores for a tool_progress line", () => {
+		const line = JSON.stringify({
+			type: "tool_progress",
+			tool_use_id: "toolu_016v62cYWga7ttHSxU7F6Qkt",
+			tool_name: "Bash",
+			parent_tool_use_id: null,
+			elapsed_time_seconds: 678,
+			heartbeat: true,
+		});
+		const events = claudeCodeAdapter.parseEvents?.(line) ?? [];
+		expect(events).toHaveLength(1);
+		const payloadType = (events[0]?.payload as { type?: unknown } | undefined)?.type;
+		expect(payloadType).toBe("tool_progress");
+		expect(keepAliveEnvelopeTypes()).toContain("tool_progress");
+	});
+
+	test("leaves the claude-code activity events counted", () => {
+		const assistant = JSON.stringify({
+			type: "assistant",
+			message: { content: [{ type: "tool_use", id: "t1", name: "Bash", input: {} }] },
+		});
+		const types = (claudeCodeAdapter.parseEvents?.(assistant) ?? []).map(
+			(e) => (e.payload as { type?: unknown }).type,
+		);
+		expect(types).toEqual(["tool_use"]);
+		expect(keepAliveEnvelopeTypes()).not.toContain("tool_use");
 	});
 });

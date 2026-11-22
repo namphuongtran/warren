@@ -11,8 +11,11 @@
  * CPU-min behind a stuck bash tool call).
  *
  * This detector closes that gap. Each tick scans `running` runs and
- * computes the run's heartbeat — the timestamp of its newest event,
- * falling back to `startedAt`. When the heartbeat is older than the
+ * computes the run's heartbeat — the timestamp of its newest activity
+ * event, falling back to `startedAt`. Harness keep-alives are not activity
+ * (namphuongtran/warren#83): claude-code emits a `tool_progress` heartbeat
+ * every 30 s while a tool runs, so counting them hid exactly the hung tool
+ * call this detector exists for. When the heartbeat is older than the
  * configurable budget the run is force-failed:
  *
  *   1. emit a `watchdog.timed_out` system event on the run's log;
@@ -28,6 +31,10 @@
  * partial workspace branch, and runs the mulch/seeds mirrors, so a
  * timed-out run still preserves whatever work the agent committed before
  * it hung — same philosophy as `cancelRun` (warren-a69a).
+ *
+ * Below the budget, a tool call open past the stall threshold gets one
+ * `watchdog.tool_stalled` warning event (`./watchdog-tool-stall.ts`). The
+ * run keeps running.
  *
  * The single-flight boot wrapper (mx-985743 / mx-094b64) drops an
  * in-flight tick when the next interval fires, isolates per-run errors so
@@ -48,6 +55,7 @@
 import { formatError } from "../core/errors.ts";
 import type { Repos } from "../db/repos/index.ts";
 import type { RunRow, RunTerminalState } from "../db/schema.ts";
+import { keepAliveEnvelopeTypes } from "../runtime/adapters/index.ts";
 import type { RunHandle, RuntimeProvider } from "../runtime/contract.ts";
 import { RuntimeRunNotFoundError } from "../runtime/errors.ts";
 import type { RunEventBroker } from "./events.ts";
@@ -55,6 +63,12 @@ import type { AutoOpenPrConfig } from "./pr.ts";
 import type { ReapRunInput, ReapRunResult } from "./reap/index.ts";
 import { type BridgeLogger, bindBridgeLogger } from "./stream/index.ts";
 import { hasCancelIntent, maybeReconcileTerminal } from "./watchdog-reconcile.ts";
+import {
+	maybeWarnToolStall,
+	type ToolStall,
+	type ToolStallDeps,
+	WATCHDOG_TOOL_STALLED_KIND,
+} from "./watchdog-tool-stall.ts";
 
 /**
  * The reap seam the watchdog force-fails a hung run through (warren-1fce). The
@@ -96,7 +110,7 @@ export const DEFAULT_WATCHDOG_CANCEL_RECONCILE_GRACE_MS = 15_000;
  */
 export const DEFAULT_WATCHDOG_HEARTBEAT_TIMEOUT_MS = 2_700_000;
 
-export interface WatchdogTickDeps {
+export interface WatchdogTickDeps extends ToolStallDeps {
 	readonly repos: Repos;
 	/**
 	 * The active runtime provider (warren-1fce). The tick's graceful cancel of a
@@ -159,19 +173,44 @@ export interface WatchdogTickResult {
 		readonly idleMs: number;
 		readonly outcome: RunTerminalState;
 	}[];
+	/**
+	 * Tool calls the tick warned about (namphuongtran/warren#83): open past the
+	 * stall threshold. Each run is still `running`; a warning never kills.
+	 */
+	readonly stalled: readonly ToolStall[];
 	readonly errors: readonly { readonly runId: string; readonly reason: string }[];
+}
+
+export interface ComputeIdleOptions {
+	/**
+	 * Payload `type` values that do not count as activity. Defaults to every
+	 * harness's declared keep-alives (`keepAliveEnvelopeTypes()`); tests pass
+	 * `[]` to read the raw tail.
+	 */
+	readonly keepAliveEnvelopeTypes?: readonly string[];
 }
 
 /**
  * Compute the heartbeat age (ms) of a `running` run: `now` minus the
- * timestamp of its newest event, falling back to `startedAt` when no
- * events have flowed yet. Returns `null` when neither anchor is parseable
- * (a `running` row with no `startedAt` is a programmer error elsewhere; we
+ * timestamp of its newest activity event, falling back to `startedAt` when
+ * none has flowed yet. Harness keep-alives (claude-code's 30 s
+ * `tool_progress`) and the watchdog's own stall warning are not activity
+ * (namphuongtran/warren#83): counting them let a hung tool call reset the
+ * clock forever. Returns `null` when neither anchor is parseable (a
+ * `running` row with no `startedAt` is a programmer error elsewhere; we
  * skip rather than mis-reap it).
  */
-export async function computeIdleMs(repos: Repos, run: RunRow, now: Date): Promise<number | null> {
-	const tail = await repos.events.listTail(run.id, 1);
-	const anchor = tail.length > 0 ? tail[tail.length - 1]?.ts : run.startedAt;
+export async function computeIdleMs(
+	repos: Repos,
+	run: RunRow,
+	now: Date,
+	opts: ComputeIdleOptions = {},
+): Promise<number | null> {
+	const newest = await repos.events.newestActivityTs(run.id, {
+		ignoreKinds: [WATCHDOG_TOOL_STALLED_KIND],
+		ignorePayloadTypes: opts.keepAliveEnvelopeTypes ?? keepAliveEnvelopeTypes(),
+	});
+	const anchor = newest ?? run.startedAt;
 	if (anchor === null || anchor === undefined) return null;
 	const anchorMs = Date.parse(anchor);
 	if (!Number.isFinite(anchorMs)) return null;
@@ -187,6 +226,7 @@ export async function tickWatchdog(deps: WatchdogTickDeps): Promise<WatchdogTick
 	const now = deps.now ?? (() => new Date());
 	const timedOut: { runId: string; idleMs: number }[] = [];
 	const reconciled: { runId: string; idleMs: number; outcome: RunTerminalState }[] = [];
+	const stalled: ToolStall[] = [];
 	const errors: { runId: string; reason: string }[] = [];
 	const graceMs = deps.terminalReconcileGraceMs ?? 0;
 
@@ -197,13 +237,14 @@ export async function tickWatchdog(deps: WatchdogTickDeps): Promise<WatchdogTick
 		return {
 			timedOut,
 			reconciled,
+			stalled,
 			errors: [{ runId: "<listByState:running>", reason: formatError(err) }],
 		};
 	}
 
 	for (const run of running) {
 		try {
-			const action = await evaluateRun(deps, run, now(), graceMs);
+			const action = await evaluateRun(deps, run, now(), graceMs, stalled);
 			if (action.kind === "timedOut") timedOut.push({ runId: run.id, idleMs: action.idleMs });
 			else if (action.kind === "reconciled") {
 				reconciled.push({ runId: run.id, idleMs: action.idleMs, outcome: action.outcome });
@@ -217,7 +258,7 @@ export async function tickWatchdog(deps: WatchdogTickDeps): Promise<WatchdogTick
 		}
 	}
 
-	return { timedOut, reconciled, errors };
+	return { timedOut, reconciled, stalled, errors };
 }
 
 /** What the tick did (or didn't do) for one `running` run. */
@@ -236,6 +277,7 @@ async function evaluateRun(
 	run: RunRow,
 	now: Date,
 	graceMs: number,
+	stalled: ToolStall[],
 ): Promise<TickAction> {
 	const idleMs = await computeIdleMs(deps.repos, run, now);
 	if (idleMs === null) return { kind: "none" };
@@ -243,6 +285,10 @@ async function evaluateRun(
 		await forceFail(deps, run, idleMs, now);
 		return { kind: "timedOut", idleMs };
 	}
+	// namphuongtran/warren#83: below the kill budget, warn once about a tool
+	// call that has stayed open past the stall threshold. The run keeps going.
+	const stall = await maybeWarnToolStall(deps, run, now);
+	if (stall !== null) stalled.push(stall);
 	// warren-c433: terminal-reconcile safety net. Below the heartbeat budget but idle
 	// past the grace, probe the backend: if the pod is terminal-or-gone yet the row is
 	// still `running`, the normal terminal-detect → reap path is wedged (the K8s

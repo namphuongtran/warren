@@ -108,6 +108,9 @@ export const codexAdapter: AgentRuntimeAdapter = {
 	terminalErrorEnvelopeTypes: ["result"],
 	// Codex writes files only through `apply_patch` items (namphuongtran/warren#36).
 	fileEditToolNames: ["apply_patch"],
+	// Empty by evidence: `codex exec --json` emits no periodic progress event
+	// while a command runs that warren has observed (namphuongtran/warren#83).
+	keepAliveEnvelopeTypes: [],
 	cliBinaries: [CODEX_BIN],
 
 	envPassthrough(): readonly string[] {

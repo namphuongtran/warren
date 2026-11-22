@@ -310,8 +310,7 @@ export type ServerPreviewConfig = z.infer<typeof ServerPreviewConfigSchema>;
 export type StaticPreviewConfig = z.infer<typeof StaticPreviewConfigSchema>;
 export type PreviewConfig = z.infer<typeof PreviewConfigSchema>;
 
-// warren-a63d: per-run USD spend cap, shared by the trigger entry and the
-// project-wide default below so both sites can never validate differently.
+// warren-a63d: one positive-limit validator for every cap, so no two sites validate differently.
 const positiveLimit = (key: string) => z.number().positive(`${key} must be positive`).finite();
 const MaxCostUsdSchema = positiveLimit("maxCostUsd");
 
@@ -392,12 +391,13 @@ export const DefaultsConfigSchema = z
 		resources: ResourcesConfigSchema.optional(),
 		// warren-b6f2: per-project admission control (K8s, design §3.3).
 		admission: AdmissionConfigSchema.optional(),
-		// Project-wide default spend cap (USD) and wall-clock limit (minutes,
-		// namphuongtran/warren#10): the weakest source in each chain — dispatch
-		// override > agent frontmatter > this. Resolved by src/runs/cost-cap.ts and
-		// src/runs/duration-limit.ts; enforced mid-run by the event bridge.
+		// Project-wide default spend cap (USD) and wall-clock limit (minutes, namphuongtran/warren#10):
+		// the weakest source in each chain (dispatch override > agent frontmatter > this). Resolved by
+		// src/runs/cost-cap.ts and src/runs/duration-limit.ts; enforced mid-run by the event bridge.
 		maxCostUsd: MaxCostUsdSchema.optional(),
 		maxDurationMinutes: positiveLimit("maxDurationMinutes").optional(),
+		// namphuongtran/warren#83: watchdog tool-stall warning threshold, over WARREN_TOOL_STALL_WARN_MS.
+		toolStallWarnMinutes: positiveLimit("toolStallWarnMinutes").optional(),
 		// warren-05ea: opt-in polling CI-fixer; missing block → poller skips it.
 		ciFixer: CiFixerConfigSchema.optional(),
 		// warren-3db0: opt-in closed-loop healer; missing block → intake skips it.

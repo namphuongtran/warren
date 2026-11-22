@@ -88,6 +88,15 @@ export interface AgentRuntimeAdapter {
 	 * declare it; absent means no edit is ever detected for that harness.
 	 */
 	readonly fileEditToolNames?: readonly string[];
+	/**
+	 * Envelope `type` values this harness emits only to say "still running"
+	 * (namphuongtran/warren#83). The heartbeat watchdog's idle clock skips an
+	 * event whose payload `type` is in this list, so a tool call that never
+	 * returns cannot keep the run looking live through keep-alives alone.
+	 * Optional so a test double need not declare it; absent means the harness
+	 * has no keep-alive warren knows about.
+	 */
+	readonly keepAliveEnvelopeTypes?: readonly string[];
 
 	/* ------------------------------------------------------------------ */
 	/* Phase-2 harness capabilities (warren-7933, plan pl-3007). Source-  */

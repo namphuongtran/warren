@@ -69,8 +69,8 @@ malformed / non-positive value fails OPEN (no cap) so a budget typo
 never silently cancels every run. `config.yaml` and legacy
 `defaults.json` share the same
 schema — `{ defaultRole?, defaultBranch?, defaultPrompt?, defaultProvider?,
-defaultModel?, runBranchPrefix?, agentImage?, preview?, maxCostUsd?, maxDurationMinutes?, pr?,
-handoff? }` — all optional,
+defaultModel?, runBranchPrefix?, agentImage?, preview?, maxCostUsd?, maxDurationMinutes?,
+toolStallWarnMinutes?, pr?, handoff? }` — all optional,
 all strict. `maxCostUsd` on `config.yaml` is the project-wide default
 spend cap, the weakest source in the warren-a63d chain: an explicit
 dispatch override (a `POST /runs` `maxCostUsd` body field / `warren run
@@ -96,6 +96,13 @@ same fail-open rule. Absent means unlimited. `withDurationLimit` in
 measures elapsed time from the run's `started_at`. When the limit passes,
 the bridge emits a `duration.exceeded` event and cancels the run. Reap
 then finalizes the run `failed` with `failureReason: duration_exceeded`.
+`toolStallWarnMinutes` (namphuongtran/warren#83) overrides
+`WARREN_TOOL_STALL_WARN_MS` (default 15 minutes) for the project's runs. When
+one tool call stays open past it, the heartbeat watchdog writes one
+`watchdog.tool_stalled` event naming the tool, a command excerpt, and the
+elapsed time. It is a warning: the run keeps running. The watchdog reads the
+key through the project config cache on every tick, so after a project
+refresh a change also applies to runs already in flight.
 `handoff` (namphuongtran/warren#21) is `{ required: boolean }`, default
 `false`. Reap always validates the run's `.warren/handoff.json` and flags a
 missing or invalid report. `required: true` also finalizes a run that would

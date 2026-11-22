@@ -6,7 +6,7 @@
  * replays events in the same order burrow emitted them.
  */
 
-import { and, asc, desc, eq, gt, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, notInArray, sql } from "drizzle-orm";
 import { USAGE_ENVELOPE_TYPES } from "../../core/usage-shape.ts";
 import type { SqliteDrizzleDb } from "../client.ts";
 import type { EventRow, EventStream } from "../schema.ts";
@@ -124,6 +124,62 @@ export class EventsRepo {
 				.limit(limit),
 		);
 		return rows.reverse();
+	}
+
+	/**
+	 * Timestamp of the run's newest event that is not ignored, or null when
+	 * every event is (namphuongtran/warren#83). The heartbeat watchdog anchors
+	 * its idle clock here: `ignorePayloadTypes` drops harness keep-alives by
+	 * their payload `type`, and `ignoreKinds` drops warren's own warnings so a
+	 * warning cannot reset the clock it was raised from. A NULL payload `type`
+	 * never matches an ignore entry.
+	 */
+	async newestActivityTs(
+		runId: string,
+		opts: {
+			readonly ignoreKinds?: readonly string[];
+			readonly ignorePayloadTypes?: readonly string[];
+		},
+	): Promise<string | null> {
+		const ignoreKinds = opts.ignoreKinds ?? [];
+		const ignoreTypes = opts.ignorePayloadTypes ?? [];
+		const column = this.events.payloadJson;
+		const payloadType =
+			this.adapter.dialect === "postgres"
+				? sql<string>`coalesce(${column} ->> 'type', '')`
+				: sql<string>`coalesce(json_extract(${column}, '$.type'), '')`;
+		const row = await this.adapter.pickOne<{ ts: string }>(
+			this.db
+				.select({ ts: this.events.ts })
+				.from(this.events)
+				.where(
+					and(
+						eq(this.events.runId, runId),
+						...(ignoreKinds.length > 0 ? [notInArray(this.events.kind, [...ignoreKinds])] : []),
+						...(ignoreTypes.length > 0 ? [notInArray(payloadType, [...ignoreTypes])] : []),
+					),
+				)
+				.orderBy(desc(this.events.sandboxEventSeq))
+				.limit(1),
+		);
+		return row?.ts ?? null;
+	}
+
+	/**
+	 * Timestamp of the run's newest event of `kind`, or null when it has none.
+	 * The watchdog's tool-stall check reads it for `tool_use` as a cheap gate
+	 * before it reads the run's tool trace (namphuongtran/warren#83).
+	 */
+	async newestTsOfKind(runId: string, kind: string): Promise<string | null> {
+		const row = await this.adapter.pickOne<{ ts: string }>(
+			this.db
+				.select({ ts: this.events.ts })
+				.from(this.events)
+				.where(and(eq(this.events.runId, runId), eq(this.events.kind, kind)))
+				.orderBy(desc(this.events.sandboxEventSeq))
+				.limit(1),
+		);
+		return row?.ts ?? null;
 	}
 
 	/**

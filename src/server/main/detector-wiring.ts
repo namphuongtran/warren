@@ -10,7 +10,9 @@
  *   (`DEFAULT_WATCHDOG_HEARTBEAT_TIMEOUT_MS`, 45 min) so a fresh deploy is
  *   protected without an explicit env var; tune via
  *   `WARREN_RUN_HEARTBEAT_TIMEOUT_MS`, opt out via
- *   `WARREN_WATCHDOG_DISABLED=1`. See `src/runs/watchdog.ts`.
+ *   `WARREN_WATCHDOG_DISABLED=1`. See `src/runs/watchdog.ts`. It also warns
+ *   once about a tool call open past `WARREN_TOOL_STALL_WARN_MS` (15 min,
+ *   project override `toolStallWarnMinutes`; namphuongtran/warren#83).
  */
 
 import type { DrizzleAdapter } from "../../db/repos/drizzle-adapter.ts";
@@ -28,6 +30,7 @@ import {
 	type WatchdogReap,
 } from "../../runs/index.ts";
 import { bootOpsStatsWorker, type OpsStatsWorkerHandle } from "../../runs/ops-stats.ts";
+import { projectToolStallResolver } from "../../runs/watchdog-tool-stall.ts";
 import type { RuntimeProvider } from "../../runtime/contract.ts";
 import { resolveRuntimeKind } from "../../runtime/registry.ts";
 import type { WarrenConfigCache } from "../../warren-config/index.ts";
@@ -56,6 +59,12 @@ export interface WatchdogWiringInput {
 	 * Required — the tick no longer constructs its own burrow-backed provider.
 	 */
 	readonly runtimeProvider: RuntimeProvider;
+	/**
+	 * Per-project config cache (namphuongtran/warren#83): the tool-stall warning
+	 * reads `toolStallWarnMinutes` through it. Absent ⇒ the env default applies
+	 * to every run.
+	 */
+	readonly warrenConfigs?: WarrenConfigCache;
 	readonly logger: Logger;
 	readonly now?: () => Date;
 }
@@ -75,6 +84,15 @@ export function bootWatchdogFromEnv(input: WatchdogWiringInput): WatchdogHandle 
 		heartbeatTimeoutMs: config.heartbeatTimeoutMs,
 		terminalReconcileGraceMs: config.terminalReconcileGraceMs,
 		cancelReconcileGraceMs: config.cancelReconcileGraceMs,
+		toolStallWarnMs: config.toolStallWarnMs,
+		...(input.warrenConfigs !== undefined
+			? {
+					resolveToolStallWarnMs: projectToolStallResolver({
+						repos: input.repos,
+						warrenConfigs: input.warrenConfigs,
+					}),
+				}
+			: {}),
 		tickMs: config.tickMs,
 		disabled: !config.enabled,
 		logger: bridgeLoggerFromPino(logger),
@@ -89,6 +107,7 @@ export function bootWatchdogFromEnv(input: WatchdogWiringInput): WatchdogHandle 
 				heartbeatTimeoutMs: config.heartbeatTimeoutMs,
 				terminalReconcileGraceMs: config.terminalReconcileGraceMs,
 				cancelReconcileGraceMs: config.cancelReconcileGraceMs,
+				toolStallWarnMs: config.toolStallWarnMs,
 			},
 			"run watchdog running",
 		);
@@ -164,6 +183,7 @@ export function bootBackgroundDetectors(
 		broker: input.broker,
 		autoOpenPr: input.autoOpenPr,
 		runtimeProvider: input.runtimeProvider,
+		warrenConfigs: input.warrenConfigs,
 		logger: input.logger,
 		...now,
 	});
