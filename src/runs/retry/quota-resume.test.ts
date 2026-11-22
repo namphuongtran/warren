@@ -118,6 +118,7 @@ describe("createQuotaResumer", () => {
 		const refusal = new ProviderQuotaExhaustedError("spent", {
 			reason: "provider_quota_exhausted",
 			retryAfterSeconds: 3600,
+			resetsAt: Date.parse("2026-11-22T10:12:00.000Z") / 1000,
 		});
 		const refusing = stubSpawn(fixture.repos, { throw: refusal });
 		const { instance } = resumer(fixture, clock, { spawnRunFn: refusing.spawnRunFn });

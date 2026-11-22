@@ -128,6 +128,7 @@ describe("runPlanRunTick", () => {
 			throw new ProviderQuotaExhaustedError("window spent", {
 				reason: "provider_quota_exhausted",
 				retryAfterSeconds: 600,
+				resetsAt: 1795338600,
 			});
 		};
 

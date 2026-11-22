@@ -1,12 +1,12 @@
 import { ValidationError } from "../../../core/errors.ts";
-import { IssueNotFoundError } from "../../../core/wire.ts";
+import { IssueNotFoundError, QUOTA_EXHAUSTED_ACTIONS } from "../../../core/wire.ts";
 import { mintGitCredential } from "../../../forge/credentials.ts";
 import { refreshProject } from "../../../projects/manage.ts";
 import { readProviderFrontmatter } from "../../../registry/schema.ts";
 import { validateBaseCommit, validateDispatchRef } from "../../../runs/base-commit.ts";
 import { readMaxCostUsd } from "../../../runs/cost-cap.ts";
 import { readMaxDurationMinutes } from "../../../runs/duration-limit.ts";
-import { spawnRun } from "../../../runs/index.ts";
+import { type SpawnRunResult, spawnOrHoldRun, spawnRun } from "../../../runs/index.ts";
 import { MULCH_ARM_VALUES } from "../../../runtime/adapters/mulch-arm.ts";
 import type { TrackerContext } from "../../../tracker/contract.ts";
 import type { GitSpawnCredential } from "../../../workspace/git/credential-env.ts";
@@ -441,18 +441,26 @@ async function buildHttpSpawnOptions(
 export function createRunHandler(deps: ServerDeps): RouteHandler {
 	return async (ctx) => {
 		const body = await readJsonBody(ctx);
+		// namphuongtran/warren#30: "hold" parks a dispatch the quota guard refuses.
+		const onQuotaExhausted = optionalEnum(body, "onQuotaExhausted", QUOTA_EXHAUSTED_ACTIONS);
 		const options = await buildHttpSpawnOptions(deps, body, ctx.logger);
 
-		// warren-d525: the real dispatch — spawn and attach the bridge. Wrapped
-		// so the idempotency store can run it at most once per (projectId, key),
-		// keeping every side effect (spawn + bridge start) deduped.
-		const dispatch = async (): Promise<IdempotentDispatch> => {
-			const result = await spawnRun(options);
+		const started = (result: SpawnRunResult): IdempotentDispatch => {
 			deps.bridges.start(result.run.id, result.sandboxRun.id, result.sandbox.id);
 			return {
 				run: result.run,
 				sandbox: { id: result.sandbox.id, workspacePath: result.sandbox.workspacePath },
 			};
+		};
+		// warren-d525: the real dispatch — spawn and attach the bridge. Wrapped
+		// so the idempotency store can run it at most once per (projectId, key),
+		// keeping every side effect (spawn + bridge start) deduped. A held run
+		// gets no bridge: the quota hold releaser starts one at its launch.
+		const dispatch = async (): Promise<IdempotentDispatch> => {
+			if (onQuotaExhausted !== "hold") return started(await spawnRun(options));
+			const outcome = await spawnOrHoldRun(options);
+			if (outcome.kind === "dispatched") return started(outcome.result);
+			return { run: outcome.run, sandbox: null, quotaHold: outcome.hold };
 		};
 
 		// `Idempotency-Key` present + a store wired → dedupe duplicate
@@ -465,6 +473,6 @@ export function createRunHandler(deps: ServerDeps): RouteHandler {
 				? await deps.idempotencyStore.run(options.projectId, idempotencyKey, dispatch)
 				: await dispatch();
 
-		return jsonResponse(201, dispatched);
+		return jsonResponse(dispatched.quotaHold !== undefined ? 202 : 201, dispatched);
 	};
 }

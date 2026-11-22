@@ -18,6 +18,8 @@ import type {
 	InboxState,
 	PreviewState,
 	PullRequestLifecycle,
+	QuotaExhaustedAction,
+	QuotaHoldView,
 	RunApproachRecord,
 	RunCostBasis,
 	RunFailureReason,
@@ -302,9 +304,11 @@ export interface CreateRunInput {
 	/**
 	 * Dispatch even while the run's provider credential has a spent usage
 	 * window (namphuongtran/warren#30). Without it such a dispatch answers 429
-	 * `provider_quota_exhausted` with `Retry-After`.
+	 * `provider_quota_exhausted` with `Retry-After`, or is held (below).
 	 */
 	force?: boolean;
+	/** `hold`: 202 on a spent window, run after the reset (namphuongtran/warren#30). */
+	onQuotaExhausted?: QuotaExhaustedAction;
 }
 
 /**
@@ -331,10 +335,9 @@ export interface DispatchRunInput
 
 export interface SpawnRunResponse {
 	run: RunRow;
-	sandbox: {
-		id: string;
-		workspacePath: string;
-	};
+	/** `null` while the run is held on a spent provider quota (`quotaHold`). */
+	sandbox: { id: string; workspacePath: string } | null;
+	quotaHold?: QuotaHoldView;
 }
 
 /**

@@ -60,10 +60,12 @@ import {
 import type { WarrenConfigCache } from "../../warren-config/index.ts";
 import type { RunEventBroker } from "../events.ts";
 import { quotaKey } from "../quota/fingerprint.ts";
+import { releaseAtAfter } from "../quota/hold.ts";
 import { ProviderQuotaExhaustedError } from "../quota/state.ts";
 import { REAP_QUOTA_EXHAUSTED_KIND } from "../reap/quota.ts";
 import { spawnRun } from "../spawn/index.ts";
 import type { SpawnLogger, SpawnRunInput } from "../spawn/types.ts";
+import { appendRunSystemEvent } from "../stream/system-event.ts";
 import type { BridgeRegistry } from "../stream/types.ts";
 import { inheritedDispatchOverrides } from "./inherited-overrides.ts";
 
@@ -90,10 +92,6 @@ const DECISION_KINDS: readonly string[] = [
 
 /** Resumes one lineage may hold. The run that first hit the limit is not one. */
 export const MAX_QUOTA_RESUMES = 3;
-/** Wait this long past the reset, so the provider's clock has surely rolled over. */
-const RESUME_DELAY_SECONDS = 60;
-/** Spread resumes on one credential over this many seconds after the delay. */
-const RESUME_JITTER_SECONDS = 120;
 /** How far back the tick looks. Covers a seven-day usage window plus a day. */
 const RESUME_LOOKBACK_MS = 8 * 24 * 60 * 60 * 1000;
 
@@ -143,20 +141,8 @@ export function createQuotaResumer(input: QuotaResumerInput): QuotaResumer {
 	const now = input.now ?? (() => new Date());
 	const random = input.random ?? Math.random;
 	const emit = async (runId: string, kind: string, payload: unknown): Promise<void> => {
-		const seq = ((await input.repos.events.maxSeqForRun(runId)) ?? 0) + 1;
-		const row = await input.repos.events.append({
-			runId,
-			sandboxEventSeq: seq,
-			ts: now().toISOString(),
-			kind,
-			stream: "system",
-			payload,
-		});
-		input.broker?.publish(runId, row);
-	};
-	const resumeAtAfter = (resetsAtSeconds: number): string => {
-		const jitter = Math.floor(random() * RESUME_JITTER_SECONDS);
-		return new Date((resetsAtSeconds + RESUME_DELAY_SECONDS + jitter) * 1000).toISOString();
+		const ts = now().toISOString();
+		await appendRunSystemEvent(input.repos, input.broker, { runId, kind, payload, ts });
 	};
 
 	const decide = async (run: RunRow, events: readonly EventRow[]): Promise<void> => {
@@ -181,7 +167,7 @@ export function createQuotaResumer(input: QuotaResumerInput): QuotaResumer {
 		const resetsAt = await resolveResetsAt(input, run, events);
 		if (resetsAt === null) return skip("reset_unknown");
 		const scheduled: ScheduledResume = {
-			resumeAt: resumeAtAfter(resetsAt),
+			resumeAt: releaseAtAfter(resetsAt, random),
 			resetsAt,
 			attempt: attempts + 1,
 			mode: resumeMode(run),
@@ -216,11 +202,11 @@ export function createQuotaResumer(input: QuotaResumerInput): QuotaResumer {
 		} catch (err) {
 			if (err instanceof ProviderQuotaExhaustedError) {
 				// The window moved: wait for the new reset, same attempt.
-				const resetsAt = Math.ceil(now().getTime() / 1000) + err.retryAfterSeconds;
+				const { resetsAt } = err;
 				await emit(run.id, QUOTA_RESUME_EVENTS.scheduled, {
 					...scheduled,
 					resetsAt,
-					resumeAt: resumeAtAfter(resetsAt),
+					resumeAt: releaseAtAfter(resetsAt, random),
 					maxAttempts: MAX_QUOTA_RESUMES,
 				});
 				return;

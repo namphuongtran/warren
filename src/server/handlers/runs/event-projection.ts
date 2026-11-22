@@ -55,6 +55,7 @@
  * one import site.
  */
 
+import { QUOTA_HOLD_EVENTS } from "../../../core/wire.ts";
 import {
 	buildEnvSecretPattern,
 	instanceEnvSecretPattern,
@@ -114,6 +115,25 @@ export const RAW_FAILURE_EVENT_KINDS: ReadonlySet<string> = new Set([
 	"spawn_failed",
 	"reap.workspace_salvage_failed",
 ]);
+
+/**
+ * Payload fields a spectator never sees, by event kind. A held run's
+ * `dispatch.quota_held` keeps the hold (`reason`, `resetsAt`, `releaseAt`)
+ * but drops the stored dispatch request: its prompt is already public on the
+ * run row, while its `metadata`, `dispatcherHandle` and overrides are not
+ * (namphuongtran/warren#30).
+ */
+const OPERATOR_ONLY_PAYLOAD_FIELDS: ReadonlyMap<string, readonly string[]> = new Map([
+	[QUOTA_HOLD_EVENTS.held, ["request"]],
+]);
+
+function dropOperatorOnlyFields(kind: string, payload: unknown): unknown {
+	const fields = OPERATOR_ONLY_PAYLOAD_FIELDS.get(kind);
+	if (fields === undefined || typeof payload !== "object" || payload === null) return payload;
+	const out: Record<string, unknown> = { ...(payload as Record<string, unknown>) };
+	for (const field of fields) delete out[field];
+	return out;
+}
 
 /**
  * The body half of the body/log split for {@link RAW_FAILURE_EVENT_KINDS}:
@@ -217,6 +237,6 @@ export function projectEvent<T extends ProjectableEvent>(
 	if (INTERNAL_EVENT_KINDS.has(row.kind)) return null;
 	const payload = RAW_FAILURE_EVENT_KINDS.has(row.kind)
 		? sanitizeFailurePayload(row.payloadJson)
-		: row.payloadJson;
+		: dropOperatorOnlyFields(row.kind, row.payloadJson);
 	return { ...row, payloadJson: scrubSecrets(payload, instanceEnvSecretPattern()) };
 }

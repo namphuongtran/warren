@@ -51,3 +51,32 @@ export interface ProviderQuotaView {
 export interface ListProviderQuotaResponse {
 	readonly quotas: readonly ProviderQuotaView[];
 }
+
+/**
+ * What `POST /runs` does when the provider-quota guard refuses the dispatch
+ * (`onQuotaExhausted`). `refuse` (the default) answers 429. `hold` creates
+ * the run `queued` with no workload and launches it after the window resets.
+ */
+export const QUOTA_EXHAUSTED_ACTIONS = ["refuse", "hold"] as const;
+export type QuotaExhaustedAction = (typeof QUOTA_EXHAUSTED_ACTIONS)[number];
+
+/**
+ * The events that carry a held run's state, all on the held run. The newest
+ * one says where the hold stands: `held` waits for `releaseAt`, `releasing`
+ * means a launch began, `released` and `releaseFailed` are done.
+ */
+export const QUOTA_HOLD_EVENTS = {
+	held: "dispatch.quota_held",
+	releasing: "dispatch.quota_release_started",
+	released: "dispatch.quota_released",
+	releaseFailed: "dispatch.quota_release_failed",
+} as const;
+
+/** Why and until when a held run waits. On the 202 of a held `POST /runs`. */
+export interface QuotaHoldView {
+	readonly reason: typeof PROVIDER_QUOTA_EXHAUSTED;
+	/** When the credential's window reopens, unix seconds. */
+	readonly resetsAt: number;
+	/** ISO8601 time the run is launched: the reset plus a short delay and jitter. */
+	readonly releaseAt: string;
+}

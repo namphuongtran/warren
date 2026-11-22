@@ -32,8 +32,11 @@ export interface QuotaResumeWorkerHandle {
 }
 
 interface StartQuotaResumeWorkerInput {
-	readonly resumer: QuotaResumer;
+	/** Anything that ticks: the resumer, or the quota hold releaser (namphuongtran/warren#30). */
+	readonly resumer: Pick<QuotaResumer, "tick">;
 	readonly logger?: SpawnLogger;
+	/** Log name of a failed tick. Defaults to `quota-resume`. */
+	readonly name?: string;
 }
 
 /** Single-flight: a tick still running when the next interval fires is skipped. */
@@ -48,7 +51,7 @@ export function startQuotaResumeWorker(
 			.tick()
 			.catch((err: unknown) => {
 				const error = err instanceof Error ? err.message : String(err);
-				input.logger?.error({ error }, "quota-resume.tick_failed");
+				input.logger?.error({ error }, `${input.name ?? "quota-resume"}.tick_failed`);
 			})
 			.finally(() => {
 				inFlight = null;
