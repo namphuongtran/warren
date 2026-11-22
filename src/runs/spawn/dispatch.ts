@@ -27,7 +27,7 @@ import { buildSeedFiles } from "../seed.ts";
 import { validateTargetBranch } from "../target-branch.ts";
 import { readCachedAgent, readProjectDefaults, resolveOverride } from "./agent-cache.ts";
 import { injectWarrenCallbackEnv } from "./callback-env.ts";
-import { resolveContinuationRef, resolveExistingBranch } from "./continuation.ts";
+import { resolveContinuationRef, resolveDispatchBranches } from "./continuation.ts";
 import { writeDispatchContext } from "./dispatch-context.ts";
 import { injectGitIdentityEnv, warnIfGitIdentityUnconfigured } from "./git-identity.ts";
 import {
@@ -86,10 +86,10 @@ async function dispatchRun(input: SpawnRunInput): Promise<SpawnRunResult> {
 	// warren-326f: the explicit opt-in to run on an EXISTING branch. Shape-validated
 	// and fail-closed against the push remote BEFORE any side effect, then folded
 	// into the repair-run pattern (branch = base ref = push target); see
-	// resolveExistingBranch. Downstream keeps reading `ref`/`targetBranch`, so
+	// resolveDispatchBranches (#58: newBranch too). Downstream keeps reading `ref`/`targetBranch`, so
 	// providers and reap need no special-casing and default dispatches are
 	// byte-identical.
-	const existingBranch = await resolveExistingBranch(input, project);
+	const { existingBranch, newBranch } = await resolveDispatchBranches(input, project);
 	const baseRefField = existingBranch ?? input.ref;
 	const pushTarget = existingBranch ?? targetBranch;
 
@@ -253,7 +253,7 @@ async function dispatchRun(input: SpawnRunInput): Promise<SpawnRunResult> {
 			envDefault: input.runBranchPrefixDefault,
 		}),
 		run.id,
-		pushTarget,
+		pushTarget ?? newBranch,
 	);
 
 	const runEnv = composeRunEnv(run.id, projectDefaults?.qualityGate, input.serverEnv);

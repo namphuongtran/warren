@@ -29,6 +29,7 @@ import { existsSync } from "node:fs";
 import { ValidationError } from "../../core/errors.ts";
 import { defaultSpawn } from "../../projects/clone.ts";
 import { composeRunBranch, resolveRunBranchPrefix } from "../branch.ts";
+import { assertBranchAbsentOnRemote, validateNewBranchShape } from "../new-branch.ts";
 import { assertBranchOnRemote, validateExistingBranchShape } from "../target-branch.ts";
 import { readProjectDefaults } from "./agent-cache.ts";
 import type { SpawnRunInput } from "./types.ts";
@@ -63,6 +64,49 @@ export async function resolveExistingBranch(
 		cwd: existsSync(project.localPath) ? project.localPath : process.cwd(),
 	});
 	return branch;
+}
+
+/**
+ * namphuongtran/warren#58: resolve the `newBranch` opt-in. Shape-validated,
+ * then checked FAIL-CLOSED to be absent from the push remote, before any side
+ * effect. Returns the normalized short branch name, or `undefined` when the
+ * field was absent (the run then gets the composed `${prefix}/${runId}`).
+ */
+export async function resolveNewBranch(
+	input: SpawnRunInput,
+	project: { gitUrl: string; localPath: string; defaultBranch?: string | null },
+): Promise<string | undefined> {
+	const branch = validateNewBranchShape({
+		newBranch: input.newBranch,
+		targetBranch: input.targetBranch,
+		existingBranch: input.existingBranch,
+		defaultBranch: project.defaultBranch ?? undefined,
+	});
+	if (branch === undefined) return undefined;
+	await assertBranchAbsentOnRemote({
+		gitUrl: project.gitUrl,
+		branch,
+		spawn: input.projectSpawn ?? defaultSpawn,
+		gitCredential: input.gitCredential,
+		cwd: existsSync(project.localPath) ? project.localPath : process.cwd(),
+	});
+	return branch;
+}
+
+/**
+ * Both branch opt-ins of a dispatch. `newBranch` resolves first, so its
+ * conflict with `existingBranch` is refused before any remote probe.
+ */
+export async function resolveDispatchBranches(
+	input: SpawnRunInput,
+	project: { gitUrl: string; localPath: string; defaultBranch?: string | null },
+): Promise<{ existingBranch?: string; newBranch?: string }> {
+	const newBranch = await resolveNewBranch(input, project);
+	const existingBranch = await resolveExistingBranch(input, project);
+	return {
+		...(existingBranch !== undefined ? { existingBranch } : {}),
+		...(newBranch !== undefined ? { newBranch } : {}),
+	};
 }
 
 export async function resolveContinuationRef(

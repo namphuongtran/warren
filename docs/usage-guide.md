@@ -213,6 +213,7 @@ Common flags:
 | `--seed <id>` | Attach the run to a seeds issue. When the run succeeds with new commits, Warren closes the issue. |
 | `--base-commit <sha>` | Cut the workspace from a fixed commit |
 | `--existing-branch <branch>` | Continue work on an existing branch and push back to it. No PR opens. |
+| `--new-branch <branch>` | Name the run's new branch instead of `<prefix>/<runId>`, for a repository that requires a branch name pattern. The branch must not exist yet. A PR opens as usual. |
 | `--rescue-from <runId>` | Run again from the salvaged work of a failed run |
 
 ### 5.2 Monitor and intervene

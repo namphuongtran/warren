@@ -361,6 +361,8 @@ async function buildHttpSpawnOptions(
 	// the domain path — shape validation, remote probe, push-back, no PR — is
 	// the one warren-326f already owns.
 	const existingBranch = optionalString(body, "existingBranch");
+	// namphuongtran/warren#58: name the fresh run branch; validated in spawnRun.
+	const newBranch = optionalString(body, "newBranch");
 	const dispatcherHandle = optionalString(body, "dispatcherHandle");
 	// warren-97a2: the HTTP-collapsed `warren run` labels its dispatches
 	// trigger=cli; omitting the field preserves the spawnRun default.
@@ -416,6 +418,7 @@ async function buildHttpSpawnOptions(
 		seedId,
 		...(targetBranch !== undefined ? { targetBranch } : {}),
 		...(effectiveExistingBranch !== undefined ? { existingBranch: effectiveExistingBranch } : {}),
+		...(newBranch !== undefined ? { newBranch } : {}),
 		...(parentRunId !== undefined ? { parentRunId } : {}),
 		...(cloneKind !== undefined ? { cloneKind } : {}),
 		dispatcherHandle,

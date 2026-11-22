@@ -88,6 +88,8 @@ export interface RunArgs {
 	readonly baseCommit?: string;
 	/** Opt-in existing-branch dispatch (warren-326f), forwarded to `POST /runs`. */
 	readonly existingBranch?: string;
+	/** Name of the fresh run branch (namphuongtran/warren#58), forwarded to `POST /runs`. */
+	readonly newBranch?: string;
 	/**
 	 * Dispatch-from-rescue (#1241, warren-1db0), forwarded to `POST /runs`
 	 * `rescueFromRunId`. When set, agent/project/prompt become optional
@@ -152,6 +154,7 @@ export async function runRun(
 			...(args.seedId !== undefined ? { seedId: args.seedId } : {}),
 			...(args.baseCommit !== undefined ? { baseCommit: args.baseCommit } : {}),
 			...(args.existingBranch !== undefined ? { existingBranch: args.existingBranch } : {}),
+			...(args.newBranch !== undefined ? { newBranch: args.newBranch } : {}),
 			...(args.rescueFrom !== undefined ? { rescueFromRunId: args.rescueFrom } : {}),
 		});
 		runId = spawned.run.id;
@@ -371,6 +374,10 @@ export function registerRunCommand(program: Command, context: CliContext): void 
 				"run on an existing push-remote branch and push back to it; no PR",
 			)
 			.option(
+				"--new-branch <branch>",
+				"name the run's new branch instead of <prefix>/<runId>; it must not exist yet, and gets a PR",
+			)
+			.option(
 				"--rescue-from <runId>",
 				"re-dispatch a salvaged run's recovered work off its warren/rescue/<runId> branch",
 			),
@@ -388,6 +395,7 @@ export function registerRunCommand(program: Command, context: CliContext): void 
 				seed?: string;
 				baseCommit?: string;
 				existingBranch?: string;
+				newBranch?: string;
 				rescueFrom?: string;
 			} & RemoteOpts,
 		) => {
@@ -409,6 +417,7 @@ export function registerRunCommand(program: Command, context: CliContext): void 
 					...(opts.seed !== undefined ? { seedId: opts.seed } : {}),
 					...(opts.baseCommit !== undefined ? { baseCommit: opts.baseCommit } : {}),
 					...(opts.existingBranch !== undefined ? { existingBranch: opts.existingBranch } : {}),
+					...(opts.newBranch !== undefined ? { newBranch: opts.newBranch } : {}),
 					...(opts.rescueFrom !== undefined ? { rescueFrom: opts.rescueFrom } : {}),
 				},
 			);

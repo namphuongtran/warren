@@ -231,6 +231,8 @@ export interface CreateRunInput {
 	targetBranch?: string;
 	/** Opt-in dispatch onto an existing push-remote branch (warren-326f); fail-closed at the server. */
 	existingBranch?: string;
+	/** Name of the fresh run branch (namphuongtran/warren#58); must not exist on the remote yet. */
+	newBranch?: string;
 	providerOverride?: string;
 	modelOverride?: string;
 	/** Run trigger label (warren-97a2); defaults to the server's own default when omitted. */
