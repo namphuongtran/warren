@@ -8,7 +8,7 @@
  * so the report cannot break the PR body's section structure.
  */
 
-import type { RunHandoff, RunHandoffRecord } from "../core/wire.ts";
+import type { RunHandoff, RunHandoffApproach, RunHandoffRecord } from "../core/wire.ts";
 import { fenceFor, longestBacktickRun, neutralizePreviewMarkers } from "./pr-agent-report.ts";
 
 /** One line, safe as a markdown list item. */
@@ -37,6 +37,16 @@ function bulletSection(title: string, items: readonly string[]): string[] {
 	return ["", `**${title}**`, "", ...items.map((item) => `- ${item}`)];
 }
 
+/** One line on whether the work followed the run's approach note (namphuongtran/warren#33). */
+function approachLine(approach: RunHandoffApproach | undefined): string[] {
+	if (approach === undefined) return [];
+	const verdict = approach.followed
+		? "followed the approach note"
+		: "deviated from the approach note";
+	const why = approach.deviation === null ? "" : `: ${oneLine(approach.deviation)}`;
+	return ["", `**Approach:** ${verdict}${why}`];
+}
+
 function renderRecorded(handoff: RunHandoff): string {
 	const verification = handoff.verification.map(
 		(step) => `${codeSpan(step.command)}: ${oneLine(step.outcome)}`,
@@ -47,6 +57,7 @@ function renderRecorded(handoff: RunHandoff): string {
 		`**Status:** ${handoff.status}`,
 		"",
 		renderSummary(handoff.summary),
+		...approachLine(handoff.approach),
 		...bulletSection("Verification", verification),
 		...bulletSection("How to try", handoff.howToTry.map(oneLine)),
 		...bulletSection("Open questions", handoff.openQuestions.map(oneLine)),

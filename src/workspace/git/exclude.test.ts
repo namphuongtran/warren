@@ -30,6 +30,7 @@ describe("installWorkspaceExcludes", () => {
 				await writeFile(join(workspace, "local.private"), "private");
 				await mkdir(join(workspace, ".warren"), { recursive: true });
 				await writeFile(join(workspace, ".warren", "handoff.json"), "{}");
+				await writeFile(join(workspace, ".warren", "approach.md"), "## Understanding");
 				await writeFile(join(workspace, "work.txt"), "work");
 				await fixtureGitOrThrow(workspace, ["add", "-A"], { env: hostEnv });
 				const staged = await fixtureGitOrThrow(workspace, ["diff", "--cached", "--name-only"]);

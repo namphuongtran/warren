@@ -25,6 +25,7 @@ function run(overrides: Partial<RunRow>): RunRow {
 		deletions: null,
 		qualityGateOutcome: null,
 		handoff: null,
+		approach: null,
 		prompt: "",
 		trigger: "manual",
 		prUrl: null,

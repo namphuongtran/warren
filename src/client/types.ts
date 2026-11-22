@@ -18,6 +18,7 @@ import type {
 	InboxState,
 	PreviewState,
 	PullRequestLifecycle,
+	RunApproachRecord,
 	RunCostBasis,
 	RunFailureReason,
 	RunHandoffRecord,
@@ -45,14 +46,19 @@ export {
 	isTerminalRunState,
 	type PreviewState,
 	type PullRequestLifecycle,
+	RUN_APPROACH_HEADINGS,
+	RUN_APPROACH_STATES,
 	RUN_HANDOFF_REVIEW_VERDICTS,
 	RUN_HANDOFF_STATES,
 	RUN_HANDOFF_STATUSES,
 	RUN_QUALITY_GATE_OUTCOMES,
 	RUN_TERMINAL_STATES,
+	type RunApproachRecord,
+	type RunApproachState,
 	type RunCostBasis,
 	type RunFailureReason,
 	type RunHandoff,
+	type RunHandoffApproach,
 	type RunHandoffRecord,
 	type RunHandoffReview,
 	type RunHandoffReviewFinding,
@@ -154,6 +160,12 @@ export interface RunRow {
 	 * Null = not derived (pre-column rows, or a run that has not reaped yet).
 	 */
 	handoff: RunHandoffRecord | null;
+	/**
+	 * The approach note reap read from `.warren/approach.md`
+	 * (namphuongtran/warren#33): recorded (agent Markdown, render it escaped)
+	 * or missing. Null = not derived (pre-column rows, or not reaped yet).
+	 */
+	approach: RunApproachRecord | null;
 	prompt: string;
 	trigger: string;
 	prUrl: string | null;

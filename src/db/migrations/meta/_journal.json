@@ -414,6 +414,13 @@
 			"when": 1795335269818,
 			"tag": "0058_new_mad_thinker",
 			"breakpoints": true
+		},
+		{
+			"idx": 59,
+			"version": "6",
+			"when": 1795339219364,
+			"tag": "0059_shocking_quasimodo",
+			"breakpoints": true
 		}
 	]
 }

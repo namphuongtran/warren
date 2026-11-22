@@ -12,6 +12,22 @@ Releases **0.9.10 and earlier** live in
 
 ### Added
 
+- **Approach note before the first edit (namphuongtran/warren#33).** The
+  source-editing built-ins (`claude-code`, `pi`, `codex`, `pr-fixer`,
+  `healer`) now write `.warren/approach.md` before their first edit, under
+  fixed headings: Understanding, Options considered, Chosen approach and why,
+  Risks / unknowns, and Verification plan. A trivial task may write one line.
+  A run git-exclude keeps the file off the branch. Finalize collects it on
+  every provider, and reap stores it as `approach` on `GET /runs/:id` and the
+  runs list (16 KiB cap, truncated past it) and emits `approach.recorded`. A
+  run whose agent was asked for a note and wrote none is flagged
+  `approach.missing`, for information only. Other agents are not flagged. The
+  handoff report gains an optional `approach` block (`followed`, `deviation`)
+  that says whether the work kept to the note, and the PR body's
+  `## Handoff` shows it. Adds a nullable `runs.approach_json` column (SQLite
+  0059, Postgres 0054). The prompt change touches `src/registry/builtins/`,
+  so it needs human review under Article IX.
+
 - **Reviewer verdict in the handoff report (namphuongtran/warren#18).** The handoff
   report gains an optional `review` block (`verdict`, `summary`, `findings`),
   validated at reap: `request_changes` must name at least one finding. The

@@ -14,6 +14,7 @@
 import type { AgentDefinition } from "../schema.ts";
 import { MODEL_TIERS } from "./model-tiers.ts";
 import {
+	APPROACH_FRAGMENT,
 	BASE_WORKSPACE_BULLETS,
 	GATE_FINAL_RUN_RULE,
 	HANDOFF_FRAGMENT,
@@ -34,6 +35,8 @@ Operating contract:
 ${VALIDATION_DISCIPLINE_BULLETS}
 - Use git as you normally would. Commit your changes; warren reaps the branch and pushes upstream. Committing is mandatory, and staging is not committing. \`git add\` on its own leaves the work uncommitted, and reap classifies a run that ends with uncommitted changes as a FAILURE (\`dropped_commit\`) even when the agent otherwise succeeded — the workspace is then destroyed and the work is lost. Before you report completion, run \`git status\` and \`git log\` and confirm your edits are in a commit. The only exception is a run that genuinely changed no files.
 - Do not run \`git push\` yourself — warren handles the push host-side after the run terminates.
+
+${APPROACH_FRAGMENT}
 
 ${HANDOFF_FRAGMENT}
 `;

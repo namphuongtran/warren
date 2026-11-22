@@ -45,6 +45,7 @@ import {
 	RUN_MODES,
 	RUN_QUALITY_GATE_OUTCOMES,
 	RUN_STATES,
+	type RunApproachRecord,
 	type RunHandoffRecord,
 	TABLE_NAMES,
 } from "./columns.ts";
@@ -249,20 +250,19 @@ export const runs = sqliteTable(
 		// Reap-time outcome facts (warren-ab2b / pl-103e): what the reap
 		// pipeline MEASURED at finalize — commits the pushed branch was ahead
 		// of the base, plus the parsed `git diff --numstat` totals. Recorded,
-		// not interpreted: no derived judgments. All nullable — rows written
-		// before the columns existed, runs whose finalize was skipped/failed,
-		// and diffs that could not be measured are NULL, which analytics reads
-		// as "unknown" (excluded from denominators), never as zero.
+		// not interpreted. All nullable: pre-column rows, skipped/failed finalizes,
+		// and unmeasurable diffs are NULL: analytics reads "unknown" (out of denominators), never 0.
 		commitsAhead: integer("commits_ahead"),
 		filesChanged: integer("files_changed"),
 		insertions: integer("insertions"),
 		deletions: integer("deletions"),
-		// Quality gate (namphuongtran/warren#36): `qualityGate` frozen at dispatch
-		// (null = unconfigured) and the outcome reap derived (null = not derived).
+		// Quality gate (namphuongtran/warren#36): command frozen at dispatch, outcome reap-derived.
 		qualityGate: text("quality_gate"),
 		qualityGateOutcome: text("quality_gate_outcome", { enum: RUN_QUALITY_GATE_OUTCOMES }),
-		// The validated handoff report reap recorded (namphuongtran/warren#21); null = not derived.
+		// Reap-recorded agent notes, null = not derived: the validated handoff report
+		// (namphuongtran/warren#21) and the approach note (namphuongtran/warren#33).
 		handoff: text("handoff_json", { mode: "json" }).$type<RunHandoffRecord>(),
+		approach: text("approach_json", { mode: "json" }).$type<RunApproachRecord>(),
 	},
 	(t) => [
 		index(INDEX_NAMES.runsState).on(t.state),

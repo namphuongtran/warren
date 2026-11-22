@@ -181,3 +181,46 @@ describe("parseRunHandoff", () => {
 		});
 	});
 });
+
+describe("parseRunHandoff approach adherence (namphuongtran/warren#33)", () => {
+	function withApproach(approach: unknown) {
+		return parseRunHandoff(JSON.stringify({ status: "done", summary: "Done.", approach }));
+	}
+
+	test("records a followed approach with no deviation", () => {
+		expect(withApproach({ followed: true })).toMatchObject({
+			state: "recorded",
+			handoff: { approach: { followed: true, deviation: null } },
+		});
+	});
+
+	test("records a deviation and its reason", () => {
+		expect(
+			withApproach({ followed: false, deviation: "Queued the call; the retry loop raced." }),
+		).toMatchObject({
+			state: "recorded",
+			handoff: {
+				approach: { followed: false, deviation: "Queued the call; the retry loop raced." },
+			},
+		});
+	});
+
+	test("omits the block when the agent wrote none", () => {
+		const record = parseRunHandoff('{"status":"done","summary":"Done."}');
+		expect(record.state === "recorded" && "approach" in record.handoff).toBe(false);
+	});
+
+	test("flags a deviation without a reason", () => {
+		expect(withApproach({ followed: false })).toEqual({
+			state: "invalid",
+			reason: "approach.deviation must say why the work left the approach note",
+		});
+	});
+
+	test("flags a non-boolean followed", () => {
+		expect(withApproach({ followed: "yes" })).toEqual({
+			state: "invalid",
+			reason: "approach.followed must be a boolean",
+		});
+	});
+});

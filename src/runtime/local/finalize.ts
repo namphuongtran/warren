@@ -31,7 +31,6 @@
  */
 
 import { join } from "node:path";
-import { clipRunHandoffBody, RUN_HANDOFF_PATH } from "../../core/wire.ts";
 import type { EventRow } from "../../db/schema.ts";
 import { mergeMulch } from "../../runs/reap/mulch.ts";
 import { mirrorPlans, mirrorSeeds } from "../../runs/reap/seeds.ts";
@@ -57,6 +56,7 @@ import { finalizeCommitStage, finalizeMergeStage } from "../contract.ts";
 import { RuntimeProviderError } from "../errors.ts";
 import { collectMulchUsageEvent } from "../mulch-usage.ts";
 import { PUSH_REJECTED_EVENT, parsePushRejection } from "../push-rejection.ts";
+import { captureRunNotes, captureWorkspaceFile } from "./finalize-notes.ts";
 import { finalizeSeedReset } from "./finalize-seed-reset.ts";
 
 /** Clone-relative (posix) tracker paths — the delta `path` fields + read-back keys. */
@@ -161,9 +161,8 @@ export async function finalizeLocalWorkspace(
 	// reads for auto-plan-run detection (warren-1f56), and the workspace is gone
 	// after `terminate`, so finalize must capture it here.
 	const workspacePlansBody = await captureWorkspaceFile(workspacePath, ".seeds/plans.jsonl", fs);
-	// The agent's handoff report (namphuongtran/warren#21), clipped before it leaves finalize.
-	const handoff = await captureWorkspaceFile(workspacePath, RUN_HANDOFF_PATH, fs);
-	const handoffBody = handoff === null ? null : clipRunHandoffBody(handoff);
+	// The handoff report (namphuongtran/warren#21) and the approach note (#33), clipped here.
+	const notes = await captureRunNotes(workspacePath, fs);
 	if (commit.has("seeds")) {
 		await finalizeSeedsCommit(workspacePath, clonePath, fs, exec, trail, collector);
 	}
@@ -182,7 +181,7 @@ export async function finalizeLocalWorkspace(
 		dirty: push.dirty,
 		dirtyPaths: push.dirtyPaths,
 		workspacePlansBody,
-		handoffBody,
+		...notes,
 		artifacts: {
 			...(mulch !== undefined ? { mulch } : {}),
 			...(seeds !== undefined ? { seeds } : {}),
@@ -209,19 +208,6 @@ function resolveClonePath(intent: FinalizeIntent, artifacts: Set<string>): strin
 		);
 	}
 	return hint;
-}
-
-/** Snapshot a workspace file before `terminate` destroys it; `null` if absent/unreadable. */
-async function captureWorkspaceFile(
-	workspacePath: string,
-	relPath: string,
-	fs: ReapFs,
-): Promise<string | null> {
-	try {
-		return await fs.readFile(join(workspacePath, relPath));
-	} catch {
-		return null;
-	}
 }
 
 async function finalizeMulch(

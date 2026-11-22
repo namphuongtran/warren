@@ -398,7 +398,10 @@ export interface Ctx {
 	workspacePath: string;
 }
 
-export async function setup(localPath = "/data/projects/x/y"): Promise<Ctx> {
+export async function setup(
+	localPath = "/data/projects/x/y",
+	renderedAgentJson: unknown = {},
+): Promise<Ctx> {
 	const db = await openDatabase({ path: ":memory:" });
 	const repos = createRepos(db);
 	await repos.agents.upsert({ name: "refactor-bot", renderedJson: { sections: { system: "x" } } });
@@ -411,7 +414,7 @@ export async function setup(localPath = "/data/projects/x/y"): Promise<Ctx> {
 		agentName: "refactor-bot",
 		projectId: project.id,
 		prompt: "p",
-		renderedAgentJson: {},
+		renderedAgentJson,
 		trigger: "manual",
 		sandboxId: "bur_aaaaaaaaaaaa",
 		sandboxRunId: "run_zzzzzzzzzzzz",

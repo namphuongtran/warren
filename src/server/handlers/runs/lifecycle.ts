@@ -96,6 +96,8 @@ export const PUBLIC_RUN_FIELDS = [
 	// namphuongtran/warren#21: the agent's handoff report is agent output of the
 	// same class as the event stream and the prompt, which spectators already see.
 	"handoff",
+	// namphuongtran/warren#33: the approach note, the same class of agent output.
+	"approach",
 	"costUsd",
 	// warren-f3c3: how costUsd was priced — the same spectator-safe class as
 	// costUsd itself (it qualifies the number, adds nothing new).

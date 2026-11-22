@@ -197,19 +197,23 @@ describe("collectFinalizeResult", () => {
 		expect(skipped).toContain("seeds_commit");
 	});
 
-	test("collects the workspace handoff report, omitted when absent (namphuongtran/warren#21)", async () => {
-		const body = '{"status":"done","summary":"x"}';
-		const withFile = fakeFs({ "/ws/.warren/handoff.json": body });
-		const r = await collectFinalizeResult(intent({ push: false }), "/ws", {
-			fs: withFile,
-			git: fakeGit().git,
+	// The handoff report (namphuongtran/warren#21) and the approach note (#33).
+	test("collects the workspace run notes, each omitted when absent", async () => {
+		const handoff = '{"status":"done","summary":"x"}';
+		const approach = "## Understanding\nFix the typo.";
+		const withFiles = fakeFs({
+			"/ws/.warren/handoff.json": handoff,
+			"/ws/.warren/approach.md": approach,
 		});
-		expect(r.handoffBody).toBe(body);
+		const git = fakeGit().git;
+		const r = await collectFinalizeResult(intent({ push: false }), "/ws", { fs: withFiles, git });
+		expect(r).toMatchObject({ handoffBody: handoff, approachBody: approach });
 		const without = await collectFinalizeResult(intent({ push: false }), "/ws", {
 			fs: fakeFs({}),
 			git: fakeGit().git,
 		});
 		expect(without).not.toHaveProperty("handoffBody");
+		expect(without).not.toHaveProperty("approachBody");
 	});
 
 	test("push:false skips the push + count and produces empty-push=false", async () => {

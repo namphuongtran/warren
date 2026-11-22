@@ -8,7 +8,12 @@
 import { eq } from "drizzle-orm";
 import { NotFoundError } from "../../core/errors.ts";
 import type { SqliteDrizzleDb } from "../client.ts";
-import type { RunHandoffRecord, RunQualityGateOutcome, RunRow } from "../schema.ts";
+import type {
+	RunApproachRecord,
+	RunHandoffRecord,
+	RunQualityGateOutcome,
+	RunRow,
+} from "../schema.ts";
 import type { DrizzleAdapter } from "./drizzle-adapter.ts";
 
 /**
@@ -80,4 +85,18 @@ export async function setHandoff(
 	const db = adapter.drizzle as SqliteDrizzleDb;
 	const runs = adapter.schema.runs;
 	await adapter.runWrite(db.update(runs).set({ handoff: record }).where(eq(runs.id, id)));
+}
+
+/**
+ * Store the approach note reap read off the workspace
+ * (namphuongtran/warren#33). Last write wins, like the handoff above.
+ */
+export async function setApproach(
+	adapter: DrizzleAdapter,
+	id: string,
+	record: RunApproachRecord,
+): Promise<void> {
+	const db = adapter.drizzle as SqliteDrizzleDb;
+	const runs = adapter.schema.runs;
+	await adapter.runWrite(db.update(runs).set({ approach: record }).where(eq(runs.id, id)));
 }

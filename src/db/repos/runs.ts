@@ -7,6 +7,7 @@ import type { SqliteDrizzleDb } from "../client.ts";
 import type {
 	CloneKind,
 	PullRequestLifecycle,
+	RunApproachRecord,
 	RunCostBasis,
 	RunFailureReason,
 	RunHandoffRecord,
@@ -21,6 +22,7 @@ import { fixAttemptHistoryByPrUrl, listPrCandidatesByProject } from "./runs-ci-f
 import { deleteNeverStarted } from "./runs-delete.ts";
 import {
 	type RunOutcomeFacts,
+	setApproach as setApproachBody,
 	setHandoff as setHandoffBody,
 	setOutcomeFacts as setOutcomeFactsBody,
 	setQualityGateOutcome as setQualityGateOutcomeBody,
@@ -173,6 +175,7 @@ export class RunsRepo {
 			qualityGate,
 			qualityGateOutcome: null,
 			handoff: null,
+			approach: null,
 			salvageRef: null,
 			salvagePath: null,
 			costUsd: null,
@@ -350,13 +353,10 @@ export class RunsRepo {
 	}
 
 	/**
-	 * Persist per-run cost + token accounting (warren-a7dc). All fields are
-	 * optional patches — omitted fields preserve the existing value, explicit
-	 * `null` clears it. Mirrors `attachBurrow`'s partial-input semantics so the
-	 * bridge can land start-snapshot and end-snapshot writes on different turns
-	 * without juggling intermediate state. Throws ValidationError if no fields
-	 * were supplied, matching `attachBurrow`. The columns are nullable so
-	 * non-pi runs (or pi runs whose stats RPC failed) leave them at null.
+	 * Persist per-run cost + token accounting (warren-a7dc) as a partial patch: an
+	 * omitted field keeps its value and explicit `null` clears it, so the bridge can land
+	 * start and end snapshots on different turns. Throws ValidationError when no field was
+	 * supplied (like `attachBurrow`). Runs without stats (non-pi, failed RPC) stay null.
 	 */
 	async attachStats(id: string, input: AttachStatsInput): Promise<RunRow> {
 		const keys: (keyof AttachStatsInput)[] = [
@@ -463,6 +463,11 @@ export class RunsRepo {
 		await setHandoffBody(this.adapter, id, record);
 	}
 
+	/** Reap-recorded approach note (namphuongtran/warren#33); body in runs-outcome-facts.ts. */
+	async setApproach(id: string, record: RunApproachRecord): Promise<void> {
+		await setApproachBody(this.adapter, id, record);
+	}
+
 	/** CI-fixer queries (warren-0b75); bodies live in runs-ci-fixer.ts. */
 	listPrCandidatesByProject(projectId: string, limit = 25) {
 		return listPrCandidatesByProject(this.adapter, projectId, limit);
@@ -473,10 +478,8 @@ export class RunsRepo {
 	}
 
 	/**
-	 * Atomic queued → running transition. Returns the claimed row, or null
-	 * if the row no longer exists or is no longer in `queued`. Used to keep
-	 * the warren-side state in sync with burrow's "the run loop just picked
-	 * this up" observation.
+	 * Atomic queued → running transition, mirroring the runtime's "the run loop
+	 * picked this up". Null when the row is gone or no longer `queued`.
 	 */
 	async claimById(id: string, now: Date = new Date()): Promise<RunRow | null> {
 		return this.adapter.runInTransaction(async (tx) => {

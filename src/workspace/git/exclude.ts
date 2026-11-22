@@ -36,7 +36,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
-import { RUN_HANDOFF_PATH } from "../../core/wire.ts";
+import { RUN_APPROACH_PATH, RUN_HANDOFF_PATH } from "../../core/wire.ts";
 import { commitExcludes } from "../../runtime/adapters/index.ts";
 import { runGit, runGitOrThrow } from "./exec.ts";
 import { WORKSPACE_GITCONFIG_FILENAME } from "./identity.ts";
@@ -56,9 +56,9 @@ const BLOCK_END = "# <<< warren run excludes <<<";
 /**
  * Every workspace-relative pattern a run branch must never carry: the
  * harness transcripts each adapter declares, the seeded agent envelope, the
- * workspace gitconfig, and the agent's handoff report (namphuongtran/warren#21),
- * which reap reads off the workspace rather than the branch. De-duplicated,
- * stable order.
+ * workspace gitconfig, and the agent's handoff report (namphuongtran/warren#21)
+ * and approach note (namphuongtran/warren#33), which reap reads off the
+ * workspace rather than the branch. De-duplicated, stable order.
  */
 export function workspaceCommitExcludes(): readonly string[] {
 	return [
@@ -67,6 +67,7 @@ export function workspaceCommitExcludes(): readonly string[] {
 			AGENT_ENVELOPE_PATH,
 			WORKSPACE_GITCONFIG_FILENAME,
 			RUN_HANDOFF_PATH,
+			RUN_APPROACH_PATH,
 		]),
 	];
 }

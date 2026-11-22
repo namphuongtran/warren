@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { isKnownRuntimeId, parseRunHandoff } from "../../core/wire.ts";
+import { isKnownRuntimeId, parseRunHandoff, RUN_APPROACH_HEADINGS } from "../../core/wire.ts";
 import { openDatabase, type WarrenDb } from "../../db/client.ts";
 import { AgentsRepo } from "../../db/repos/agents.ts";
 import { DrizzleAdapter } from "../../db/repos/drizzle-adapter.ts";
@@ -24,7 +24,11 @@ import {
 	seedBuiltinAgents,
 	stampAgentSource,
 } from "./index.ts";
-import { GATE_FINAL_RUN_RULE, VALIDATION_DISCIPLINE_BULLETS } from "./prompt-fragments.ts";
+import {
+	APPROACH_FRAGMENT,
+	GATE_FINAL_RUN_RULE,
+	VALIDATION_DISCIPLINE_BULLETS,
+} from "./prompt-fragments.ts";
 
 describe("BUILTIN_AGENTS", () => {
 	test("includes claude-code, pi, planner, pr-fixer, and healer", () => {
@@ -97,6 +101,40 @@ describe("BUILTIN_AGENTS", () => {
 			for (const field of ["status", "summary", "verification", "howToTry", "openQuestions"]) {
 				expect(system).toContain(`"${field}"`);
 			}
+		}
+	});
+
+	// namphuongtran/warren#33: the coding agents write the approach note before
+	// their first edit; the read-only agents make no edits, so they get no note.
+	test("source-editing builtins ask for the approach note before the first edit (namphuongtran/warren#33)", () => {
+		const editing = [
+			CLAUDE_CODE_BUILTIN,
+			PI_BUILTIN,
+			CODEX_BUILTIN,
+			PR_FIXER_BUILTIN,
+			HEALER_BUILTIN,
+		];
+		for (const builtin of editing) {
+			const system = builtin.sections.system ?? "";
+			expect(system).toContain(APPROACH_FRAGMENT);
+			for (const heading of RUN_APPROACH_HEADINGS) expect(system).toContain(`## ${heading}`);
+		}
+		for (const builtin of BUILTIN_AGENTS.filter((b) => !editing.includes(b))) {
+			expect(builtin.sections.system ?? "").not.toContain(".warren/approach.md");
+		}
+		expect(APPROACH_FRAGMENT).toContain("before your first edit");
+		expect(APPROACH_FRAGMENT).toContain("one-line approach");
+	});
+
+	// The adherence examples the fragment shows must validate against the core parser.
+	test("the approach fragment's handoff examples validate (namphuongtran/warren#33)", () => {
+		const examples = [...APPROACH_FRAGMENT.matchAll(/`("approach": \{[^`]*\})`/g)].map(
+			(match) => match[1] ?? "",
+		);
+		expect(examples).toHaveLength(2);
+		for (const example of examples) {
+			const record = parseRunHandoff(`{"status":"done","summary":"x",${example}}`);
+			expect(record).toMatchObject({ state: "recorded", handoff: { approach: {} } });
 		}
 	});
 
