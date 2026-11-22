@@ -130,6 +130,15 @@ out over current child run ids — keeps the retry visible on the UI
 timeline. A spawn failure during retry falls back to the ordinary
 `dispatch_failed:` terminal path.
 
+`quota_exhausted` (namphuongtran/warren#30) is also retryable. While the
+credential's usage window is spent, the dispatch guard refuses the retry spawn
+and the tick turns that into a `provider_quota_exhausted` noop, so the child
+waits for the reset without spending its retry. A child that pushed commits is
+retried as a `continue` clone of its own branch (`continueFrom` on the spawn
+seam), with a prompt that names the stopped run. The plan's `ref` still
+freezes onto the retry, so its PR targets the same base. Other retryable
+causes keep the fresh re-dispatch.
+
 **Trivial-merge advance rule.** A child run that succeeded but produced
 no commits is treated as merged without ever opening a PR. The signal
 is the `reap.empty_push` system event (`commitsAhead === 0`) that

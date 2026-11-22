@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { type Harness, NOW, neverPoll, setup } from "./coordinator.test-helpers.ts";
-import { advancePlanRun } from "./coordinator.ts";
+import {
+	advancePlanRun,
+	type CoordinatorSpawnFn,
+	type CoordinatorSpawnInput,
+} from "./coordinator.ts";
+import { PlanRunSpawnDeferredError } from "./errors.ts";
 import { MAX_CHILD_RETRIES } from "./retry.ts";
 
 /**
@@ -24,7 +29,14 @@ describe("advancePlanRun — automatic child retry (warren-6de9)", () => {
 
 	/** Drive child seq=1 to a terminal-failed run with the given cause. */
 	const failChildRun = async (
-		failureReason: "provider_error" | "crashed" | "timed_out" | "sandbox_run_lost" | "preempted",
+		failureReason:
+			| "provider_error"
+			| "crashed"
+			| "timed_out"
+			| "sandbox_run_lost"
+			| "preempted"
+			| "quota_exhausted",
+		commitsAhead: number | null = null,
 	): Promise<string> => {
 		await h.repos.planRuns.transitionTo(h.planRun.id, "running", {
 			startedAt: NOW.toISOString(),
@@ -32,6 +44,15 @@ describe("advancePlanRun — automatic child retry (warren-6de9)", () => {
 		const runId = await h.makeRun("warren-a");
 		await h.repos.runs.markRunning(runId, NOW);
 		await h.repos.runs.finalize(runId, "failed", NOW, failureReason);
+		if (commitsAhead !== null) {
+			await h.repos.runs.setOutcomeFacts(runId, {
+				commitsAhead,
+				baseSha: null,
+				filesChanged: 1,
+				insertions: 1,
+				deletions: 0,
+			});
+		}
 		await h.seedChildState({
 			planRunId: h.planRun.id,
 			seq: 1,
@@ -42,16 +63,80 @@ describe("advancePlanRun — automatic child retry (warren-6de9)", () => {
 		return runId;
 	};
 
-	const advance = async () =>
+	const advance = async (spawn: CoordinatorSpawnFn = h.spawnStub(() => "unused")) =>
 		advancePlanRun({
 			planRun: await h.repos.planRuns.require(h.planRun.id),
 			repos: h.repos,
 			getIssue: h.getIssueStub("open"),
 			checkPrMerged: neverPoll,
-			spawn: h.spawnStub(() => "unused"),
+			spawn,
 			emit: h.emit,
 			now: () => NOW,
 		});
+
+	/** A spawn seam that records its inputs and refuses while `spent` holds. */
+	const quotaSpawn = (window: { spent: boolean }) => {
+		const calls: CoordinatorSpawnInput[] = [];
+		const inner = h.spawnStub(() => "unused");
+		const spawn: CoordinatorSpawnFn = async (input) => {
+			calls.push(input);
+			if (window.spent) {
+				throw new PlanRunSpawnDeferredError("spent", "provider_quota_exhausted");
+			}
+			return inner(input);
+		};
+		return { spawn, calls };
+	};
+
+	// namphuongtran/warren#30: a child the provider refused on a spent usage
+	// window waits for the reset (the dispatch guard defers the retry spawn)
+	// and is then retried once, instead of failing the plan.
+	test("child quota_exhausted → retry waits for the reset, then dispatches", async () => {
+		const failedRunId = await failChildRun("quota_exhausted");
+		const window = { spent: true };
+		const { spawn } = quotaSpawn(window);
+
+		const waiting = await advance(spawn);
+		expect(waiting).toEqual({ kind: "noop", reason: "provider_quota_exhausted" });
+		const held = (await h.repos.planRuns.listChildren(h.planRun.id)).find((c) => c.seq === 1);
+		expect(held?.runId).toBe(failedRunId);
+		expect(held?.retryCount).toBe(0);
+
+		window.spent = false;
+		const resumed = await advance(spawn);
+		expect(resumed.kind).toBe("dispatched");
+		const child = (await h.repos.planRuns.listChildren(h.planRun.id)).find((c) => c.seq === 1);
+		expect(child?.retryCount).toBe(1);
+		const reloaded = await h.repos.planRuns.require(h.planRun.id);
+		expect(reloaded.state).toBe("running");
+	});
+
+	test("quota child with pushed commits → the retry continues from its branch", async () => {
+		const failedRunId = await failChildRun("quota_exhausted", 2);
+		const { spawn, calls } = quotaSpawn({ spent: false });
+		await advance(spawn);
+
+		expect(calls[0]?.continueFrom).toBe(failedRunId);
+		expect(calls[0]?.prompt).toContain(failedRunId);
+		expect(calls[0]?.prompt).toEndWith("work on sd warren-a");
+	});
+
+	test("quota child with nothing pushed → a fresh retry from the plan's base", async () => {
+		await failChildRun("quota_exhausted", 0);
+		const { spawn, calls } = quotaSpawn({ spent: false });
+		await advance(spawn);
+
+		expect(calls[0]?.continueFrom).toBeUndefined();
+		expect(calls[0]?.prompt).toBe("work on sd warren-a");
+	});
+
+	test("provider-error child with pushed commits → still a fresh retry", async () => {
+		await failChildRun("provider_error", 2);
+		const { spawn, calls } = quotaSpawn({ spent: false });
+		await advance(spawn);
+
+		expect(calls[0]?.continueFrom).toBeUndefined();
+	});
 
 	test("child provider error → one retry dispatched, plan stays running", async () => {
 		const failedRunId = await failChildRun("provider_error");

@@ -37,6 +37,11 @@
  * is scheduled again at the new reset without spending an attempt. An
  * automatic-trigger run that the automatic-run cap turns away stays scheduled
  * and is tried on the next tick.
+ *
+ * Plan-run children are skipped here. The plan-run coordinator retries a
+ * `quota_exhausted` child itself (`src/plan-runs/retry.ts`): the guard defers
+ * that retry until the reset, and it continues from the child's pushed
+ * commits through the same {@link quotaContinuationPrompt}.
  */
 
 import type { Repos } from "../../db/repos/index.ts";
@@ -390,13 +395,20 @@ async function countQuotaResumes(
 	return attempts;
 }
 
-function resumePrompt(run: RunRow, mode: QuotaResumeMode): string {
-	if (mode === "replicate") return run.prompt;
+/**
+ * The task prompt for a run that builds on the commits of a run the provider
+ * stopped on a spent usage window. Shared with the plan-run child retry.
+ */
+export function quotaContinuationPrompt(previousRunId: string, prompt: string): string {
 	return (
-		`Run ${run.id} worked on this task and stopped when the provider's usage limit ` +
+		`Run ${previousRunId} worked on this task and stopped when the provider's usage limit ` +
 		"was reached. Its commits are on this branch. Read what it already did, then " +
-		`finish the task.\n\n${run.prompt}`
+		`finish the task.\n\n${prompt}`
 	);
+}
+
+function resumePrompt(run: RunRow, mode: QuotaResumeMode): string {
+	return mode === "replicate" ? run.prompt : quotaContinuationPrompt(run.id, run.prompt);
 }
 
 async function buildResumeSpawnInput(
