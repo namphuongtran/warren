@@ -204,6 +204,12 @@ admission:
   the next child's prompt carries the previous child's report. The `reviewer` agent adds a
   `review` block with its verdict and findings, which the campaign controller's review policy
   reads.
+- The source-editing built-in agents write an approach note to `.warren/approach.md` before
+  their first edit: Understanding, Options considered, Chosen approach and why, Risks /
+  unknowns, and Verification plan. Git ignores the file. Reap serves it as `approach` on
+  `GET /runs/:id` and emits `approach.recorded`. A run whose agent was asked for a note and
+  wrote none is flagged `approach.missing`, for information only. The handoff report's `approach` block
+  (`followed`, plus `deviation` when the work left the plan) says whether the work kept to it.
 - Optional: a `.seeds/` directory for the issue tracker, and `.mulch/` for agent memory across
   runs. Warren detects these directories when they exist.
 

@@ -37,7 +37,7 @@ The generated body can include the agent's notes from the final commit body, the
 
 PR opening is not the core run guarantee. Warren always treats the pushed branch as its delivery boundary. Forge configuration and permissions determine whether it can open or find a pull request after that push.
 
-The `handoff` fragment renders the run's validated `.warren/handoff.json` as a `## Handoff` section: the status, the summary, and the verification, how-to-try, and open-question lists. A summary that opens its own markdown heading is fenced, and list items are flattened to one line, so the report cannot break the body's sections. A run with a missing or invalid report gets a one-line note with the reason.
+The `handoff` fragment renders the run's validated `.warren/handoff.json` as a `## Handoff` section: the status, the summary, whether the work followed the run's approach note (`.warren/approach.md`) or deviated from it and why, and the verification, how-to-try, and open-question lists. A summary that opens its own markdown heading is fenced, and list items are flattened to one line, so the report cannot break the body's sections. A run with a missing or invalid report gets a one-line note with the reason.
 
 The `agent_report` fragment holds the run's final assistant message. That is the text of the last assistant `text` event before the terminal `result` event. Warren fences the message so it cannot break the surrounding markdown and caps it at 8 KiB, keeping the first and last 4 KiB, with a truncation note. A run with no assistant text renders no section. A run that recorded a handoff report renders no `agent_report` section, because the handoff replaces it.
 

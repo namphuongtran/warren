@@ -49,6 +49,7 @@ import type {
 	PlanRunState,
 	PreviewState,
 	PullRequestLifecycle,
+	RunApproachRecord,
 	RunCostBasis,
 	RunFailureReason,
 	RunHandoffRecord,
@@ -155,6 +156,7 @@ export interface RunRow {
 	deletions: number | null;
 	qualityGateOutcome: RunQualityGateOutcome | null; // reap-derived (namphuongtran/warren#36)
 	handoff: RunHandoffRecord | null; // reap-validated handoff report (namphuongtran/warren#21)
+	approach: RunApproachRecord | null; // agent approach note, render escaped (namphuongtran/warren#33)
 	prompt: string;
 	trigger: string;
 	prUrl: string | null; // PR reap opened (warren-f6af); null = skipped or the forge call errored

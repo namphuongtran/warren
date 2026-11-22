@@ -26,6 +26,7 @@ import type { FinalizeResult, FinalizeStage, RuntimeProvider } from "../../runti
 import { finalizeCommitStage, finalizeMergeStage } from "../../runtime/contract.ts";
 import { PUSH_REJECTED_EVENT } from "../../runtime/push-rejection.ts";
 import type { BoundBridgeLogger } from "../stream/index.ts";
+import { recordApproach } from "./approach.ts";
 import { dispatchAutoPlanRuns, hasAutoPlanRunFrontmatter, parsePlanIds } from "./auto-plan-run.ts";
 import { applyK8sCloneDeltas } from "./clone-apply.ts";
 import { runProviderFinalize } from "./finalize-intent.ts";
@@ -477,6 +478,8 @@ export async function runReapPipeline(
 	state.handoffShortfall =
 		ctx.input.outcome === "succeeded" &&
 		isHandoffShortfall(state.handoff, ctx.input.handoffRequired);
+	// namphuongtran/warren#33: informational. A thrown finalize never collected the note.
+	if (!finalizeThrew) await recordApproach(ctx, finalizeResult.approachBody);
 
 	// warren-e9e1 (leg 2): K8s merged in-pod, so apply finalize's mirror deltas to
 	// the clone host-side. Gated on the K8s discriminator; the local path already

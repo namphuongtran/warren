@@ -388,8 +388,9 @@ export interface FinalizeResult {
 	 * on its own auto-dispatch frontmatter checks).
 	 */
 	workspacePlansBody: string | null;
-	/** The clipped `.warren/handoff.json` body (namphuongtran/warren#21); null/absent = missing. */
+	/** Clipped `.warren/handoff.json` (warren#21) and `approach.md` (#33); null/absent = missing. */
 	handoffBody?: string | null;
+	approachBody?: string | null;
 	/**
 	 * The per-record + per-line/stage events the merge functions emitted,
 	 * captured verbatim for the domain to re-emit through its real event surface

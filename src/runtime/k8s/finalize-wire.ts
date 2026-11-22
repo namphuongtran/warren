@@ -31,7 +31,12 @@
  */
 
 import { ValidationError } from "../../core/errors.ts";
-import { clipRunHandoffBody, isSalvageTrigger, type SalvageTrigger } from "../../core/wire.ts";
+import {
+	clipRunApproachBody,
+	clipRunHandoffBody,
+	isSalvageTrigger,
+	type SalvageTrigger,
+} from "../../core/wire.ts";
 import type {
 	ArtifactDelta,
 	ArtifactDeltaFile,
@@ -275,6 +280,7 @@ export function validateFinalizeResult(value: unknown): FinalizeResult {
 	const commitsAheadBase = optStringOrNull(o, "commitsAheadBase", "result");
 	// namphuongtran/warren#21: optional; re-clipped so a pod cannot push a runaway body into reap.
 	const handoffBody = optStringOrNull(o, "handoffBody", "result");
+	const approachBody = optStringOrNull(o, "approachBody", "result"); // #33, same posture
 	return {
 		pushed: reqBoolean(o, "pushed", "result"),
 		commitsAhead: reqNumberOrNull(o, "commitsAhead", "result"),
@@ -284,6 +290,7 @@ export function validateFinalizeResult(value: unknown): FinalizeResult {
 		...(dirtyPaths !== undefined ? { dirtyPaths } : {}),
 		workspacePlansBody: optStringOrNull(o, "workspacePlansBody", "result"),
 		...(handoffBody !== null ? { handoffBody: clipRunHandoffBody(handoffBody) } : {}),
+		...(approachBody !== null ? { approachBody: clipRunApproachBody(approachBody) } : {}),
 		events: validateEvents(o.events),
 		artifacts,
 		prBranch: optStringOrNull(o, "prBranch", "result"),

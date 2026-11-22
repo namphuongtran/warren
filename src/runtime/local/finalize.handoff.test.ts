@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
-import { RUN_HANDOFF_MAX_BYTES } from "../../core/wire.ts";
+import { RUN_APPROACH_MAX_BYTES, RUN_HANDOFF_MAX_BYTES } from "../../core/wire.ts";
 import { fakeBurrowClient, fakeExec, fakeFs, makeBurrow } from "../../runs/reap/test-helpers.ts";
 import type { FinalizeIntent, RunHandle } from "../contract.ts";
 
@@ -39,5 +39,24 @@ describe("finalize — handoff collection", () => {
 		const body = "x".repeat(RUN_HANDOFF_MAX_BYTES * 4);
 		const result = await finalizeWith({ [`${WS}/.warren/handoff.json`]: body });
 		expect(result.handoffBody?.length).toBe(RUN_HANDOFF_MAX_BYTES + 1);
+	});
+});
+
+describe("finalize — approach note collection (namphuongtran/warren#33)", () => {
+	test("returns the workspace .warren/approach.md body", async () => {
+		const body = "## Understanding\nFix the typo.";
+		const result = await finalizeWith({ [`${WS}/.warren/approach.md`]: body });
+		expect(result.approachBody).toBe(body);
+	});
+
+	test("returns null when the run wrote no approach note", async () => {
+		const result = await finalizeWith({});
+		expect(result.approachBody).toBeNull();
+	});
+
+	test("clips an oversized note past the cap", async () => {
+		const body = "x".repeat(RUN_APPROACH_MAX_BYTES * 4);
+		const result = await finalizeWith({ [`${WS}/.warren/approach.md`]: body });
+		expect(result.approachBody?.length).toBe(RUN_APPROACH_MAX_BYTES + 1);
 	});
 });

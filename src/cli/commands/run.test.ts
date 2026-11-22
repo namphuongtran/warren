@@ -58,6 +58,7 @@ function runRow(over: Partial<RunRow> = {}): RunRow {
 		deletions: null,
 		qualityGateOutcome: null,
 		handoff: null,
+		approach: null,
 		startedAt: "2026-08-04T00:00:00.000Z",
 		workspaceReadyAt: null,
 		agentReadyAt: null,
@@ -112,9 +113,8 @@ interface MockClientInput {
 	/** Final row returned by waitForRun / getRun once terminal (or the only snap). */
 	readonly row?: RunRow;
 	/**
-	 * Sequence of getRun/waitForRun snapshots after the stream closes
-	 * (warren-22cf). When set, waitForRun walks the list and only resolves
-	 * once a terminal state appears (or throws wait_timeout if none does).
+	 * getRun/waitForRun snapshots after the stream closes (warren-22cf): waitForRun
+	 * walks them, resolving on a terminal state or throwing wait_timeout if none comes.
 	 */
 	readonly waitRows?: readonly RunRow[];
 	readonly waitError?: Error;

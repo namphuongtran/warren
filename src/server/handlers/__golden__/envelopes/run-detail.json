@@ -60,6 +60,7 @@
 			"qualityGate": null,
 			"qualityGateOutcome": null,
 			"handoff": null,
+			"approach": null,
 			"maxCostUsd": null
 		}
 	}

@@ -52,6 +52,7 @@ import {
 	RUN_MODES,
 	RUN_QUALITY_GATE_OUTCOMES,
 	RUN_STATES,
+	type RunApproachRecord,
 	type RunHandoffRecord,
 	TABLE_NAMES,
 } from "./columns.ts";
@@ -177,6 +178,7 @@ export const runs = pgTable(
 		qualityGate: text("quality_gate"),
 		qualityGateOutcome: text("quality_gate_outcome", { enum: RUN_QUALITY_GATE_OUTCOMES }),
 		handoff: jsonb("handoff_json").$type<RunHandoffRecord>(), // namphuongtran/warren#21
+		approach: jsonb("approach_json").$type<RunApproachRecord>(), // namphuongtran/warren#33
 	},
 	(t) => [
 		index(INDEX_NAMES.runsState).on(t.state),

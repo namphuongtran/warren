@@ -13,7 +13,12 @@
  */
 
 import { join } from "node:path";
-import { clipRunHandoffBody, RUN_HANDOFF_PATH } from "../../core/wire.ts";
+import {
+	clipRunApproachBody,
+	clipRunHandoffBody,
+	RUN_APPROACH_PATH,
+	RUN_HANDOFF_PATH,
+} from "../../core/wire.ts";
 import { parseDirtyPaths, repairBaseTrackingRef } from "../../runs/reap/util.ts";
 import { authenticatedCloneUrl, bareTokenCredential } from "../../workspace/git/clone-url.ts";
 import type {
@@ -409,6 +414,8 @@ export async function collectFinalizeResult(
 	);
 	// The agent's handoff report (namphuongtran/warren#21), clipped before it rides the wire.
 	const handoff = await readFileOrNull(deps.fs, join(workspacePath, RUN_HANDOFF_PATH));
+	// The agent's approach note (namphuongtran/warren#33), clipped the same way.
+	const approach = await readFileOrNull(deps.fs, join(workspacePath, RUN_APPROACH_PATH));
 	for (const key of commit) trail.skipped(finalizeCommitStage(key));
 
 	const push = await runPush(intent, workspacePath, deps.git, trail, collector);
@@ -424,6 +431,7 @@ export async function collectFinalizeResult(
 		dirtyPaths: push.dirtyPaths,
 		workspacePlansBody,
 		...(handoff !== null ? { handoffBody: clipRunHandoffBody(handoff) } : {}),
+		...(approach !== null ? { approachBody: clipRunApproachBody(approach) } : {}),
 		events: collector.events,
 		artifacts: {
 			...(mulch !== undefined ? { mulch } : {}),

@@ -70,6 +70,8 @@ describe("run field classification (warren-946f)", () => {
 			"endedAt",
 			// namphuongtran/warren#21: agent output, the same class as the event stream.
 			"handoff",
+			// namphuongtran/warren#33: the approach note is agent output of the same class.
+			"approach",
 		] as const) {
 			expect(PUBLIC_RUN_FIELDS).toContain(kept);
 		}
@@ -191,6 +193,19 @@ describe("GET /runs projections under WARREN_AUTH=public (warren-946f)", () => {
 				state: "recorded",
 				handoff,
 			});
+		}
+	});
+
+	test("GET /runs/:id serves the stored approach note (namphuongtran/warren#33)", async () => {
+		const approach = {
+			state: "recorded",
+			markdown: "## Understanding\nFix it.",
+			truncated: false,
+		} as const;
+		await repos.runs.setApproach(runId, approach);
+		for (const token of [undefined, TOKEN]) {
+			const body = await get(`/runs/${runId}`, token);
+			expect((body.run as Record<string, unknown>).approach).toEqual(approach);
 		}
 	});
 

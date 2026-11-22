@@ -20,6 +20,7 @@
 import type { AgentDefinition } from "../schema.ts";
 import { MODEL_TIERS } from "./model-tiers.ts";
 import {
+	APPROACH_FRAGMENT,
 	GATE_FINAL_RUN_RULE,
 	HANDOFF_FRAGMENT,
 	MULCH_FRAGMENT,
@@ -67,6 +68,8 @@ ${VALIDATION_DISCIPLINE_BULLETS}
 
 - The project repo is mounted at the burrow workspace root, checked out on the failing PR's branch.
 - /workspace/.warren/agent.json is this rendered agent definition.
+
+${APPROACH_FRAGMENT}
 
 ${HANDOFF_FRAGMENT}
 `;

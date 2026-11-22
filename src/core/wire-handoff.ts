@@ -80,6 +80,15 @@ export interface RunHandoffReview {
 	readonly findings: readonly RunHandoffReviewFinding[];
 }
 
+/**
+ * Whether the work followed the run's approach note (namphuongtran/warren#33).
+ * A deviation must say why; `deviation` is null when the agent gave none.
+ */
+export interface RunHandoffApproach {
+	readonly followed: boolean;
+	readonly deviation: string | null;
+}
+
 /** The validated handoff report. Optional lists default to empty. */
 export interface RunHandoff {
 	readonly status: RunHandoffStatus;
@@ -93,6 +102,8 @@ export interface RunHandoff {
 	readonly openQuestions: readonly string[];
 	/** A reviewer's verdict; absent for every other agent. */
 	readonly review?: RunHandoffReview;
+	/** Adherence to `.warren/approach.md`; absent when the agent wrote no block. */
+	readonly approach?: RunHandoffApproach;
 }
 
 /** The handoff result stored on the run and served on `GET /runs/:id`. */
@@ -203,6 +214,24 @@ function reviewBlock(raw: Record<string, unknown>): Field<RunHandoffReview | und
 	};
 }
 
+/** The optional `approach` block. `undefined` means the agent wrote none. */
+function approachBlock(raw: Record<string, unknown>): Field<RunHandoffApproach | undefined> {
+	const value = raw.approach;
+	if (value === undefined) return { ok: true, value: undefined };
+	if (!isRecord(value)) return { ok: false, reason: "approach must be an object" };
+	if (typeof value.followed !== "boolean") {
+		return { ok: false, reason: "approach.followed must be a boolean" };
+	}
+	const deviation = nonEmptyString(value.deviation) ? value.deviation : null;
+	if (!value.followed && deviation === null) {
+		return {
+			ok: false,
+			reason: "approach.deviation must say why the work left the approach note",
+		};
+	}
+	return { ok: true, value: { followed: value.followed, deviation } };
+}
+
 function parseJsonObject(body: string): Field<Record<string, unknown>> {
 	let parsed: unknown;
 	try {
@@ -242,6 +271,8 @@ export function parseRunHandoff(body: string | null): RunHandoffRecord {
 	if (!openQuestions.ok) return invalid(openQuestions.reason);
 	const review = reviewBlock(raw);
 	if (!review.ok) return invalid(review.reason);
+	const approach = approachBlock(raw);
+	if (!approach.ok) return invalid(approach.reason);
 	return {
 		state: "recorded",
 		handoff: {
@@ -252,6 +283,7 @@ export function parseRunHandoff(body: string | null): RunHandoffRecord {
 			openQuestions: openQuestions.value,
 			// Omitted rather than null, so every non-reviewer record keeps its shape.
 			...(review.value === undefined ? {} : { review: review.value }),
+			...(approach.value === undefined ? {} : { approach: approach.value }),
 		},
 	};
 }

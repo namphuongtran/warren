@@ -10,7 +10,13 @@
  * never assumes `bun run check:all` on an unknown repo.
  */
 
-import { RUN_HANDOFF_MAX_BYTES, RUN_HANDOFF_PATH } from "../../core/wire.ts";
+import {
+	RUN_APPROACH_HEADINGS,
+	RUN_APPROACH_MAX_BYTES,
+	RUN_APPROACH_PATH,
+	RUN_HANDOFF_MAX_BYTES,
+	RUN_HANDOFF_PATH,
+} from "../../core/wire.ts";
 
 /**
  * The neutral quality-gate resolution chain (warren-cb46):
@@ -86,3 +92,26 @@ Before the run ends, write your handoff report to /workspace/${RUN_HANDOFF_PATH}
 - \`status\` and \`summary\` are required. The three lists may be empty.
 - \`status\` is \`done\` when the task is complete, \`partial\` when only some of it landed (say what is left in the summary), and \`blocked\` when you could not proceed (say why in \`openQuestions\`).
 - List only verification commands you actually ran, with their real outcome.`;
+
+const [UNDERSTANDING, OPTIONS, CHOSEN, RISKS, VERIFICATION] = RUN_APPROACH_HEADINGS;
+
+/**
+ * The approach note (namphuongtran/warren#33), shared by the source-editing
+ * builtins. Reap reads the file off the workspace and stores it with the run
+ * (`parseRunApproach`, src/core/wire-approach.ts). The handoff report's
+ * `approach` block (`parseRunHandoff`) says whether the work followed it; the
+ * two examples below must validate against that parser.
+ */
+export const APPROACH_FRAGMENT = `## Approach note (before your first edit)
+
+Before your first edit, write your approach to /workspace/${RUN_APPROACH_PATH}. Warren reads it after the run, stores it with the run, and shows it to the operator, so they can tell a deliberate design from a workaround. Git ignores the file, so do not commit it. Keep it under ${RUN_APPROACH_MAX_BYTES / 1024} KiB of Markdown under these headings:
+
+- \`## ${UNDERSTANDING}\`: the problem in your own words, including what is out of scope.
+- \`## ${OPTIONS}\`: two or three options, each with its trade-off.
+- \`## ${CHOSEN}\`: the option you picked and the reason.
+- \`## ${RISKS}\`: what could go wrong and what you do not know yet.
+- \`## ${VERIFICATION}\`: the tests or commands that will prove the work.
+
+A trivial task (a typo, a one-line config change) may write a one-line approach instead of the headings.
+
+Do not rewrite the note after you start editing. If the work changes course, say so in your handoff report instead: add \`"approach": { "followed": false, "deviation": "what changed and why" }\` to it. When the work followed the note, add \`"approach": { "followed": true }\`.`;

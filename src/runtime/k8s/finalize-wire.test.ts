@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { ValidationError } from "../../core/errors.ts";
-import { RUN_HANDOFF_MAX_BYTES } from "../../core/wire.ts";
+import { RUN_APPROACH_MAX_BYTES, RUN_HANDOFF_MAX_BYTES } from "../../core/wire.ts";
 import type { FinalizeResult } from "../contract.ts";
 import {
 	IN_POD_FINALIZE_WIRE_VERSION,
@@ -65,6 +65,18 @@ describe("validateFinalizeResult", () => {
 		const clipped = validateFinalizeResult({ ...fullResult(), handoffBody: huge }).handoffBody;
 		expect(clipped?.length).toBe(RUN_HANDOFF_MAX_BYTES + 1);
 		expect(() => validateFinalizeResult({ ...fullResult(), handoffBody: 7 } as unknown)).toThrow(
+			ValidationError,
+		);
+	});
+
+	test("carries an optional approachBody, clipped, and keeps it off when absent (namphuongtran/warren#33)", () => {
+		expect(validateFinalizeResult(fullResult())).not.toHaveProperty("approachBody");
+		const body = "## Understanding\nFix the typo.";
+		expect(validateFinalizeResult({ ...fullResult(), approachBody: body }).approachBody).toBe(body);
+		const huge = "x".repeat(RUN_APPROACH_MAX_BYTES * 2);
+		const clipped = validateFinalizeResult({ ...fullResult(), approachBody: huge }).approachBody;
+		expect(clipped?.length).toBe(RUN_APPROACH_MAX_BYTES + 1);
+		expect(() => validateFinalizeResult({ ...fullResult(), approachBody: 7 } as unknown)).toThrow(
 			ValidationError,
 		);
 	});
