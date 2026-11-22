@@ -333,11 +333,13 @@ describe("demo polish (warren-f53e)", () => {
 		// tail because steering meant scrolling past the whole log.
 		// The Direction C workload inspector (warren-8c85) solves the same
 		// problem by layout: the tail is the main column and the steer
-		// inbox sits in the always-visible side column.
+		// inbox sits in the always-visible side column. The main column is
+		// the Summary / Activity tab view now (namphuongtran/warren#38); the
+		// tail lives on its Activity tab.
 		const runDetail = read("pages", "run-detail", "index.tsx");
 		const aside = runDetail.indexOf("<aside");
 		const steer = runDetail.indexOf("<SteerForm");
-		const tail = runDetail.indexOf("<EventTail");
+		const tail = runDetail.indexOf("<RunDetailViews");
 		expect(steer).toBeGreaterThan(-1);
 		expect(tail).toBeGreaterThan(-1);
 		expect(aside).toBeGreaterThan(-1);

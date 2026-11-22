@@ -1,5 +1,5 @@
 import { COST_ANALYTICS_NONE_KEY, type CostBucket } from "../../api/client.ts";
-import type { TokenBreakdown } from "../../api/types.ts";
+import type { TokenBreakdown } from "../../api/run-analytics-types.ts";
 
 /**
  * Derivation helpers for the telemetry economics tab (warren-cc6c).

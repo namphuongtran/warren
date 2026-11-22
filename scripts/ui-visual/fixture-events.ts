@@ -16,6 +16,7 @@
 
 import type { AppendEventInput } from "../../src/db/repos/events.ts";
 import type { Repos } from "../../src/db/repos/index.ts";
+import type { PinnedJudgeVerdict } from "./fixture-summary.ts";
 
 /** One scripted tool round-trip on the running run. */
 interface ToolStep {
@@ -304,9 +305,11 @@ export const FIXTURE_RUBRIC_VERSION = "sha256:fx0rubric0v1";
 /**
  * NDJSON rows for the fake judge export, newest id first (the UI asks for
  * `?order=desc`). Every third run fails a class; one run is `unjudged`.
+ * `pinned` verdicts (the run detail Summary fixture) take the newest ids.
  */
 export function judgeExportRows(
 	runs: readonly { readonly runId: string; readonly endedAt: string }[],
+	pinned: readonly PinnedJudgeVerdict[] = [],
 ): string {
 	const rows = runs.map((r, i) => {
 		const id = i + 1;
@@ -347,7 +350,27 @@ export function judgeExportRows(
 			detail: null,
 		};
 	});
-	return `${rows
+	const pinnedRows = pinned.map((v, i) => ({
+		id: runs.length + i + 1,
+		kind: "verdict",
+		runId: v.runId,
+		rubricVersion: FIXTURE_RUBRIC_VERSION,
+		judgeModelId: "claude-haiku-4-5",
+		verdict: {
+			runId: v.runId,
+			assignments: v.assignments,
+			provenance: {
+				provider: "anthropic",
+				model: "claude-haiku-4-5",
+				rubricVersion: FIXTURE_RUBRIC_VERSION,
+				judgedAt: v.endedAt,
+				costUsd: 0.0042,
+			},
+		},
+		reason: null,
+		detail: null,
+	}));
+	return `${[...rows, ...pinnedRows]
 		.reverse()
 		.map((r) => JSON.stringify(r))
 		.join("\n")}\n`;

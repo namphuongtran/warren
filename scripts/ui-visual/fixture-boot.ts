@@ -184,7 +184,10 @@ export async function bootFixture(opts: FixtureBootOptions = {}): Promise<Fixtur
 			seedsProjectPath,
 			plainProjectPath,
 		});
-		judge = startFakeJudge(judgeExportRows(seeded.judgeRuns), seeded.judgeRuns.length);
+		judge = startFakeJudge(
+			judgeExportRows(seeded.judgeRuns, seeded.pinnedVerdicts),
+			seeded.judgeRuns.length + seeded.pinnedVerdicts.length,
+		);
 		const uiDistDir = opts.uiDistDir === undefined ? defaultUiDistDir() : opts.uiDistDir;
 		boot = await bootInProc({
 			tmpRoot,

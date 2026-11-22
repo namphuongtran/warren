@@ -18,7 +18,7 @@
 		"src/server/server.test.ts": 536,
 		"src/server/types.ts": 508,
 		"src/ui/src/api/client.ts": 728,
-		"src/ui/src/api/types.ts": 776,
+		"src/ui/src/api/types.ts": 717,
 		"src/ui/src/pages/dispatch-plan/walk-form.tsx": 505,
 		"src/warren-config/schema.ts": 504,
 		"src/runs/retry/provider-retry.ts": 507

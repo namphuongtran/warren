@@ -1,8 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { projectsApi, runsApi } from "@/api/client.ts";
-import type { RunEvent, RunRow } from "@/api/types.ts";
+import type { RunRow } from "@/api/types.ts";
 import { isTerminalRunState } from "@/api/types.ts";
 import { OperatorOnly } from "@/components/operator-only.tsx";
 import { RunFailureBadge } from "@/components/status-indicator.tsx";
@@ -14,7 +13,6 @@ import { formatError } from "@/lib/format-error.ts";
 import { formatPullRequestLifecycle } from "@/lib/labels.ts";
 import { cn, formatTimestamp } from "@/lib/utils.ts";
 import type { DispatchRouteState } from "@/pages/dispatch/dispatch-draft.ts";
-import { EventTail } from "@/pages/run-detail/event-tail.tsx";
 import { PhaseRail, PhaseRailStrip } from "@/pages/run-detail/phase-rail.tsx";
 import { PreviewPanel } from "@/pages/run-detail/preview-panel.tsx";
 import {
@@ -25,6 +23,7 @@ import {
 } from "@/pages/run-detail/side-panels.tsx";
 import { CancelRunButton, SteerForm } from "@/pages/run-detail/steering-panel.tsx";
 import { ToolStallAlert } from "@/pages/run-detail/tool-stall-alert.tsx";
+import { useRefetchOnTriggerEvents } from "@/pages/run-detail/use-refetch-on-trigger-events.ts";
 import {
 	extractQuotaHold,
 	extractReapSummary,
@@ -32,64 +31,20 @@ import {
 } from "@/pages/run-detail-format.ts";
 import { projectLabel } from "@/pages/runs/runs-format.ts";
 import { formatRunElapsed } from "./run-detail-format.ts";
+import { RunDetailViews } from "./run-detail-views.tsx";
 
 /**
  * Run detail — the Direction C workload inspector (warren-8c85 /
  * pl-7e38 step 4), translated from docs/ui-revamp/screens/run-detail.jsx:
  * breadcrumb + identity header, the five-cell lifecycle phase rail, the
- * structured event tail (main column), and the side column's Runtime /
+ * Summary / Activity tabs (main column, namphuongtran/warren#38; Activity
+ * holds the structured event tail), and the side column's Runtime /
  * Spend / Preview / Run definition / Prompt / Steering panels. Live
  * tailing rides the existing NDJSON stream reader (useEventStream);
  * operator affordances (cancel, re-run, steer, preview login/teardown)
  * ride OperatorOnly so the WARREN_AUTH=public spectator projection stays
  * read-only.
  */
-
-/**
- * Event kinds whose arrival means the warren run row may have advanced
- * (state transition, cancel forwarded, reap finalized, preview flips).
- */
-const REFETCH_TRIGGER_KINDS: ReadonlySet<string> = new Set([
-	"state_change",
-	"cancel.requested",
-	"reap.completed",
-	"reap_failed",
-	"preview_launched",
-	"preview_evicted",
-	"preview_torn_down",
-]);
-
-/**
- * Invalidate the ["runs"] query family when an event with a
- * state-changing kind arrives. Tracked via index, not seq, so events
- * appended out of observed order would still be considered.
- */
-function useRefetchOnTriggerEvents(events: RunEvent[], qc: QueryClientLike) {
-	const processedEventCountRef = useRef(0);
-	useEffect(() => {
-		const len = events.length;
-		if (len <= processedEventCountRef.current) {
-			processedEventCountRef.current = len;
-			return;
-		}
-		let trigger = false;
-		for (let i = processedEventCountRef.current; i < len; i++) {
-			const evt = events[i];
-			if (evt !== undefined && REFETCH_TRIGGER_KINDS.has(evt.kind)) {
-				trigger = true;
-				break;
-			}
-		}
-		processedEventCountRef.current = len;
-		if (trigger) {
-			void qc.invalidateQueries({ queryKey: ["runs"] });
-		}
-	}, [events, qc]);
-}
-
-interface QueryClientLike {
-	invalidateQueries: (opts: { queryKey: string[] }) => Promise<unknown>;
-}
 
 function stateColor(state: string): string {
 	switch (state) {
@@ -370,13 +325,8 @@ export function RunDetailPage() {
 	const reap = extractReapSummary(stream.events);
 	const bridgeStalled = !isTerminal && isBridgeStalled(stream.events);
 	const quotaHold = r.state === "queued" ? extractQuotaHold(stream.events) : null;
-	const projectName =
-		r.projectId === null
-			? "deleted project"
-			: projectLabel(
-					projects.data?.projects.find((p) => p.id === r.projectId)?.gitUrl,
-					r.projectId,
-				);
+	const gitUrl = projects.data?.projects.find((p) => p.id === r.projectId)?.gitUrl;
+	const projectName = r.projectId === null ? "deleted project" : projectLabel(gitUrl, r.projectId);
 
 	return (
 		<div className="flex min-h-full flex-col gap-3 px-3.5 pt-[22px] pb-12 md:px-6 xl:h-full">
@@ -432,12 +382,13 @@ export function RunDetailPage() {
 			 */}
 			<div className="flex min-h-0 flex-1 flex-col gap-3 xl:h-full xl:min-h-0 xl:flex-row xl:overflow-hidden">
 				<div className="order-3 flex min-h-0 min-w-0 flex-1 flex-col gap-3 md:order-none">
-					<EventTail
-						runId={r.id}
+					<RunDetailViews
+						run={r}
+						isTerminal={isTerminal}
+						gitUrl={gitUrl}
 						events={stream.events}
 						status={stream.status}
 						error={stream.error}
-						terminal={isTerminal}
 					/>
 				</div>
 				<aside className="flex w-full shrink-0 flex-col gap-3 max-xl:contents xl:min-h-0 xl:w-[326px] xl:overflow-y-auto">
