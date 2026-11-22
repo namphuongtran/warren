@@ -10,6 +10,17 @@ Releases **0.9.10 and earlier** live in
 
 ## [Unreleased]
 
+### Changed
+
+- **Campaign-controller review fix loop (namphuongtran/warren#18).** The
+  tick now drives the follow-up coordinator when the repository policy
+  sets `mutations.followUpPush: true`. A reviewer `request_changes`
+  verdict, or a classified review-bot finding, starts a follow-up run on
+  the PR branch under the campaign manifest's agent, and the pushed head
+  is reviewed again, at most `maxRounds` times. A campaign whose policy
+  already set the flag starts fixer runs after this upgrade. Turn the flag
+  off to keep the old behaviour.
+
 ## [0.19.3] — 2026-10-07
 
 The hardening patch. Local runs get a narrowed git-metadata sandbox, the

@@ -19,6 +19,7 @@ import { join } from "node:path";
 import { approveCampaign, importCampaign } from "../admission.ts";
 import { FixedClock, SequentialIdGenerator } from "../clock.ts";
 import { digestOf } from "../digest.ts";
+import { FOLLOW_UP_ACTION_TYPE, FOLLOW_UP_STOPPED_REASON } from "../follow-up/coordinator.ts";
 import { ReadOnlyGithubClient } from "../github/client.ts";
 import { FakeGithubServer } from "../github/fake-server.ts";
 import { GithubPrAlreadyExistsError, type GithubPrCreateTransport } from "../github/pr-create.ts";
@@ -31,6 +32,7 @@ import type {
 import { PR_INTENT_ACTION_TYPE } from "../pr-intent/intender.ts";
 import { validateBotGrammar } from "../reconcile/bot-grammar.ts";
 import { CLAWSWEEPER_ACK_BODY, clawsweeperVerdictBody } from "../reconcile/clawsweeper-fixtures.ts";
+import { REVIEW_NEEDS_HUMAN_REASON } from "../review/coordinator.ts";
 import { REVIEW_VERDICT_CLOSE, REVIEW_VERDICT_OPEN } from "../review/verdict.ts";
 import { CampaignStateStore } from "../store/state-store.ts";
 import { WarrenClient } from "../warren-client.ts";
@@ -1100,6 +1102,19 @@ describe("runTick review stage", () => {
 	 * #7 at HEAD_SHA, and return that tick (the first one a PR exists in).
 	 */
 	async function withOpenPr(h: TickHarness): Promise<TickResult> {
+		setOpenPr(h, HEAD_SHA);
+		h.github.setResource("/repos/openclaw/openclaw/pulls/7/reviews", []);
+		h.github.setResource("/repos/openclaw/openclaw/issues/7/comments", []);
+		h.github.setResource("/repos/openclaw/openclaw/pulls/7/comments", []);
+		const tick1 = await runTick(h.deps, h.campaignId);
+		h.warren.setRunState(runIdOf(tick1), { state: "succeeded", costUsd: 1, branch: BRANCH });
+		const tick2 = await runTick(h.deps, h.campaignId);
+		expect(stagesOf(tick2.stages)).toContain("pr_execute:created");
+		return tick2;
+	}
+
+	/** Serve upstream PR #7 open at `sha`, with empty checks on that SHA. */
+	function setOpenPr(h: TickHarness, sha: string): void {
 		h.github.setResource("/repos/openclaw/openclaw/pulls/7", {
 			node_id: "PR_7",
 			number: 7,
@@ -1107,7 +1122,7 @@ describe("runTick review stage", () => {
 			draft: false,
 			title: "Flaky scheduler test (#812)",
 			user: { login: "warren-run-bot" },
-			head: { ref: BRANCH, sha: HEAD_SHA, repo: { full_name: "warren-run-bot/openclaw" } },
+			head: { ref: BRANCH, sha, repo: { full_name: "warren-run-bot/openclaw" } },
 			base: {
 				ref: "main",
 				sha: "def456def456def456def456def456def456def4",
@@ -1119,24 +1134,16 @@ describe("runTick review stage", () => {
 			updated_at: "2026-08-26T00:00:00.000Z",
 			html_url: "https://github.com/openclaw/openclaw/pull/7",
 		});
-		h.github.setResource("/repos/openclaw/openclaw/pulls/7/reviews", []);
-		h.github.setResource("/repos/openclaw/openclaw/issues/7/comments", []);
-		h.github.setResource("/repos/openclaw/openclaw/pulls/7/comments", []);
-		h.github.setResource(`/repos/openclaw/openclaw/commits/${HEAD_SHA}/check-runs`, {
+		h.github.setResource(`/repos/openclaw/openclaw/commits/${sha}/check-runs`, {
 			total_count: 0,
 			check_runs: [],
 		});
-		h.github.setResource(`/repos/openclaw/openclaw/commits/${HEAD_SHA}/status`, {
+		h.github.setResource(`/repos/openclaw/openclaw/commits/${sha}/status`, {
 			state: "pending",
 			total_count: 0,
-			sha: HEAD_SHA,
+			sha,
 			statuses: [],
 		});
-		const tick1 = await runTick(h.deps, h.campaignId);
-		h.warren.setRunState(runIdOf(tick1), { state: "succeeded", costUsd: 1, branch: BRANCH });
-		const tick2 = await runTick(h.deps, h.campaignId);
-		expect(stagesOf(tick2.stages)).toContain("pr_execute:created");
-		return tick2;
 	}
 
 	test("adds no review stage when the policy has no review block", async () => {
@@ -1183,5 +1190,128 @@ describe("runTick review stage", () => {
 			[`/repos/openclaw/openclaw/statuses/${HEAD_SHA}`, "success"],
 		]);
 		expect(publisher.reviews).toHaveLength(1);
+		// followUpPush is off in this policy: no fixer stage at all.
+		expect(journaledFollowUp(h)).toBe(false);
+	});
+
+	/** True when any tick so far journaled a follow-up run. */
+	function journaledFollowUp(h: TickHarness): boolean {
+		return h.store.actions
+			.listActionsForCampaign(h.campaignId)
+			.some((action) => action.actionType === FOLLOW_UP_ACTION_TYPE);
+	}
+
+	function verdictEvents(verdict: Record<string, unknown>): Array<Record<string, unknown>> {
+		return [
+			{
+				seq: 1,
+				kind: "text",
+				stream: "stdout",
+				payload: {
+					text: `${REVIEW_VERDICT_OPEN}${JSON.stringify(verdict)}${REVIEW_VERDICT_CLOSE}`,
+				},
+			},
+		];
+	}
+
+	/** The run id of the fixer a tick dispatched; throws when there is none. */
+	function fixerRunIdOf(tick: TickResult): string {
+		const fix = tick.stages.find((o) => o.stage === "follow_up" && o.status === "dispatched");
+		const runId = (fix?.detail as { runId?: unknown } | undefined)?.runId;
+		if (typeof runId !== "string") {
+			throw new Error("no follow_up stage dispatched a fixer run");
+		}
+		return runId;
+	}
+
+	function fixerPolicy(): Record<string, unknown> {
+		const policy = livePolicy(true) as {
+			mutations: Record<string, boolean>;
+			review: Record<string, unknown>;
+		};
+		return {
+			...policy,
+			mutations: { ...policy.mutations, followUpPush: true },
+			review: { ...policy.review, maxRounds: 1 },
+		};
+	}
+
+	const CHANGES = {
+		verdict: "request_changes",
+		summary: "One defect.",
+		findings: [{ title: "Clock not seeded", body: "Seed it.", path: "src/a.ts", line: 3 }],
+	};
+
+	test("feeds a change request to a fixer run and re-reviews the pushed head", async () => {
+		const publisher = new RecordingPublisher();
+		const h = harness({
+			policy: fixerPolicy(),
+			prCreator: new FakeGithubPrCreator({ firstPrNumber: 7 }),
+			reviewPublisher: publisher,
+		});
+		const review1 = (requireStage(await withOpenPr(h), "review").detail as { runId: string }).runId;
+		h.warren.setRunEvents(review1, verdictEvents(CHANGES));
+		h.warren.setRunState(review1, { state: "succeeded", costUsd: 0.2 });
+
+		// The change request and the fixer dispatch land in the same tick.
+		const tick3 = await runTick(h.deps, h.campaignId);
+		expect(requireStage(tick3, "review").status).toBe("changes_requested");
+		const fixRunId = fixerRunIdOf(tick3);
+		const fixRun = h.warren.getRunRow(fixRunId);
+		expect(fixRun?.agentName).toBe("pi");
+		expect(fixRun?.model).toBe("claude-sonnet-4-5");
+		expect(fixRun?.existingBranch).toBe(BRANCH);
+		expect(fixRun?.prompt).toContain("Clock not seeded");
+
+		// The fixer pushes a new head; the next tick settles it and reviews the new SHA.
+		const NEW_SHA = "fed987fed987fed987fed987fed987fed987fed9";
+		h.warren.setRunState(fixRunId, { state: "succeeded", costUsd: 1, branch: BRANCH });
+		setOpenPr(h, NEW_SHA);
+		const tick4 = await runTick(h.deps, h.campaignId);
+		expect(stagesOf(tick4.stages)).toContain("follow_up:pushed");
+		const review2 = requireStage(tick4, "review");
+		expect(review2.status).toBe("dispatched");
+		const review2Id = (review2.detail as { runId: string }).runId;
+		expect(h.warren.getRunRow(review2Id)?.baseCommit).toBe(NEW_SHA);
+
+		// A second change request exceeds maxRounds: a human, not another fixer.
+		h.warren.setRunEvents(review2Id, verdictEvents(CHANGES));
+		h.warren.setRunState(review2Id, { state: "succeeded", costUsd: 0.2 });
+		const runsBefore = h.warren.createdRunCount();
+		const tick5 = await runTick(h.deps, h.campaignId);
+		expect(requireStage(tick5, "review").status).toBe("needs_human");
+		expect(stagesOf(tick5.stages)).toContain("follow_up:no_actionable_feedback");
+		expect(h.warren.createdRunCount()).toBe(runsBefore);
+		expect(h.store.events.listOpenAttention(h.campaignId).map((item) => item.reason)).toContain(
+			REVIEW_NEEDS_HUMAN_REASON,
+		);
+	});
+
+	test("stops the loop for a human when the fixer run fails, and frees the next review", async () => {
+		const h = harness({
+			policy: fixerPolicy(),
+			prCreator: new FakeGithubPrCreator({ firstPrNumber: 7 }),
+			reviewPublisher: new RecordingPublisher(),
+		});
+		const review1 = (requireStage(await withOpenPr(h), "review").detail as { runId: string }).runId;
+		h.warren.setRunEvents(review1, verdictEvents(CHANGES));
+		h.warren.setRunState(review1, { state: "succeeded", costUsd: 0.2 });
+		const tick3 = await runTick(h.deps, h.campaignId);
+		const fixRunId = fixerRunIdOf(tick3);
+
+		h.warren.setRunState(fixRunId, { state: "failed", failureReason: "agent_error" });
+		const tick4 = await runTick(h.deps, h.campaignId);
+		expect(stagesOf(tick4.stages)).toContain("follow_up:run_failed");
+		// The same findings are never re-sent to another fixer.
+		const tick5 = await runTick(h.deps, h.campaignId);
+		expect(stagesOf(tick5.stages)).toContain("follow_up:previous_attempt_failed");
+		expect(
+			h.store.events
+				.listOpenAttention(h.campaignId)
+				.filter((a) => a.reason === FOLLOW_UP_STOPPED_REASON),
+		).toHaveLength(1);
+		// A human push gets a fresh review: the head-moving run is no longer live.
+		setOpenPr(h, "0123456789012345678901234567890123456789");
+		expect(requireStage(await runTick(h.deps, h.campaignId), "review").status).toBe("dispatched");
 	});
 });

@@ -13,8 +13,11 @@
  *    `followUpPush` flag is absent or false, the coordinator refuses
  *    before touching the store or the client. No code path exists.
  * 2. **Intent before I/O.** A `follow_up_run` action is journaled with
- *    the exact prompt digest before the dispatch POST. A crash between
- *    journal and POST replans onto the same action key.
+ *    the exact prompt digest before the dispatch POST, atomically with the
+ *    active-follow-up slot. The action key is derived from the findings
+ *    set, so a set is dispatched at most once: an ambiguous POST settles
+ *    `uncertain` and a refused one `permanent_failure`, and either stops
+ *    that set for a human instead of re-sending it.
  * 3. **Untrusted provenance stays data.** The prompt carries the
  *    classified finding fields (category + structured fields) inside a
  *    clearly-labeled untrusted data block — never raw comment bodies,
@@ -23,7 +26,9 @@
  *    active one, never duplicates.
  * 5. **Iteration cap + repeat-finding stop.** Hitting the cap, or
  *    observing findings identical to the set already responded to,
- *    opens an attention item instead of dispatching.
+ *    opens an attention item (once per stop) instead of dispatching.
+ *    Findings raised against a head SHA that is no longer the PR head
+ *    are not actionable.
  * 6. **Reconcile the push.** When the follow-up run's push lands on the
  *    PR head branch, the covered feedback is marked addressed and the
  *    iteration count advances.
@@ -31,6 +36,7 @@
 import { canonicalJson, sha256Hex } from "../digest.ts";
 import { CampaignControllerError, type CampaignControllerErrorCode } from "../errors.ts";
 import { isValidRefName } from "../github-grammar.ts";
+import type { CampaignStateStore } from "../store/state-store.ts";
 import type {
 	ActionErrorClass,
 	ActionRow,
@@ -38,6 +44,8 @@ import type {
 	FollowUpProgressRow,
 	ReviewFeedbackRow,
 } from "../store/types.ts";
+import { TERMINAL_ACTION_STATES } from "../store/types.ts";
+import { DispatchUncertainError } from "../warren-client.ts";
 
 /** Action type persisted for every follow-up run intent. */
 export const FOLLOW_UP_ACTION_TYPE = "follow_up_run";
@@ -62,7 +70,9 @@ export type FollowUpInvariant =
 	| "no_actionable_feedback"
 	| "head_branch_missing"
 	| "head_branch_invalid"
-	| "already_active";
+	| "already_active"
+	| "previous_attempt_failed"
+	| "head_unchanged";
 
 /** A refused follow-up plan. `invariant` names the failed rule. */
 export class FollowUpRefusal extends CampaignControllerError {
@@ -103,6 +113,12 @@ export interface FollowUpWorkItemContext {
 	readonly agent: string;
 	/** The PR head branch the follow-up run must extend. */
 	readonly headBranch: string | null;
+	/**
+	 * The PR's current head SHA. A finding that records the SHA it was raised
+	 * against (`fields.headSha`, as review findings do) is skipped once the
+	 * head has moved past it, so the fixer never acts on stale findings.
+	 */
+	readonly headSha?: string | null;
 	/** The profile's versioned agentGuidance block, if any. */
 	readonly agentGuidance?: string;
 	/** Per-run USD cap; also the reservation size. */
@@ -122,6 +138,9 @@ export interface ClassifiedFinding {
 export interface FollowUpStoreDeps {
 	listFeedback(campaignId: string): ReviewFeedbackRow[];
 	listActionsForWorkItem(workItemId: string): ActionRow[];
+	getAction(id: string): ActionRow | null;
+	getActionByKey(actionKey: string): ActionRow | null;
+	transaction<T>(fn: () => T): T;
 	beginAction(input: {
 		actionKey: string;
 		campaignId: string;
@@ -142,12 +161,12 @@ export interface FollowUpStoreDeps {
 			resultBranch?: string | null;
 		},
 	): ActionRow;
-	addAttention(input: {
+	addAttentionOnce(input: {
 		campaignId: string;
 		reason: string;
 		workItemId?: string | null;
 		detailJson?: string | null;
-	}): AttentionItemRow;
+	}): { row: AttentionItemRow; created: boolean };
 	followUps: {
 		getProgress(workItemId: string): FollowUpProgressRow | null;
 		requireProgress(workItemId: string): FollowUpProgressRow;
@@ -168,6 +187,22 @@ export interface FollowUpStoreDeps {
 	};
 }
 
+/** The follow-up store surface over the controller's state store. */
+export function followUpStoreOf(store: CampaignStateStore): FollowUpStoreDeps {
+	return {
+		listFeedback: (campaignId) => store.events.listFeedback(campaignId),
+		listActionsForWorkItem: (workItemId) => store.actions.listActionsForWorkItem(workItemId),
+		getAction: (id) => store.actions.getAction(id),
+		getActionByKey: (actionKey) => store.actions.getActionByKey(actionKey),
+		transaction: (fn) => store.transaction(fn),
+		beginAction: (input) => store.actions.beginAction(input),
+		markExecuting: (id) => store.actions.markExecuting(id),
+		settleAction: (id, input) => store.actions.settleAction(id, input),
+		addAttentionOnce: (input) => store.events.addAttentionOnce(input),
+		followUps: store.followUps,
+	};
+}
+
 /** The narrow dispatch surface — the WarrenClient POST, nothing else. */
 export type FollowUpDispatchFn = (input: {
 	project: string;
@@ -185,6 +220,8 @@ export type FollowUpOutcomeStatus =
 	| "no_actionable_feedback"
 	| "cap_blocked"
 	| "repeat_findings_blocked"
+	| "previous_attempt_failed"
+	| "head_unchanged"
 	| "dispatch_failed";
 
 export interface FollowUpOutcome {
@@ -257,6 +294,54 @@ function toFinding(row: ReviewFeedbackRow): ClassifiedFinding {
 	return { feedbackId: row.id, category: row.category, fields };
 }
 
+/** True when the finding names a head SHA other than the current one. */
+function isStaleFinding(finding: ClassifiedFinding, headSha: string | null): boolean {
+	const raisedAgainst = finding.fields.headSha;
+	return headSha !== null && typeof raisedAgainst === "string" && raisedAgainst !== headSha;
+}
+
+/** A follow-up that passed every check and is ready to journal. */
+interface PlannedFollowUp {
+	readonly headBranch: string;
+	readonly findings: readonly ClassifiedFinding[];
+	readonly actionKey: string;
+	readonly iteration: number;
+	readonly neededCents: number;
+}
+
+/** A non-dispatching outcome. */
+function stop(
+	status: FollowUpOutcomeStatus,
+	invariant: FollowUpInvariant | null,
+	iteration: number,
+	feedbackIds: readonly string[],
+	ids: { actionId?: string | null; runId?: string | null } = {},
+): FollowUpOutcome {
+	return {
+		status,
+		invariant,
+		actionId: ids.actionId ?? null,
+		runId: ids.runId ?? null,
+		feedbackIds,
+		iteration,
+	};
+}
+
+/** The PR head branch must exist and be a valid ref. */
+function requireHeadBranch(ctx: FollowUpWorkItemContext): string {
+	const headBranch = ctx.headBranch;
+	if (headBranch === null || headBranch.trim() === "") {
+		throw new FollowUpRefusal(
+			"head_branch_missing",
+			`work item ${ctx.workItemId} has no open-PR head branch to extend`,
+		);
+	}
+	if (!isValidRefName(headBranch)) {
+		throw new FollowUpRefusal("head_branch_invalid", `invalid head branch ref: ${headBranch}`);
+	}
+	return headBranch;
+}
+
 export interface FollowUpCoordinatorDeps {
 	readonly store: FollowUpStoreDeps;
 	readonly dispatch: FollowUpDispatchFn;
@@ -274,7 +359,7 @@ export class FollowUpCoordinator {
 	/**
 	 * Plan, journal, and dispatch one follow-up run for a work item.
 	 * Refuses closed per the invariants above; every stop opens an
-	 * attention item so an operator sees the loop halt.
+	 * attention item (once) so an operator sees the loop halt.
 	 */
 	async coordinate(ctx: FollowUpWorkItemContext, policy: FollowUpPolicy): Promise<FollowUpOutcome> {
 		// Invariant 1: disabled flag = structurally impossible. Checked
@@ -286,65 +371,67 @@ export class FollowUpCoordinator {
 				"repository policy does not enable mutations.followUpPush; follow-up runs are structurally impossible",
 			);
 		}
-		const maxFollowUps = policy.maxFollowUpsPerPr ?? DEFAULT_MAX_FOLLOW_UPS_PER_PR;
+		const planned = this.#plan(ctx, policy);
+		return "status" in planned ? planned : this.#journalAndDispatch(ctx, planned);
+	}
 
+	/** Every check that runs before the journal: a stop outcome, or the intent to send. */
+	#plan(ctx: FollowUpWorkItemContext, policy: FollowUpPolicy): FollowUpOutcome | PlannedFollowUp {
 		// One active follow-up per work item: resume, never duplicate.
 		const progress = this.#store.followUps.getProgress(ctx.workItemId);
+		const iteration = progress?.iteration ?? 0;
 		if (progress?.activeActionId != null) {
-			return {
-				status: "already_active",
-				invariant: "already_active",
+			return stop("already_active", "already_active", iteration, [], {
 				actionId: progress.activeActionId,
 				runId: progress.runId,
-				feedbackIds: [],
-				iteration: progress.iteration,
-			};
+			});
 		}
 
-		// Iteration cap: a chatty reviewer cannot ping-pong the budget away.
-		const iteration = progress?.iteration ?? 0;
-		if (iteration >= maxFollowUps) {
-			this.#openAttention(ctx, `iteration cap reached (${iteration}/${maxFollowUps})`);
-			return {
-				status: "cap_blocked",
-				invariant: "iteration_cap_breached",
-				actionId: null,
-				runId: null,
-				feedbackIds: [],
-				iteration,
-			};
-		}
-
-		// Actionable feedback: classified rows not yet responded to.
+		// Actionable feedback: classified rows not yet responded to, raised
+		// against the current head.
 		const addressed = new Set(progress?.addressedFeedbackIds ?? []);
 		const findings = this.#store
 			.listFeedback(ctx.campaignId)
 			.filter((row) => row.workItemId === ctx.workItemId && !addressed.has(row.id))
-			.map(toFinding);
+			.map(toFinding)
+			.filter((finding) => !isStaleFinding(finding, ctx.headSha ?? null));
 		if (findings.length === 0) {
-			return {
-				status: "no_actionable_feedback",
-				invariant: "no_actionable_feedback",
-				actionId: null,
-				runId: null,
-				feedbackIds: [],
-				iteration,
-			};
+			return this.#noActionable(ctx, addressed, iteration);
+		}
+		const feedbackIds = findings.map((f) => f.feedbackId);
+
+		// Iteration cap: a chatty reviewer cannot ping-pong the budget away.
+		const maxFollowUps = policy.maxFollowUpsPerPr ?? DEFAULT_MAX_FOLLOW_UPS_PER_PR;
+		if (iteration >= maxFollowUps) {
+			this.#openAttention(
+				ctx,
+				`cap:${iteration}`,
+				`iteration cap reached (${iteration}/${maxFollowUps})`,
+			);
+			return stop("cap_blocked", "iteration_cap_breached", iteration, []);
 		}
 
 		// Repeat-finding stop: identical findings to what we already
 		// responded to means the reviewer loop is not converging.
 		const fingerprint = findingsFingerprint(findings);
 		if (progress?.lastRespondedFingerprint === fingerprint) {
-			this.#openAttention(ctx, "newest findings equal the set already responded to");
-			return {
-				status: "repeat_findings_blocked",
-				invariant: "repeat_findings",
-				actionId: null,
-				runId: null,
-				feedbackIds: findings.map((f) => f.feedbackId),
-				iteration,
-			};
+			this.#openAttention(
+				ctx,
+				`repeat:${fingerprint}`,
+				"newest findings equal the set already responded to",
+			);
+			return stop("repeat_findings_blocked", "repeat_findings", iteration, feedbackIds);
+		}
+
+		// One attempt per findings set: a set whose dispatch already settled
+		// (refused, or ambiguous) is never re-sent. `abandonActive` opened the
+		// attention item when it settled, so this stop adds none.
+		const actionKey = `follow-up:${ctx.campaignId}:${ctx.workItemId}:${fingerprint.slice(0, 16)}`;
+		const previous = this.#store.getActionByKey(actionKey);
+		if (previous !== null && TERMINAL_ACTION_STATES.includes(previous.state)) {
+			return stop("previous_attempt_failed", "previous_attempt_failed", iteration, feedbackIds, {
+				actionId: previous.id,
+			});
 		}
 
 		// Budget headroom: the follow-up draws from the same campaign cap.
@@ -355,21 +442,49 @@ export class FollowUpCoordinator {
 				`follow-up run needs ${neededCents}c, campaign headroom is ${ctx.budgetHeadroomUsdCents}c`,
 			);
 		}
+		return { headBranch: requireHeadBranch(ctx), findings, actionKey, iteration, neededCents };
+	}
 
-		// The PR head branch must exist and be a valid ref.
-		const headBranch = ctx.headBranch;
-		if (headBranch === null || headBranch.trim() === "") {
-			throw new FollowUpRefusal(
-				"head_branch_missing",
-				`work item ${ctx.workItemId} has no open-PR head branch to extend`,
-			);
+	/**
+	 * Nothing left to send. When a finding raised against the CURRENT head
+	 * was already handed to a fixer, the fixer finished without moving the
+	 * head: that SHA is never reviewed again, so a human must step in.
+	 */
+	#noActionable(
+		ctx: FollowUpWorkItemContext,
+		addressed: ReadonlySet<string>,
+		iteration: number,
+	): FollowUpOutcome {
+		const headSha = ctx.headSha ?? null;
+		const answeredAtHead =
+			headSha !== null &&
+			this.#store
+				.listFeedback(ctx.campaignId)
+				.some(
+					(row) =>
+						row.workItemId === ctx.workItemId &&
+						addressed.has(row.id) &&
+						toFinding(row).fields.headSha === headSha,
+				);
+		if (!answeredAtHead) {
+			return stop("no_actionable_feedback", "no_actionable_feedback", iteration, []);
 		}
-		if (!isValidRefName(headBranch)) {
-			throw new FollowUpRefusal("head_branch_invalid", `invalid head branch ref: ${headBranch}`);
-		}
+		this.#openAttention(
+			ctx,
+			`unchanged:${headSha}`,
+			"the follow-up run finished but the PR head is still the SHA its findings were raised against",
+		);
+		return stop("head_unchanged", "head_unchanged", iteration, []);
+	}
 
-		// Invariants 2/3: compose the intent payload — classified fields
-		// only, banner-framed, digest-bound — then journal before I/O.
+	/** Invariants 2/3: journal the intent atomically, then send it exactly once. */
+	async #journalAndDispatch(
+		ctx: FollowUpWorkItemContext,
+		plan: PlannedFollowUp,
+	): Promise<FollowUpOutcome> {
+		const { headBranch, findings, actionKey, iteration } = plan;
+		const feedbackIds = findings.map((f) => f.feedbackId);
+		// Classified fields only, banner-framed, digest-bound.
 		const payload: FollowUpIntentPayload = {
 			kind: "follow_up_run",
 			issueRef: ctx.issueRef,
@@ -384,25 +499,25 @@ export class FollowUpCoordinator {
 		};
 		const prompt = renderFollowUpPrompt(payload);
 		const requestDigest = sha256Hex(canonicalJson({ ...payload, prompt }));
-		const actionKey = `follow-up:${ctx.campaignId}:${ctx.workItemId}:f${iteration + 1}`;
-
-		const action = this.#store.beginAction({
-			actionKey,
-			campaignId: ctx.campaignId,
-			workItemId: ctx.workItemId,
-			actionType: FOLLOW_UP_ACTION_TYPE,
-			requestDigest,
-			attempt: iteration + 1,
-			reservedUsdCents: neededCents,
+		const action = this.#store.transaction(() => {
+			const row = this.#store.beginAction({
+				actionKey,
+				campaignId: ctx.campaignId,
+				workItemId: ctx.workItemId,
+				actionType: FOLLOW_UP_ACTION_TYPE,
+				requestDigest,
+				attempt: iteration + 1,
+				reservedUsdCents: plan.neededCents,
+			});
+			this.#store.followUps.recordStarted({
+				campaignId: ctx.campaignId,
+				workItemId: ctx.workItemId,
+				actionId: row.id,
+				headBranch,
+				runId: null,
+			});
+			return this.#store.markExecuting(row.id);
 		});
-		this.#store.followUps.recordStarted({
-			campaignId: ctx.campaignId,
-			workItemId: ctx.workItemId,
-			actionId: action.id,
-			headBranch,
-			runId: null,
-		});
-		this.#store.markExecuting(action.id);
 
 		try {
 			const { runId } = await this.#dispatch({
@@ -414,33 +529,66 @@ export class FollowUpCoordinator {
 				idempotencyKey: actionKey,
 			});
 			this.#store.followUps.recordRunId(ctx.workItemId, runId);
-			return {
-				status: "dispatched",
-				invariant: null,
-				actionId: action.id,
-				runId,
-				feedbackIds: findings.map((f) => f.feedbackId),
-				iteration,
-			};
+			return { ...stop("dispatched", null, iteration, feedbackIds), actionId: action.id, runId };
 		} catch (error) {
-			// Fail closed: settle the journaled intent and clear the active
-			// slot. The action key freezes the digest, so a re-tick plans a
-			// fresh attempt against the same evidence.
-			this.#store.settleAction(action.id, {
-				state: "permanent_failure",
-				errorClass: "dispatch_rejected",
-				errorJson: JSON.stringify({ message: String(error) }),
+			// Fail closed, never re-POST: an ambiguous dispatch settles
+			// uncertain, a refusal settles failed, and the findings set stops.
+			const uncertain = error instanceof DispatchUncertainError;
+			this.abandonActive({
+				campaignId: ctx.campaignId,
+				workItemId: ctx.workItemId,
+				state: uncertain ? "uncertain" : "permanent_failure",
+				errorClass: uncertain ? "ambiguous_response" : "dispatch_rejected",
+				reason: uncertain ? "dispatch_uncertain" : "dispatch_rejected",
+				message: error instanceof Error ? error.message : String(error),
 			});
-			this.#store.followUps.clearActive(ctx.workItemId);
-			return {
-				status: "dispatch_failed",
-				invariant: null,
-				actionId: action.id,
-				runId: null,
-				feedbackIds: findings.map((f) => f.feedbackId),
-				iteration,
-			};
+			return { ...stop("dispatch_failed", null, iteration, feedbackIds), actionId: action.id };
 		}
+	}
+
+	/**
+	 * Stop the active follow-up without a push: settle its action (unless a
+	 * crash already settled it), clear the active slot, and open one
+	 * attention item naming why. Used for a refused or ambiguous dispatch,
+	 * and by the tick when the follow-up run fails or pushes elsewhere.
+	 * Returns false when the work item has no active follow-up.
+	 */
+	abandonActive(input: {
+		campaignId: string;
+		workItemId: string;
+		state: "uncertain" | "permanent_failure";
+		errorClass: ActionErrorClass;
+		reason: string;
+		message?: string;
+	}): boolean {
+		const progress = this.#store.followUps.getProgress(input.workItemId);
+		const actionId = progress?.activeActionId ?? null;
+		if (actionId === null) {
+			return false;
+		}
+		this.#store.transaction(() => {
+			const action = this.#store.getAction(actionId);
+			if (action !== null && !TERMINAL_ACTION_STATES.includes(action.state)) {
+				this.#store.settleAction(actionId, {
+					state: input.state,
+					errorClass: input.errorClass,
+					errorJson: canonicalJson({ reason: input.reason, message: input.message ?? null }),
+				});
+			}
+			this.#store.followUps.clearActive(input.workItemId);
+			this.#store.addAttentionOnce({
+				campaignId: input.campaignId,
+				workItemId: input.workItemId,
+				reason: FOLLOW_UP_STOPPED_REASON,
+				detailJson: canonicalJson({
+					key: `follow-up:${actionId}`,
+					actionId,
+					runId: progress?.runId ?? null,
+					detail: input.reason,
+				}),
+			});
+		});
+		return true;
 	}
 
 	/**
@@ -466,14 +614,20 @@ export class FollowUpCoordinator {
 		if (action === undefined || action.state === "succeeded") {
 			return null;
 		}
-		this.#store.settleAction(action.id, {
-			state: "succeeded",
-			resultBranch: input.pushedBranch,
-		});
-		return this.#store.followUps.recordResponded({
-			workItemId: input.workItemId,
-			feedbackIds: this.#pendingFeedbackIds(input.workItemId),
-			fingerprint: findingsFingerprint(this.#pendingFeedback(input.workItemId).map(toFinding)),
+		// Only findings recorded before the dispatch reached the fixer.
+		const covered = this.#pendingFeedback(input.workItemId).filter(
+			(row) => row.createdAtMs <= action.createdAtMs,
+		);
+		return this.#store.transaction(() => {
+			this.#store.settleAction(action.id, {
+				state: "succeeded",
+				resultBranch: input.pushedBranch,
+			});
+			return this.#store.followUps.recordResponded({
+				workItemId: input.workItemId,
+				feedbackIds: covered.map((row) => row.id),
+				fingerprint: findingsFingerprint(covered.map(toFinding)),
+			});
 		});
 	}
 
@@ -486,16 +640,12 @@ export class FollowUpCoordinator {
 			.filter((row) => row.workItemId === workItemId && !addressed.has(row.id));
 	}
 
-	#pendingFeedbackIds(workItemId: string): string[] {
-		return this.#pendingFeedback(workItemId).map((row) => row.id);
-	}
-
-	#openAttention(ctx: FollowUpWorkItemContext, detail: string): void {
-		this.#store.addAttention({
+	#openAttention(ctx: FollowUpWorkItemContext, key: string, detail: string): void {
+		this.#store.addAttentionOnce({
 			campaignId: ctx.campaignId,
 			reason: FOLLOW_UP_STOPPED_REASON,
 			workItemId: ctx.workItemId,
-			detailJson: JSON.stringify({ detail }),
+			detailJson: canonicalJson({ key: `follow-up:${ctx.workItemId}:${key}`, detail }),
 		});
 	}
 }

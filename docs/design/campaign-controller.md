@@ -604,6 +604,9 @@ controller policy, not a core change. An opt-in repository-policy
 pinned to each campaign PR's head SHA, publish its verdict as a commit
 status on that SHA plus a COMMENT review, and feed `request_changes`
 findings to the follow-up coordinator for at most `maxRounds` fix rounds.
+With `mutations.followUpPush` on, the tick's `follow_up` stage turns those
+findings into a fix run on the PR branch, and the pushed head is reviewed
+again.
 Forge branch protection requiring the status is the merge gate. The
 operator guide is `extensions/campaign-controller/RUNBOOK.md` §10.
 

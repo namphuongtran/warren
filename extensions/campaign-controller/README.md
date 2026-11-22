@@ -218,9 +218,7 @@ opt-in merge gate driven by a commit status —
   review on the old SHA and starts a new one with a `pending` status.
   `request_changes` findings are recorded as `review_feedback` rows for
   the follow-up coordinator, at most `maxRounds` times; the next change
-  request publishes `failure` and opens `review_needs_human`. (The tick
-  does not drive the follow-up coordinator yet, so no fixer run starts on
-  its own; see [RUNBOOK.md](RUNBOOK.md) §10.) A failed run or a missing
+  request publishes `failure` and opens `review_needs_human`. A failed run or a missing
   verdict publishes `error` and opens `review_failed`. Nothing approves by
   default. Publishing is derived from each round's durable state, so a
   crash between settling and publishing is repaired on the next tick.
@@ -231,6 +229,16 @@ opt-in merge gate driven by a commit status —
   `review` stage, after the read-only GitHub reconcile. It runs only when
   the policy has a `review` block and `GITHUB_TOKEN` is set; otherwise the
   stage is absent, off and silent.
+- [`src/tick/follow-up-stage.ts`](src/tick/follow-up-stage.ts) — the
+  fixer half of the loop, present only when the policy enables
+  `mutations.followUpPush`. Before the review stage it settles each live
+  follow-up run (a push to the PR branch marks its findings addressed, so
+  the new head is reviewed in the same tick; a failed run stops the loop
+  with `follow_up_stopped`). After it, the unaddressed findings raised
+  against the PR's current head go to one follow-up run on the existing
+  PR branch under the manifest's approved agent, provider, and model.
+  Each findings set is dispatched at most once, and a refused or
+  ambiguous dispatch is never re-sent.
 
 The repository policy opts in with an optional `review` block (covered by
 the policy digest, so approval binds it):

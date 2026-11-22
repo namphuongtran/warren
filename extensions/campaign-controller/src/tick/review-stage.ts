@@ -98,7 +98,7 @@ export async function runReviewStage(
 }
 
 /** One pull-request read; a 404 maps to null, a 304 without validators is impossible here. */
-async function readPullRequest(
+export async function readPullRequest(
 	github: ReadOnlyGithubClient,
 	owner: string,
 	repo: string,

@@ -35,6 +35,8 @@ export interface FakeRunRow {
 	maxCostUsd: number | null;
 	/** The `baseCommit` the dispatch pinned, if any (namphuongtran/warren#18 reviewer runs). */
 	baseCommit: string | null;
+	/** The `existingBranch` the dispatch extends, if any (follow-up fixer runs). */
+	existingBranch: string | null;
 	state: string;
 	failureReason: string | null;
 	ref: string | null;
@@ -86,7 +88,14 @@ function readDispatchFields(
 	body: unknown,
 ): Pick<
 	FakeRunRow,
-	"agentName" | "projectId" | "prompt" | "provider" | "model" | "maxCostUsd" | "baseCommit"
+	| "agentName"
+	| "projectId"
+	| "prompt"
+	| "provider"
+	| "model"
+	| "maxCostUsd"
+	| "baseCommit"
+	| "existingBranch"
 > {
 	if (typeof body !== "object" || body === null) {
 		throw new Error("fake warren: dispatch body must be an object");
@@ -107,6 +116,7 @@ function readDispatchFields(
 		model: typeof b.modelOverride === "string" ? b.modelOverride : null,
 		maxCostUsd: typeof b.maxCostUsd === "number" ? b.maxCostUsd : null,
 		baseCommit: typeof b.baseCommit === "string" ? b.baseCommit : null,
+		existingBranch: typeof b.existingBranch === "string" ? b.existingBranch : null,
 	};
 }
 
