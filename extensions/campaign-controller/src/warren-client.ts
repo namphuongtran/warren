@@ -50,6 +50,47 @@ export interface WarrenRunView {
 	provider: string | null;
 	model: string | null;
 	costUsd: number | null;
+	/** The run's handoff report; null before reap or on warren predating it. */
+	handoff: WarrenRunHandoff | null;
+}
+
+/**
+ * The run's handoff report (namphuongtran/warren#21), narrowed to what the
+ * controller reads. Warren validated the report at reap, but everything in
+ * it is still agent output: `review` stays `unknown` until the review
+ * policy narrows it (`src/review/verdict.ts`).
+ */
+export interface WarrenRunHandoff {
+	state: WarrenRunHandoffState;
+	/** Why the report is missing or invalid; null when recorded. */
+	reason: string | null;
+	/** The recorded report's `review` block, unvalidated; null when absent. */
+	review: unknown;
+}
+
+/** Warren's `RUN_HANDOFF_STATES`, spelled locally: the extension boundary forbids the import. */
+const HANDOFF_STATES = ["recorded", "missing", "invalid"] as const;
+export type WarrenRunHandoffState = (typeof HANDOFF_STATES)[number];
+
+function isHandoffState(value: unknown): value is WarrenRunHandoffState {
+	return HANDOFF_STATES.some((state) => state === value);
+}
+
+/** Narrow `GET /runs/:id` `handoff`; anything unrecognized reads as no report. */
+function narrowRunHandoff(raw: unknown): WarrenRunHandoff | null {
+	if (typeof raw !== "object" || raw === null) return null;
+	const row = raw as Record<string, unknown>;
+	const state = row.state;
+	if (!isHandoffState(state)) return null;
+	if (state !== "recorded") {
+		return { state, reason: asString(row.reason), review: null };
+	}
+	const report = row.handoff;
+	const review =
+		typeof report === "object" && report !== null
+			? ((report as Record<string, unknown>).review ?? null)
+			: null;
+	return { state, reason: null, review };
 }
 
 /**
@@ -238,6 +279,7 @@ export function parseRunEnvelope(raw: unknown): WarrenRunView {
 		provider: asString(row.provider),
 		model: asString(row.model),
 		costUsd: typeof row.costUsd === "number" ? row.costUsd : null,
+		handoff: narrowRunHandoff(row.handoff),
 	};
 }
 

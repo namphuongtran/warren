@@ -6,19 +6,19 @@
  * pull request's exact head SHA with `baseCommit`, usually under a
  * provider/model override so a different model reviews than the one that
  * wrote the change. It reads the diff, judges it, and ends its final
- * message with one tagged JSON verdict block.
+ * handoff report with a `review` verdict block.
  *
  * The controller (not this agent) turns that verdict into a commit status
  * and a PR review comment with its own GitHub credential, and feeds
  * `request_changes` findings to a fixer run. The reviewer holds no forge
  * write credential and must not commit: a run with no commits reaps as a
- * successful no-op, so its transcript is its only output.
+ * successful no-op, so its handoff report is its only output.
  *
- * The verdict grammar below is a wire contract with
- * `extensions/campaign-controller/src/review/verdict.ts`. The extension
- * boundary forbids a shared import, so each side spells the tags once and
- * a test on each side pins them. When the structured handoff report (namphuongtran/warren#21)
- * lands, the verdict can move there.
+ * The `review` block's schema lives once in `src/core/wire-handoff.ts`
+ * (namphuongtran/warren#21). Reap validates it and `GET /runs/:id` serves it
+ * as `handoff.handoff.review`, which is where
+ * `extensions/campaign-controller/src/review/verdict.ts` reads it. A test
+ * pins every example below against that validator.
  *
  * Read-only is enforced in the system prompt, like the planner's write
  * scope: warren's sandbox profile has no per-tool ACL yet. No quality-gate
@@ -62,23 +62,48 @@ Skip style preferences, naming taste, and speculative refactors. One real findin
 
 ## Your verdict
 
-End your final message with exactly one verdict block and nothing after it:
+Your verdict goes in the handoff report described below, under a \`review\` key. It is the only output warren reads from you. Set \`status\` to \`done\` once you have decided, and use the top-level \`summary\` to say what you reviewed.
 
-<warren-review-verdict>
-{"verdict":"approve","summary":"<one paragraph on what the change does and why it is safe>","findings":[]}
-</warren-review-verdict>
+An approval:
 
-or
+\`\`\`json
+{
+  "status": "done",
+  "summary": "Reviewed the change at the pinned commit.",
+  "review": {
+    "verdict": "approve",
+    "summary": "One paragraph on what the change does and why it is safe to merge.",
+    "findings": []
+  }
+}
+\`\`\`
 
-<warren-review-verdict>
-{"verdict":"request_changes","summary":"<one paragraph>","findings":[{"title":"<short name of the defect>","body":"<what is wrong, why it matters, how to fix it>","path":"src/file.ts","line":42}]}
-</warren-review-verdict>
+A change request:
 
-Rules for the block:
+\`\`\`json
+{
+  "status": "done",
+  "summary": "Reviewed the change at the pinned commit.",
+  "review": {
+    "verdict": "request_changes",
+    "summary": "One paragraph on what the change does and what blocks it.",
+    "findings": [
+      {
+        "title": "Short name of the defect",
+        "body": "What is wrong, why it matters, and how to fix it.",
+        "path": "src/file.ts",
+        "line": 42
+      }
+    ]
+  }
+}
+\`\`\`
+
+Rules for the \`review\` block:
 - \`verdict\` is \`"approve"\` or \`"request_changes"\`.
-- \`request_changes\` needs at least one finding. \`path\` and \`line\` are optional.
-- The block must be valid JSON between the two tags. Do not wrap it in a code fence.
-- A run that ends without a valid block counts as a failed review, and the merge stays blocked.
+- \`request_changes\` needs at least one finding. Each finding needs a non-empty \`title\` and \`body\`. \`path\` and \`line\` are optional.
+- Report at most 10 findings, each \`body\` under 800 characters, so the whole report stays under the size limit below. If you found more, keep the ones that matter most. A report over the limit is discarded, and with it your verdict.
+- A run that ends without a valid \`review\` block counts as a failed review, and the merge stays blocked.
 
 ## Workspace map
 

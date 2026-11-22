@@ -562,3 +562,102 @@ describe("ReviewCoordinator with a reviewer panel (Phase 2)", () => {
 		expect(publisher.statesOn(SHA_B)).toEqual(["pending", "success"]);
 	});
 });
+
+// namphuongtran/warren#21: the reviewer writes its verdict into the handoff
+// report. The transcript block stays as the fallback for an older warren.
+describe("ReviewCoordinator verdict source", () => {
+	/** Finish the review run with a handoff report and an optional transcript. */
+	function finishWithHandoff(runId: string, handoff: unknown, text?: string): void {
+		if (text !== undefined) {
+			fake.setRunEvents(runId, [{ seq: 1, kind: "text", stream: "stdout", payload: { text } }]);
+		}
+		fake.setRunState(runId, { state: "succeeded", costUsd: 0.4, handoff });
+	}
+
+	function recorded(review: unknown): unknown {
+		return { state: "recorded", handoff: { status: "done", summary: "Reviewed.", review } };
+	}
+
+	function eventReads(): number {
+		return fake.recordedRequests().filter((req) => req.path.endsWith("/events")).length;
+	}
+
+	test("approves from the handoff review without reading the transcript", async () => {
+		const c = coordinator();
+		const first = await c.step(ctx());
+		finishWithHandoff(first.runId ?? "", recorded(APPROVE));
+
+		const outcome = await c.step(ctx());
+		expect(outcome.status).toBe("approved");
+		expect(publisher.statesOn(SHA_A)).toEqual(["pending", "success"]);
+		expect(publisher.reviews[0]?.body.body).toContain("Clean change.");
+		expect(eventReads()).toBe(0);
+	});
+
+	test("hands handoff findings to the fixer on request_changes", async () => {
+		const c = coordinator();
+		const first = await c.step(ctx());
+		finishWithHandoff(first.runId ?? "", recorded(CHANGES));
+
+		expect((await c.step(ctx())).status).toBe("changes_requested");
+		expect(publisher.reviews[0]?.body.body).toContain("src/a.ts:3");
+		expect(store.events.listFeedback(campaignId)).toHaveLength(2);
+	});
+
+	test("prefers the handoff verdict over a transcript block that disagrees", async () => {
+		const c = coordinator();
+		const first = await c.step(ctx());
+		finishWithHandoff(first.runId ?? "", recorded(CHANGES), verdictText(APPROVE));
+
+		expect((await c.step(ctx())).status).toBe("changes_requested");
+		expect(publisher.statesOn(SHA_A)).toEqual(["pending", "failure"]);
+	});
+
+	test("falls back to the transcript block when warren serves no handoff", async () => {
+		const c = coordinator();
+		const first = await c.step(ctx());
+		finishWithHandoff(first.runId ?? "", null, verdictText(APPROVE));
+
+		expect((await c.step(ctx())).status).toBe("approved");
+	});
+
+	test("fails closed naming the handoff when the report is invalid and no block exists", async () => {
+		const c = coordinator();
+		const first = await c.step(ctx());
+		finishWithHandoff(first.runId ?? "", {
+			state: "invalid",
+			reason: "review.verdict must be one of approve, request_changes",
+		});
+
+		const outcome = await c.step(ctx());
+		expect(outcome.status).toBe("review_failed");
+		expect(outcome.detail).toBe("handoff_invalid");
+		expect(publisher.statesOn(SHA_A)).toEqual(["pending", "error"]);
+	});
+
+	test("fails closed naming the handoff when the reviewer wrote none", async () => {
+		const c = coordinator();
+		const first = await c.step(ctx());
+		finishWithHandoff(first.runId ?? "", {
+			state: "missing",
+			reason: "the run did not write .warren/handoff.json",
+		});
+
+		const outcome = await c.step(ctx());
+		expect(outcome.status).toBe("review_failed");
+		expect(outcome.detail).toBe("handoff_missing");
+	});
+
+	test("rejects a handoff review that fails the controller's own shape check", async () => {
+		const c = coordinator();
+		const first = await c.step(ctx());
+		finishWithHandoff(
+			first.runId ?? "",
+			recorded({ verdict: "lgtm", summary: "ok", findings: [] }),
+		);
+
+		const outcome = await c.step(ctx());
+		expect(outcome.status).toBe("review_failed");
+		expect(outcome.detail).toBe("verdict_invalid_shape");
+	});
+});

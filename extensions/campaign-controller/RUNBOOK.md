@@ -271,8 +271,13 @@ SHA; a new push gets a new review.
   once and counts as a non-approval. An outvoted dissent appears in the PR
   comment but never reaches the fixer.
 
-- The verdict rides the reviewer's transcript (`GET /runs/:id/events`)
-  until the structured handoff report (namphuongtran/warren#21) lands.
+- The verdict rides the reviewer's handoff report (namphuongtran/warren#21), under
+  `review` on `GET /runs/:id`. A warren that predates the report serves no
+  `handoff`, so the controller falls back to the tagged block in the
+  reviewer's transcript (`GET /runs/:id/events`). When neither holds a
+  verdict, `review_failed` names the cause: `handoff_missing` or
+  `handoff_invalid` (read the run's `handoff.missing` event for the
+  reason), or a `verdict_*` reason for a malformed block.
 - A new review waits while a build or fixer run for the work item is
   live, because that run will move the head anyway.
 - Review actions (`review_run`, `review_status`, `review_comment`) are

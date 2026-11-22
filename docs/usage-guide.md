@@ -201,7 +201,9 @@ admission:
   `GET /runs/:id`, emits `handoff.recorded`, and renders it as `## Handoff` in the PR body.
   A missing or invalid report is flagged with a reason (`handoff.missing`). Set
   `handoff: { required: true }` to fail such a run with `handoff_missing`. In a plan-run,
-  the next child's prompt carries the previous child's report.
+  the next child's prompt carries the previous child's report. The `reviewer` agent adds a
+  `review` block with its verdict and findings, which the campaign controller's review policy
+  reads.
 - Optional: a `.seeds/` directory for the issue tracker, and `.mulch/` for agent memory across
   runs. Warren detects these directories when they exist.
 
