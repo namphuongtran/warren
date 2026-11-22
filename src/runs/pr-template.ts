@@ -24,8 +24,10 @@
  * fragment names so typos surface loudly (acceptance #4).
  */
 
+import type { RunHandoffRecord } from "../core/wire.ts";
 import { PREVIEW_FRAGMENT_END, PREVIEW_FRAGMENT_START, type PrCommit, type PrSeed } from "./pr.ts";
 import { defaultAgentReport } from "./pr-agent-report.ts";
+import { defaultHandoff } from "./pr-handoff.ts";
 
 /**
  * The fixed set of recognized fragment names. Order is the body order
@@ -37,6 +39,7 @@ import { defaultAgentReport } from "./pr-agent-report.ts";
 export const PR_FRAGMENT_NAMES = [
 	"title",
 	"summary",
+	"handoff",
 	"agent_notes",
 	"agent_report",
 	"run",
@@ -107,16 +110,13 @@ export interface PrFragmentContext {
 	readonly tokensOutput?: number;
 	readonly tokensCacheRead?: number;
 	readonly previewOptedIn?: boolean;
-	/**
-	 * Body (not the subject) of the run's final commit, lifted at reap time
-	 * into an `## Agent notes` section under Summary (warren-5e86). Empty /
-	 * whitespace-only / undefined → the fragment is omitted entirely.
-	 */
+	/** The reap-validated handoff (namphuongtran/warren#21); undefined → no section. */
+	readonly handoff?: RunHandoffRecord;
+	/** Final commit body → `## Agent notes` (warren-5e86); blank/undefined → omitted. */
 	readonly agentNotes?: string;
 	/**
-	 * The run's final assistant message, rendered into a fenced, size-capped
-	 * `## Agent report` section (namphuongtran/warren#42). Undefined or
-	 * whitespace-only → the fragment is omitted entirely.
+	 * Final assistant message → fenced, capped `## Agent report`
+	 * (namphuongtran/warren#42). Omitted when blank or when a handoff was recorded.
 	 */
 	readonly agentReport?: string;
 	/**
@@ -295,10 +295,14 @@ function defaultRender(name: PrFragmentName, ctx: PrFragmentContext): string | n
 			return null; // handled by composeTitle
 		case "summary":
 			return defaultSummary(ctx);
+		case "handoff":
+			return ctx.handoff !== undefined ? defaultHandoff(ctx.handoff) : null;
 		case "agent_notes":
 			return ctx.agentNotes !== undefined ? defaultAgentNotes(ctx.agentNotes) : null;
 		case "agent_report":
-			return ctx.agentReport !== undefined ? defaultAgentReport(ctx.agentReport) : null;
+			return ctx.agentReport !== undefined && ctx.handoff?.state !== "recorded"
+				? defaultAgentReport(ctx.agentReport)
+				: null;
 		case "run":
 			return defaultRun(ctx);
 		case "seeds":

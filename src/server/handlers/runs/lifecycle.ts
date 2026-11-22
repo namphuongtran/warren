@@ -93,6 +93,9 @@ export const PUBLIC_RUN_FIELDS = [
 	// over the same work the diff totals describe. The gate command stays
 	// redacted, like `qualityGate` in the warren-config projection.
 	"qualityGateOutcome",
+	// namphuongtran/warren#21: the agent's handoff report is agent output of the
+	// same class as the event stream and the prompt, which spectators already see.
+	"handoff",
 	"costUsd",
 	// warren-f3c3: how costUsd was priced — the same spectator-safe class as
 	// costUsd itself (it qualifies the number, adds nothing new).

@@ -23,6 +23,7 @@ import type { AgentDefinition } from "../schema.ts";
 import { MODEL_TIERS } from "./model-tiers.ts";
 import {
 	GATE_FINAL_RUN_RULE,
+	HANDOFF_FRAGMENT,
 	MULCH_FRAGMENT,
 	QUALITY_GATE_CHAIN,
 	TRACKER_FRAGMENT,
@@ -67,6 +68,8 @@ ${VALIDATION_DISCIPLINE_BULLETS}
 
 - The project repo is mounted at the burrow workspace root.
 - /workspace/.warren/agent.json is this rendered agent definition.
+
+${HANDOFF_FRAGMENT}
 `;
 
 // warren-cb46: expertise / issue-queue text is capability-gated — a project

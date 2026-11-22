@@ -1,0 +1,1 @@
+ALTER TABLE "runs" ADD COLUMN "handoff_json" jsonb;

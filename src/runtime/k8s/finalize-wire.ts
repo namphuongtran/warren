@@ -31,7 +31,7 @@
  */
 
 import { ValidationError } from "../../core/errors.ts";
-import { isSalvageTrigger, type SalvageTrigger } from "../../core/wire.ts";
+import { clipRunHandoffBody, isSalvageTrigger, type SalvageTrigger } from "../../core/wire.ts";
 import type {
 	ArtifactDelta,
 	ArtifactDeltaFile,
@@ -273,6 +273,8 @@ export function validateFinalizeResult(value: unknown): FinalizeResult {
 	const dirtyPaths = optStringArray(o, "dirtyPaths", "result");
 	// warren-ba08: optional — an older in-pod image omits it (domain falls back to baseBranch).
 	const commitsAheadBase = optStringOrNull(o, "commitsAheadBase", "result");
+	// namphuongtran/warren#21: optional; re-clipped so a pod cannot push a runaway body into reap.
+	const handoffBody = optStringOrNull(o, "handoffBody", "result");
 	return {
 		pushed: reqBoolean(o, "pushed", "result"),
 		commitsAhead: reqNumberOrNull(o, "commitsAhead", "result"),
@@ -281,6 +283,7 @@ export function validateFinalizeResult(value: unknown): FinalizeResult {
 		dirty: reqBoolean(o, "dirty", "result"),
 		...(dirtyPaths !== undefined ? { dirtyPaths } : {}),
 		workspacePlansBody: optStringOrNull(o, "workspacePlansBody", "result"),
+		...(handoffBody !== null ? { handoffBody: clipRunHandoffBody(handoffBody) } : {}),
 		events: validateEvents(o.events),
 		artifacts,
 		prBranch: optStringOrNull(o, "prBranch", "result"),

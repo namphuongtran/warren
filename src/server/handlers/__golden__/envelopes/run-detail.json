@@ -59,6 +59,7 @@
 			"deletions": null,
 			"qualityGate": null,
 			"qualityGateOutcome": null,
+			"handoff": null,
 			"maxCostUsd": null
 		}
 	}

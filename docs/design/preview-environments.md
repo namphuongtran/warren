@@ -448,6 +448,7 @@ registry of **named fragments** (`PR_FRAGMENT_NAMES` in
 ```
 title                         → drives the PR title (truncated to 72 chars)
 summary                       → first commit subject or "agent ran for X; no commits."
+handoff                       → `.warren/handoff.json` report or a missing note (namphuongtran/warren#21)
 agent_notes                   → final commit body (warren-5e86)
 agent_report                  → final assistant message, fenced, 8 KiB cap (namphuongtran/warren#42)
 run                           → warren UI link, agent, duration, cost

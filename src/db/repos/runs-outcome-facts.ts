@@ -8,7 +8,7 @@
 import { eq } from "drizzle-orm";
 import { NotFoundError } from "../../core/errors.ts";
 import type { SqliteDrizzleDb } from "../client.ts";
-import type { RunQualityGateOutcome, RunRow } from "../schema.ts";
+import type { RunHandoffRecord, RunQualityGateOutcome, RunRow } from "../schema.ts";
 import type { DrizzleAdapter } from "./drizzle-adapter.ts";
 
 /**
@@ -66,4 +66,18 @@ export async function setQualityGateOutcome(
 	await adapter.runWrite(
 		db.update(runs).set({ qualityGateOutcome: outcome }).where(eq(runs.id, id)),
 	);
+}
+
+/**
+ * Store the handoff report reap validated (namphuongtran/warren#21). Last
+ * write wins, like the gate outcome above.
+ */
+export async function setHandoff(
+	adapter: DrizzleAdapter,
+	id: string,
+	record: RunHandoffRecord,
+): Promise<void> {
+	const db = adapter.drizzle as SqliteDrizzleDb;
+	const runs = adapter.schema.runs;
+	await adapter.runWrite(db.update(runs).set({ handoff: record }).where(eq(runs.id, id)));
 }

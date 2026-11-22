@@ -177,6 +177,12 @@ export interface ReapRunInput {
 	 */
 	readonly prAutoMerge?: AutoMergeConfig;
 	/**
+	 * The project's `handoff.required` (namphuongtran/warren#21): a succeeded
+	 * run that leaves no valid `.warren/handoff.json` fails with
+	 * `handoff_missing`. Absent = flag only.
+	 */
+	readonly handoffRequired?: boolean;
+	/**
 	 * Override the preview-launch mechanics (tests). Defaults to
 	 * `launchPreview`. Receives the resolved input shape, including the
 	 * port allocator and the resolved sidecars facade, so tests can

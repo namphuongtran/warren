@@ -108,7 +108,7 @@ describe("bridgeRunStream — budget warning (namphuongtran/warren#9)", () => {
 		expect(await kinds("budget.warning")).toHaveLength(1);
 		expect(steers).toEqual([
 			"You are near the spend cap ($8.00 of $10.00 spent). " +
-				"Finish, commit, and write your final message now.",
+				"Finish, commit, write .warren/handoff.json, and write your final message now.",
 		]);
 	});
 

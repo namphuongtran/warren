@@ -20,6 +20,7 @@ import type {
 	PullRequestLifecycle,
 	RunCostBasis,
 	RunFailureReason,
+	RunHandoffRecord,
 	RunMode,
 	RunQualityGateOutcome,
 	RunState,
@@ -44,10 +45,16 @@ export {
 	isTerminalRunState,
 	type PreviewState,
 	type PullRequestLifecycle,
+	RUN_HANDOFF_STATES,
+	RUN_HANDOFF_STATUSES,
 	RUN_QUALITY_GATE_OUTCOMES,
 	RUN_TERMINAL_STATES,
 	type RunCostBasis,
 	type RunFailureReason,
+	type RunHandoff,
+	type RunHandoffRecord,
+	type RunHandoffState,
+	type RunHandoffStatus,
 	type RunMode,
 	type RunQualityGateOutcome,
 	type RunState,
@@ -137,6 +144,12 @@ export interface RunRow {
 	 * derived (pre-column rows, or a run that has not reaped yet).
 	 */
 	qualityGateOutcome: RunQualityGateOutcome | null;
+	/**
+	 * The handoff report reap validated from `.warren/handoff.json`
+	 * (namphuongtran/warren#21): recorded, missing, or invalid with a reason.
+	 * Null = not derived (pre-column rows, or a run that has not reaped yet).
+	 */
+	handoff: RunHandoffRecord | null;
 	prompt: string;
 	trigger: string;
 	prUrl: string | null;

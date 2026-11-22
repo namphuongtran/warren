@@ -28,7 +28,7 @@
 
 import type { AgentDefinition } from "../schema.ts";
 import { MODEL_TIERS } from "./model-tiers.ts";
-import { MULCH_FRAGMENT } from "./prompt-fragments.ts";
+import { HANDOFF_FRAGMENT, MULCH_FRAGMENT } from "./prompt-fragments.ts";
 
 const SYSTEM_BODY = `You are a bug triage agent. Your job is to read existing open bug seeds, investigate the codebase to understand each one, and produce a seeds plan per bug with concrete fix steps. You do NOT write fixes yourself — you produce plans, and separate plan-runs execute them.
 
@@ -49,12 +49,14 @@ Nightwatch scans the codebase proactively and discovers new issues. You work fro
 ## If the project has no issue tracker
 
 If no issue tracker is configured for this project, say so in your final response and exit. Do not fabricate work or invent a queue.
+
+${HANDOFF_FRAGMENT}
 `;
 
 const TRACKER_FRAGMENT = `## Issue queue (seeds)
 
 - /workspace/.seeds/issues.jsonl holds the issue queue.
-- Your only writes are to .seeds/ via the sd CLI.
+- Your only writes are to .seeds/ via the sd CLI, plus the handoff report described below.
 
 ## Qualification — which bugs you plan
 

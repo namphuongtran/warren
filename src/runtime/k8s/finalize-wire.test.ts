@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { ValidationError } from "../../core/errors.ts";
+import { RUN_HANDOFF_MAX_BYTES } from "../../core/wire.ts";
 import type { FinalizeResult } from "../contract.ts";
 import {
 	IN_POD_FINALIZE_WIRE_VERSION,
@@ -54,6 +55,18 @@ describe("validateFinalizeResult", () => {
 		expect(() =>
 			validateFinalizeResult({ ...fullResult(), commitsAheadBase: 7 } as unknown),
 		).toThrow(ValidationError);
+	});
+
+	test("carries an optional handoffBody, clipped, and keeps it off when absent (namphuongtran/warren#21)", () => {
+		expect(validateFinalizeResult(fullResult())).not.toHaveProperty("handoffBody");
+		const body = '{"status":"done","summary":"x"}';
+		expect(validateFinalizeResult({ ...fullResult(), handoffBody: body }).handoffBody).toBe(body);
+		const huge = "x".repeat(RUN_HANDOFF_MAX_BYTES * 2);
+		const clipped = validateFinalizeResult({ ...fullResult(), handoffBody: huge }).handoffBody;
+		expect(clipped?.length).toBe(RUN_HANDOFF_MAX_BYTES + 1);
+		expect(() => validateFinalizeResult({ ...fullResult(), handoffBody: 7 } as unknown)).toThrow(
+			ValidationError,
+		);
 	});
 
 	test("accepts commitsAhead: null (the widened shape)", () => {

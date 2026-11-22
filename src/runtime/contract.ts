@@ -388,6 +388,8 @@ export interface FinalizeResult {
 	 * on its own auto-dispatch frontmatter checks).
 	 */
 	workspacePlansBody: string | null;
+	/** The clipped `.warren/handoff.json` body (namphuongtran/warren#21); null/absent = missing. */
+	handoffBody?: string | null;
 	/**
 	 * The per-record + per-line/stage events the merge functions emitted,
 	 * captured verbatim for the domain to re-emit through its real event surface
@@ -403,11 +405,8 @@ export interface FinalizeResult {
 	 * a delta back by key and never assumes a fixed feature set.
 	 */
 	artifacts: Record<string, ArtifactDelta>;
-	/**
-	 * The pushed branch when it carries real work ready for a PR
-	 * (`pushed && commitsAhead > 0`), else `null`. finalize does NOT open the
-	 * PR — that stays domain orchestration (§4); this only signals readiness.
-	 */
+	/** The pushed branch when it carries real work (`pushed && commitsAhead > 0`), else
+	 * `null`. finalize does NOT open the PR (domain orchestration, §4). */
 	prBranch: string | null;
 	/**
 	 * Per-stage outcome trail — a REFINEMENT over the design-doc shape (which

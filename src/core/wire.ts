@@ -54,15 +54,14 @@ export function isTerminalRunState(state: RunState): state is RunTerminalState {
 export const RUN_MODES = ["batch"] as const;
 export type RunMode = (typeof RUN_MODES)[number];
 
-// The actor vocabulary of GET /whoami (warren-3754) lives in
-// ./wire-actor.ts (file-size budget); re-exported for one canonical home.
+// The GET /whoami actor vocabulary (warren-3754) lives in ./wire-actor.ts.
 export * from "./wire-actor.ts";
 // Cost-basis vocabulary (warren-f3c3) lives in ./wire-cost.ts (file-size budget).
 export * from "./wire-cost.ts";
+export * from "./wire-handoff.ts"; // run handoff report (namphuongtran/warren#21)
 // The steering-inbox vocabulary (warren-3d0b) lives in ./wire-inbox.ts.
 export * from "./wire-inbox.ts";
-// The analytics-insight vocabulary (warren-be04) lives in
-// ./wire-insight.ts (file-size budget); re-exported for one canonical home.
+// The analytics-insight vocabulary (warren-be04) lives in ./wire-insight.ts.
 export * from "./wire-insight.ts";
 // The ops-overview window vocabulary (warren-7194) lives in ./wire-ops.ts.
 export * from "./wire-ops.ts";
@@ -217,6 +216,7 @@ export const RUN_FAILURE_REASONS = [
 	"evicted",
 	"preempted",
 	"duration_exceeded",
+	"handoff_missing",
 ] as const;
 export type RunFailureReason = (typeof RUN_FAILURE_REASONS)[number];
 

@@ -31,6 +31,7 @@
  */
 
 import { join } from "node:path";
+import { clipRunHandoffBody, RUN_HANDOFF_PATH } from "../../core/wire.ts";
 import type { EventRow } from "../../db/schema.ts";
 import { mergeMulch } from "../../runs/reap/mulch.ts";
 import { mirrorPlans, mirrorSeeds } from "../../runs/reap/seeds.ts";
@@ -159,7 +160,10 @@ export async function finalizeLocalWorkspace(
 	// clone-union over it — this is exactly what reap's `snapshotWorkspacePlans`
 	// reads for auto-plan-run detection (warren-1f56), and the workspace is gone
 	// after `terminate`, so finalize must capture it here.
-	const workspacePlansBody = await captureWorkspacePlans(workspacePath, fs);
+	const workspacePlansBody = await captureWorkspaceFile(workspacePath, ".seeds/plans.jsonl", fs);
+	// The agent's handoff report (namphuongtran/warren#21), clipped before it leaves finalize.
+	const handoff = await captureWorkspaceFile(workspacePath, RUN_HANDOFF_PATH, fs);
+	const handoffBody = handoff === null ? null : clipRunHandoffBody(handoff);
 	if (commit.has("seeds")) {
 		await finalizeSeedsCommit(workspacePath, clonePath, fs, exec, trail, collector);
 	}
@@ -178,6 +182,7 @@ export async function finalizeLocalWorkspace(
 		dirty: push.dirty,
 		dirtyPaths: push.dirtyPaths,
 		workspacePlansBody,
+		handoffBody,
 		artifacts: {
 			...(mulch !== undefined ? { mulch } : {}),
 			...(seeds !== undefined ? { seeds } : {}),
@@ -206,10 +211,14 @@ function resolveClonePath(intent: FinalizeIntent, artifacts: Set<string>): strin
 	return hint;
 }
 
-/** Snapshot workspace `.seeds/plans.jsonl` for auto-plan-run detection; `null` if absent. */
-async function captureWorkspacePlans(workspacePath: string, fs: ReapFs): Promise<string | null> {
+/** Snapshot a workspace file before `terminate` destroys it; `null` if absent/unreadable. */
+async function captureWorkspaceFile(
+	workspacePath: string,
+	relPath: string,
+	fs: ReapFs,
+): Promise<string | null> {
 	try {
-		return await fs.readFile(join(workspacePath, ".seeds", "plans.jsonl"));
+		return await fs.readFile(join(workspacePath, relPath));
 	} catch {
 		return null;
 	}

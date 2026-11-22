@@ -47,10 +47,15 @@ function capMessage(text: string): string {
  * fence only on a run at least as long as the opener, so no fence inside the
  * message can end the section early.
  */
-function fenceFor(text: string): string {
+export function fenceFor(text: string): string {
+	return "`".repeat(Math.max(3, longestBacktickRun(text) + 1));
+}
+
+/** Length of the longest run of backticks in `text` (0 when there is none). */
+export function longestBacktickRun(text: string): number {
 	let longest = 0;
 	for (const run of text.match(/`+/g) ?? []) longest = Math.max(longest, run.length);
-	return "`".repeat(Math.max(3, longest + 1));
+	return longest;
 }
 
 /**
@@ -58,7 +63,7 @@ function fenceFor(text: string): string {
  * this section sits above `## Preview`. Re-spell a quoted marker so it can
  * never be mistaken for the real one.
  */
-function neutralizePreviewMarkers(text: string): string {
+export function neutralizePreviewMarkers(text: string): string {
 	return text
 		.replaceAll(PREVIEW_FRAGMENT_START, quoted(PREVIEW_FRAGMENT_START))
 		.replaceAll(PREVIEW_FRAGMENT_END, quoted(PREVIEW_FRAGMENT_END));

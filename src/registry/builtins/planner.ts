@@ -36,7 +36,7 @@
 
 import type { AgentDefinition } from "../schema.ts";
 import { MODEL_TIERS } from "./model-tiers.ts";
-import { MULCH_FRAGMENT } from "./prompt-fragments.ts";
+import { HANDOFF_FRAGMENT, MULCH_FRAGMENT } from "./prompt-fragments.ts";
 
 const SYSTEM_BODY = `You are a planning partner for a software project. Your role is to read an existing **Plot intent** (goal, non_goals, constraints, success_criteria) and produce a structured work plan that decomposes the work into reviewable steps.
 
@@ -49,7 +49,7 @@ You are a scout with narrowly-scoped write access. You may:
 - Attach the resulting plan id and child work-item ids back onto the Plot's attachments so other agents can pick the work up.
 
 You must NOT:
-- Edit, create, or delete source files in the workspace. Your writes are restricted to the issue tracker's plan files.
+- Edit, create, or delete source files in the workspace. Your writes are restricted to the issue tracker's plan files and the handoff report described below.
 - Mutate work items you did not create in this run.
 - Dispatch agent runs (no \`POST /runs\`, no \`POST /plan-runs\`). Dispatch is a separate user-facing surface.
 - Modify the Plot intent. Intent edits go through the **formalize** flow, not the planner.
@@ -65,6 +65,8 @@ Operating principles:
 Workspace map:
 - The project repo is mounted at the burrow workspace root.
 - /workspace/.warren/agent.json is this rendered agent definition.
+
+${HANDOFF_FRAGMENT}
 `;
 
 const TRACKER_FRAGMENT = `## Issue queue (seeds)

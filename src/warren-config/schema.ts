@@ -46,6 +46,7 @@ import { parseDurationMs } from "../preview/duration.ts";
 // here so role names and registry names can never drift apart.
 import { AGENT_NAME_PATTERN } from "../registry/agent-name.ts";
 import { CiFixerConfigSchema, HealerConfigSchema } from "./feature-loop-config.ts";
+import { HandoffConfigSchema } from "./handoff-config.ts";
 import { MigrationsConfigSchema } from "./migrations-config.ts";
 import { PrConfigSchema } from "./pr-config.ts";
 import { AdmissionConfigSchema, ResourcesConfigSchema } from "./resources-config.ts";
@@ -402,12 +403,10 @@ export const DefaultsConfigSchema = z
 		// warren-3db0: opt-in closed-loop healer; missing block → intake skips it.
 		healer: HealerConfigSchema.optional(),
 		qualityGate: z.string().min(1, "qualityGate must be non-empty if provided").optional(),
-		// warren-540f: free-text per-project onboarding context injected into
-		// every dispatched agent's prompt by composeDispatchPrompt. This is where
-		// "this is a Python repo, the gate is pytest -q, there is no tracker here"
-		// lives for a mirror you do not control. Capped at 8 KiB so a runaway
-		// blob cannot silently eat the prompt budget; bytes are counted in the
-		// dispatch-context `prompt_bytes`.
+		// warren-540f: free-text onboarding context composeDispatchPrompt injects
+		// into every agent's prompt ("Python repo, gate is pytest -q, no tracker")
+		// for a mirror you do not control. Capped at 8 KiB so a runaway blob
+		// cannot eat the prompt budget; counted in dispatch-context `prompt_bytes`.
 		repoContext: z
 			.string()
 			.min(1, "repoContext must be non-empty if provided")
@@ -418,6 +417,7 @@ export const DefaultsConfigSchema = z
 		tracker: TrackerConfigSchema.optional(),
 		// warren-6c5a / pl-92a3 step 4: opt-in PR auto-merge (pr-config.ts).
 		pr: PrConfigSchema.optional(),
+		handoff: HandoffConfigSchema.optional(), // namphuongtran/warren#21 (handoff-config.ts)
 		// warren-4371: in-sandbox migration repair guidance (migrations-config.ts).
 		migrations: MigrationsConfigSchema.optional(),
 	})

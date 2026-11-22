@@ -1302,6 +1302,7 @@ components:
         - evicted
         - preempted
         - duration_exceeded
+        - handoff_missing
     RunMode:
       type: string
       enum:
@@ -1512,6 +1513,7 @@ components:
             - evicted
             - preempted
             - duration_exceeded
+            - handoff_missing
             - null
         createdAt:
           type:

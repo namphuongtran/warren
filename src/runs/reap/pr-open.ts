@@ -1,4 +1,5 @@
 import { CI_FIXER_TRIGGER } from "../../ci-fixer/poller.ts";
+import type { RunHandoffRecord } from "../../core/wire.ts";
 import type { Forge, ForgeErrorKind, PullRequestRef, RepoRef } from "../../forge/contract.ts";
 import { mintGitCredential } from "../../forge/credentials.ts";
 import type { IssueTracker } from "../../tracker/contract.ts";
@@ -92,6 +93,8 @@ export interface TryOpenPrInput {
 	 * (namphuongtran/warren#42); null/undefined renders no section.
 	 */
 	readonly agentReport?: string | null;
+	/** The reap-validated handoff (namphuongtran/warren#21); null renders no section. */
+	readonly handoff?: RunHandoffRecord | null;
 	/**
 	 * warren-cbd3: the terminal provider-error message when the run failed
 	 * with one AFTER committing and pushing. Labels the PR body's `run`
@@ -103,17 +106,20 @@ export interface TryOpenPrInput {
 }
 
 /**
- * The agent's own handoff text for the PR body: the final commit body
+ * The agent's own handoff text for the PR body: the handoff report
+ * (`## Handoff`, namphuongtran/warren#21), the final commit body
  * (`## Agent notes`, warren-5e86) and the final assistant message
  * (`## Agent report`, namphuongtran/warren#42). Absent sources are omitted.
  */
 function handoffFields(
 	finalCommitBody: string | null,
 	agentReport: string | null | undefined,
-): Pick<BuildPrContentInput, "agentNotes" | "agentReport"> {
+	handoff: RunHandoffRecord | null | undefined,
+): Pick<BuildPrContentInput, "agentNotes" | "agentReport" | "handoff"> {
 	return {
 		...(finalCommitBody !== null ? { agentNotes: finalCommitBody } : {}),
 		...(agentReport !== null && agentReport !== undefined ? { agentReport } : {}),
+		...(handoff !== null && handoff !== undefined ? { handoff } : {}),
 	};
 }
 
@@ -139,7 +145,7 @@ export async function tryOpenPr(input: TryOpenPrInput): Promise<TryOpenPrResult>
 			? { warrenBaseUrl: input.autoOpen.warrenBaseUrl }
 			: {}),
 		...(input.prContext.seed !== null ? { seed: input.prContext.seed } : {}),
-		...handoffFields(input.prContext.finalCommitBody, input.agentReport),
+		...handoffFields(input.prContext.finalCommitBody, input.agentReport, input.handoff),
 		...(input.run.startedAt !== null ? { startedAt: input.run.startedAt } : {}),
 		...(input.run.endedAt !== null ? { endedAt: input.run.endedAt } : {}),
 		...(input.run.costUsd !== null ? { costUsd: input.run.costUsd } : {}),
@@ -228,6 +234,8 @@ export interface RunPrOpenInput {
 	readonly providerError?: string | null;
 	/** The run's final assistant message (namphuongtran/warren#42). */
 	readonly agentReport?: string | null;
+	/** The reap-validated handoff (namphuongtran/warren#21). */
+	readonly handoff?: RunHandoffRecord | null;
 	/** Injected sleep for tests; defaults to real setTimeout-based sleep. */
 	readonly sleep?: (ms: number) => Promise<void>;
 	/**
@@ -318,6 +326,7 @@ export async function runPrOpen(input: RunPrOpenInput): Promise<OpenedPr | null>
 			previewOptedIn: input.previewOptedIn,
 			providerError: input.providerError,
 			agentReport: input.agentReport,
+			handoff: input.handoff,
 			...(input.prTemplate !== undefined ? { prTemplate: input.prTemplate } : {}),
 		};
 		const sleep = input.sleep ?? defaultSleep;
@@ -414,8 +423,12 @@ export async function prOpenStep(
 		setPrUrl: (id, url) => ctx.input.repos.runs.setPrUrl(id, url),
 		providerError: ctx.input.providerErrorPr?.message,
 		agentReport: await loadAgentReport(ctx.input.repos.events, ctx.run.id),
+		handoff: state.handoff,
 		...(ctx.input.prTemplate !== undefined ? { prTemplate: ctx.input.prTemplate } : {}),
-		...(ctx.input.prAutoMerge !== undefined ? { prAutoMerge: ctx.input.prAutoMerge } : {}),
+		// namphuongtran/warren#21: never arm auto-merge on a run failing its required handoff.
+		...(ctx.input.prAutoMerge !== undefined && !state.handoffShortfall
+			? { prAutoMerge: ctx.input.prAutoMerge }
+			: {}),
 		...(ctx.input.sleep !== undefined ? { sleep: ctx.input.sleep } : {}),
 	});
 	state.prUrl = state.openedPr?.url ?? null;

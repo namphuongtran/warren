@@ -19,6 +19,7 @@
  */
 
 import { join } from "node:path";
+import type { RunHandoffRecord } from "../../core/wire.ts";
 import type { EventRow, ProjectRow, RunRow } from "../../db/schema.ts";
 import type { PreviewSidecarResolver } from "../../preview/launch/index.ts";
 import type { FinalizeResult, FinalizeStage, RuntimeProvider } from "../../runtime/contract.ts";
@@ -28,6 +29,7 @@ import type { BoundBridgeLogger } from "../stream/index.ts";
 import { dispatchAutoPlanRuns, hasAutoPlanRunFrontmatter, parsePlanIds } from "./auto-plan-run.ts";
 import { applyK8sCloneDeltas } from "./clone-apply.ts";
 import { runProviderFinalize } from "./finalize-intent.ts";
+import { isHandoffShortfall, recordHandoff } from "./handoff.ts";
 import { type DiffStats, recordOutcomeFacts } from "./outcome-facts.ts";
 import { type OpenedPr, prOpenStep } from "./pr-open.ts";
 import { runPreviewAnnotate, runPreviewLaunch } from "./preview.ts";
@@ -80,6 +82,14 @@ export interface ReapPipelineState {
 	autoPlanRunCreated: boolean;
 	autoPlanRunId: string | null;
 	autoPlanRunPlanId: string | null;
+	/** namphuongtran/warren#21: the validated handoff; null = finalize never ran. */
+	handoff: RunHandoffRecord | null;
+	/**
+	 * A succeeded run left no valid handoff, and the project requires one. reap
+	 * fails the run with `handoff_missing`; the pipeline still opens the PR so a
+	 * reviewer sees the work, but withholds auto-merge, auto-plan-run, and preview.
+	 */
+	handoffShortfall: boolean;
 }
 
 /** Fresh state with every field at its "nothing happened yet" default. */
@@ -109,6 +119,8 @@ export function createPipelineState(): ReapPipelineState {
 		autoPlanRunCreated: false,
 		autoPlanRunId: null,
 		autoPlanRunPlanId: null,
+		handoff: null,
+		handoffShortfall: false,
 	};
 }
 
@@ -286,6 +298,13 @@ async function autoDispatchStep(
 		await ctx.emit("auto_plan_run_skipped", { reason: "mirror_durability_failed" });
 		return;
 	}
+	// namphuongtran/warren#21: a run that failed its required handoff dispatches nothing.
+	if (state.handoffShortfall) {
+		if (plans.baseline !== null) {
+			await ctx.emit("auto_plan_run_skipped", { reason: "handoff_missing" });
+		}
+		return;
+	}
 	const autoDispatch = await dispatchAutoPlanRuns({
 		run: ctx.run,
 		project: ctx.project,
@@ -312,6 +331,7 @@ async function previewLaunchStep(
 	state: ReapPipelineState,
 ): Promise<void> {
 	const { sandboxId } = ctx.run;
+	if (state.handoffShortfall) return; // namphuongtran/warren#21: the run is failing
 	// Surface the skip only when a successful, committed run opted in (preview would launch locally).
 	if (!ctx.provider.capabilities.previewPorts) {
 		if (
@@ -446,6 +466,17 @@ export async function runReapPipeline(
 	applyFinalizeToState(state, finalizeResult);
 	if (finalizeThrew) state.finalizeFailed = true;
 	await emitEmptyPushIfNeeded(ctx, state, finalizeResult);
+	state.handoff = await recordHandoff({
+		runs: ctx.input.repos.runs,
+		runId: ctx.run.id,
+		body: finalizeResult.handoffBody,
+		required: ctx.input.handoffRequired === true,
+		emit: ctx.emit,
+		log: ctx.log,
+	});
+	state.handoffShortfall =
+		ctx.input.outcome === "succeeded" &&
+		isHandoffShortfall(state.handoff, ctx.input.handoffRequired);
 
 	// warren-e9e1 (leg 2): K8s merged in-pod, so apply finalize's mirror deltas to
 	// the clone host-side. Gated on the K8s discriminator; the local path already

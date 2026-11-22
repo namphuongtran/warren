@@ -34,11 +34,11 @@
  */
 
 import { formatError } from "../core/errors.ts";
-import { renderPlanRunPrompt } from "../core/plan-run-prompt.ts";
 import { type Issue, IssueNotFoundError } from "../core/wire.ts";
 import type { Repos } from "../db/repos/index.ts";
 import type { PlanRunChildRow, PlanRunChildState, PlanRunRow } from "../db/schema.ts";
 import type { PrMergeChecker } from "../runs/pr-merge.ts";
+import { renderChildPrompt } from "./child-prompt.ts";
 import { DEFAULT_PLAN_RUN_MERGE_STALLED_WARNING_MS } from "./config.ts";
 import { PlanRunSpawnDeferredError } from "./errors.ts";
 import { handleInFlight } from "./in-flight.ts";
@@ -260,9 +260,9 @@ export async function advancePlanRun(input: AdvancePlanRunInput): Promise<Advanc
 			continue;
 		}
 
-		// Dispatch the next child; legacy {seed_id}-only template render.
-		// Every occurrence is substituted (warren-b3be).
-		const prompt = renderPlanRunPrompt(planRun.promptTemplate, next.seedId);
+		// Dispatch the next child: the {seed_id} template (warren-b3be) plus the
+		// previous child's handoff report (namphuongtran/warren#21).
+		const prompt = await renderChildPrompt(input.repos, planRun, next);
 		let spawnResult: CoordinatorSpawnResult;
 		try {
 			spawnResult = await input.spawn({ planRun, child: next, prompt });

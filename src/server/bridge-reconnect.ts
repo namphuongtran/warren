@@ -27,7 +27,7 @@ import type { RuntimeProvider } from "../runtime/contract.ts";
 import type { SeedsCliDeps } from "../seeds-cli/index.ts";
 import type { IssueTracker } from "../tracker/contract.ts";
 import type { WarrenConfigCache } from "../warren-config/index.ts";
-import { resolveSucceededReapProjectConfig } from "./bridge-reconnect-config.ts";
+import { NO_PROJECT_CONFIG, resolveSucceededReapProjectConfig } from "./bridge-reconnect-config.ts";
 import { teardownLostRunWorkspace } from "./bridge-reconnect-teardown.ts";
 
 export const TERMINAL_RUN_STATES: ReadonlySet<RunState> = new Set([
@@ -167,10 +167,10 @@ export async function runWithReconnect(
 			// external scheduler. reap is idempotent + best-effort, so
 			// errors land as `reap.completed`/`reap_failed` events on the
 			// run rather than escaping back up the registry.
-			const { previewConfig, prTemplate, prAutoMerge } =
+			const { previewConfig, prTemplate, prAutoMerge, handoffRequired } =
 				result.terminalDetected.outcome === "succeeded"
 					? await resolveSucceededReapProjectConfig(input, log)
-					: { previewConfig: undefined, prTemplate: undefined, prAutoMerge: undefined };
+					: NO_PROJECT_CONFIG;
 			try {
 				await input.reap({
 					runId: input.runId,
@@ -183,9 +183,8 @@ export async function runWithReconnect(
 					runtimeProvider: input.runtimeProvider,
 					broker: input.broker,
 					logger: log,
-					// warren-9cce: carry the poller's distilled `failure_reason`
-					// (`oom_killed`) so reap finalizes with it instead of inferring an
-					// anonymous crash. Absent for the in-stream terminal path.
+					// warren-9cce: carry the poller's `failure_reason` (`oom_killed`) rather than
+					// inferring an anonymous crash. Absent for the in-stream terminal path.
 					...(result.terminalDetected.failureReason !== undefined
 						? { failureReason: result.terminalDetected.failureReason }
 						: {}),
@@ -197,6 +196,7 @@ export async function runWithReconnect(
 						: {}),
 					...(prTemplate !== undefined ? { prTemplate } : {}),
 					...(prAutoMerge !== undefined ? { prAutoMerge } : {}),
+					...(handoffRequired !== undefined ? { handoffRequired } : {}),
 					...(input.seedsCli !== undefined ? { seedsCli: input.seedsCli } : {}),
 					...(input.issueTracker !== undefined ? { issueTracker: input.issueTracker } : {}),
 				});

@@ -12,6 +12,23 @@ Releases **0.9.10 and earlier** live in
 
 ### Added
 
+- **Run handoff report (namphuongtran/warren#21).** Every built-in agent
+  now writes `.warren/handoff.json` before it ends: `status` (`done`,
+  `partial`, `blocked`), `summary`, `verification`, `howToTry`, and
+  `openQuestions`. A run git-exclude keeps the file off the branch. Finalize
+  collects it on every provider (local, Docker, and the K8s in-pod
+  finalize, which sends it over the wire). Reap validates it (16 KiB cap),
+  stores it as `handoff` on `GET /runs/:id` and the runs list, emits
+  `handoff.recorded` or `handoff.missing`, and renders a `## Handoff` PR-body
+  fragment that replaces `## Agent report` when a report exists. A missing
+  or invalid report is flagged with a reason. A new `.warren/config.yaml`
+  block, `handoff: { required: true }`, fails such a run with the new
+  `handoff_missing` failure reason. Its PR still opens, but auto-merge,
+  auto-plan-run, and preview are withheld. In a plan-run, child N+1's prompt
+  carries child N's report, fenced. The budget-warning steer now asks for
+  the report too. Adds a nullable `runs.handoff_json` column (SQLite 0058,
+  Postgres 0053).
+
 - **Per-run quality-gate outcome (namphuongtran/warren#36).** Dispatch
   freezes the project's `qualityGate` onto the run. At reap, Warren reads
   the agent's tool calls and records `qualityGateOutcome`: `unconfigured`,

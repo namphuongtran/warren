@@ -75,6 +75,16 @@ describe("BUILTIN_AGENTS", () => {
 		}
 	});
 
+	test("each builtin asks for the handoff report with its schema (namphuongtran/warren#21)", () => {
+		for (const builtin of BUILTIN_AGENTS) {
+			const system = builtin.sections.system ?? "";
+			expect(system).toContain(".warren/handoff.json");
+			for (const field of ["status", "summary", "verification", "howToTry", "openQuestions"]) {
+				expect(system).toContain(`"${field}"`);
+			}
+		}
+	});
+
 	test("each builtin round-trips through parseRenderedAgent (the canopy schema)", () => {
 		for (const builtin of BUILTIN_AGENTS) {
 			const renderResponse: RenderResponse = {
