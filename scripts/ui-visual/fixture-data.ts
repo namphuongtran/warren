@@ -32,6 +32,11 @@ import {
 	SEEDS_REPO,
 	seedRun,
 } from "./fixture-runs.ts";
+import {
+	type PinnedJudgeVerdict,
+	pinnedJudgeVerdicts,
+	seedRunSummaries,
+} from "./fixture-summary.ts";
 
 export { FIXTURE_NOW_ISO, FIXTURE_NOW_MS, FIXTURE_TOKEN, minutesAgo } from "./fixture-runs.ts";
 
@@ -73,6 +78,8 @@ export interface SeedResult {
 	readonly ids: FixtureIds;
 	/** NDJSON body the fake judge export serves (newest first). */
 	readonly judgeRuns: readonly { readonly runId: string; readonly endedAt: string }[];
+	/** Verdicts pinned to lifecycle-state runs for the run detail Summary. */
+	readonly pinnedVerdicts: readonly PinnedJudgeVerdict[];
 }
 
 const RUN_IDS = {
@@ -393,6 +400,20 @@ export async function seedFixtureDb(input: SeedFixtureInput): Promise<SeedResult
 		});
 
 		for (const spec of stateRunSpecs(seedsProject.id)) await seedRun(repos, spec);
+		await seedRunSummaries(repos, RUN_IDS);
+		await appendWithToolCalls(
+			repos,
+			historyRunEvents({
+				runId: RUN_IDS.prOpen,
+				// Past every history index, so its tool-use ids stay unique.
+				index: 900,
+				startedMs: minutesAgo(51).getTime(),
+				endedMs: minutesAgo(33).getTime(),
+				prUrl: prUrlFor(1406),
+				steered: false,
+			}),
+		);
+		const pinnedVerdicts = pinnedJudgeVerdicts(RUN_IDS, minutesAgo(33).toISOString());
 		const eventCount = await appendWithToolCalls(
 			repos,
 			runningRunEvents(RUN_IDS.running, minutesAgo(8).getTime()),
@@ -411,9 +432,12 @@ export async function seedFixtureDb(input: SeedFixtureInput): Promise<SeedResult
 			tracker: { dispatchedPlanId: planRun.planId, readyPlanId: "pl-fx02" },
 			agents: { builtin: BUILTIN_AGENTS.map((a) => a.name), legacyLibrary: LEGACY_AGENT },
 			events: { runId: RUN_IDS.running, count: eventCount },
-			telemetry: { historyRunIds: history.ids, judgeRows: history.judgeRuns.length },
+			telemetry: {
+				historyRunIds: history.ids,
+				judgeRows: history.judgeRuns.length + pinnedVerdicts.length,
+			},
 		};
-		return { ids, judgeRuns: history.judgeRuns };
+		return { ids, judgeRuns: history.judgeRuns, pinnedVerdicts };
 	} finally {
 		await db.close();
 	}

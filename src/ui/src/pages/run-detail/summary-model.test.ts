@@ -1,0 +1,193 @@
+import { describe, expect, test } from "bun:test";
+import type { JudgeStoreRow } from "../telemetry/judge-verdicts.ts";
+import {
+	changesLink,
+	evidenceHref,
+	findRunJudgeRow,
+	handoffStatusView,
+	pullRequestTone,
+	pushedBranch,
+	qualityGateView,
+	readRunDetailView,
+} from "./summary-model.ts";
+
+describe("readRunDetailView", () => {
+	test("opens the Summary tab when the URL names no tab", () => {
+		expect(readRunDetailView(new URLSearchParams(""))).toEqual({ tab: "summary", seqRange: null });
+	});
+
+	test("opens the Activity tab when the URL asks for it", () => {
+		expect(readRunDetailView(new URLSearchParams("tab=activity")).tab).toBe("activity");
+	});
+
+	test("falls back to Summary for an unknown tab", () => {
+		expect(readRunDetailView(new URLSearchParams("tab=bogus")).tab).toBe("summary");
+	});
+
+	test("reads an evidence range and opens Activity for it", () => {
+		expect(readRunDetailView(new URLSearchParams("seq=12-18"))).toEqual({
+			tab: "activity",
+			seqRange: { fromSeq: 12, toSeq: 18 },
+		});
+	});
+
+	test("reads a single sequence number as a one-event range", () => {
+		expect(readRunDetailView(new URLSearchParams("tab=activity&seq=7")).seqRange).toEqual({
+			fromSeq: 7,
+			toSeq: 7,
+		});
+	});
+
+	test("ignores a malformed or backwards range", () => {
+		for (const seq of ["abc", "9-3", "-1", "1-", "1.5-2", ""]) {
+			expect(readRunDetailView(new URLSearchParams(`tab=activity&seq=${seq}`)).seqRange).toBeNull();
+		}
+	});
+});
+
+describe("evidenceHref", () => {
+	test("points at the run's Activity tab with the range highlighted", () => {
+		expect(evidenceHref("run_abc", { fromSeq: 12, toSeq: 18 })).toBe(
+			"/runs/run_abc?tab=activity&seq=12-18",
+		);
+	});
+
+	test("writes a one-event range as a single number", () => {
+		expect(evidenceHref("run_abc", { fromSeq: 7, toSeq: 7 })).toBe(
+			"/runs/run_abc?tab=activity&seq=7",
+		);
+	});
+
+	test("round-trips through readRunDetailView", () => {
+		const href = evidenceHref("run_abc", { fromSeq: 3, toSeq: 40 });
+		const params = new URLSearchParams(href.split("?")[1]);
+		expect(readRunDetailView(params).seqRange).toEqual({ fromSeq: 3, toSeq: 40 });
+	});
+});
+
+function judgeRow(
+	id: number,
+	runId: string,
+	kind: "verdict" | "unjudged" = "verdict",
+): JudgeStoreRow {
+	return {
+		id,
+		kind,
+		runId,
+		rubricVersion: "sha256:fx",
+		judgeModelId: "claude-haiku-4-5",
+		verdict: null,
+		reason: kind === "unjudged" ? "transcript_too_short" : null,
+		detail: null,
+	};
+}
+
+describe("findRunJudgeRow", () => {
+	test("returns null when the judge has not scored the run", () => {
+		expect(findRunJudgeRow([judgeRow(1, "run_other")], "run_abc")).toBeNull();
+	});
+
+	test("returns the newest row for the run when it was judged twice", () => {
+		const rows = [judgeRow(3, "run_other"), judgeRow(2, "run_abc"), judgeRow(5, "run_abc")];
+		expect(findRunJudgeRow(rows, "run_abc")?.id).toBe(5);
+	});
+
+	test("returns an unjudged marker so the page can say why", () => {
+		expect(findRunJudgeRow([judgeRow(4, "run_abc", "unjudged")], "run_abc")?.kind).toBe("unjudged");
+	});
+});
+
+describe("changesLink", () => {
+	const base = {
+		prUrl: null,
+		baseSha: "4be1f2a9c0d3e5f60718293a4b5c6d7e8f901234",
+		branch: "warren/run_abc",
+		targetBranch: null,
+	};
+
+	test("opens the PR's files view when the run opened a GitHub PR", () => {
+		const run = { ...base, prUrl: "https://github.com/acme/app/pull/12" };
+		expect(changesLink(run, "https://github.com/acme/app")).toEqual({
+			href: "https://github.com/acme/app/pull/12/files",
+			label: "Files on the PR",
+		});
+	});
+
+	test("opens a non-GitHub PR as it is", () => {
+		const run = { ...base, prUrl: "https://dev.azure.com/acme/app/_git/app/pullrequest/9" };
+		expect(changesLink(run, null)?.href).toBe(
+			"https://dev.azure.com/acme/app/_git/app/pullrequest/9",
+		);
+	});
+
+	test("builds a GitHub compare view from the base commit to the pushed branch", () => {
+		expect(changesLink(base, "https://github.com/acme/app.git")).toEqual({
+			href: "https://github.com/acme/app/compare/4be1f2a9c0d3e5f60718293a4b5c6d7e8f901234...warren/run_abc",
+			label: "Compare on GitHub",
+		});
+	});
+
+	test("reads an SSH remote and prefers the target branch reap pushed to", () => {
+		const run = { ...base, targetBranch: "feat/x" };
+		expect(changesLink(run, "git@github.com:acme/app.git")?.href).toBe(
+			"https://github.com/acme/app/compare/4be1f2a9c0d3e5f60718293a4b5c6d7e8f901234...feat/x",
+		);
+	});
+
+	test("returns null without a PR, a base commit, a branch, or a GitHub remote", () => {
+		expect(changesLink({ ...base, baseSha: null }, "https://github.com/acme/app")).toBeNull();
+		expect(changesLink({ ...base, branch: null }, "https://github.com/acme/app")).toBeNull();
+		expect(changesLink(base, "https://gitlab.com/acme/app")).toBeNull();
+		expect(changesLink(base, undefined)).toBeNull();
+	});
+});
+
+describe("qualityGateView", () => {
+	test("says the outcome lands at reap while the run is still live", () => {
+		expect(qualityGateView(null, false)).toEqual({
+			label: "Pending",
+			tone: "neutral",
+			detail: "Warren reads the gate outcome when the run finishes.",
+		});
+	});
+
+	test("says nothing was recorded for a finished run without an outcome", () => {
+		expect(qualityGateView(null, true).label).toBe("Not recorded");
+	});
+
+	test("flags a pass followed by more edits as a warning", () => {
+		const view = qualityGateView("stale", true);
+		expect(view.tone).toBe("warning");
+		expect(view.label).toBe("Stale");
+	});
+
+	test("reads a pass as success and a failure as danger", () => {
+		expect(qualityGateView("passed", true).tone).toBe("success");
+		expect(qualityGateView("failed", true).tone).toBe("danger");
+	});
+});
+
+describe("handoffStatusView", () => {
+	test("reads the agent's own status into a tone", () => {
+		expect(handoffStatusView("done")).toEqual({ label: "Done", tone: "success" });
+		expect(handoffStatusView("partial")).toEqual({ label: "Partial", tone: "warning" });
+		expect(handoffStatusView("blocked")).toEqual({ label: "Blocked", tone: "danger" });
+	});
+});
+
+describe("pushedBranch", () => {
+	test("prefers the existing branch reap pushed to over the composed run branch", () => {
+		expect(pushedBranch({ targetBranch: "feat/x", branch: "warren/run_abc" })).toBe("feat/x");
+		expect(pushedBranch({ targetBranch: null, branch: "warren/run_abc" })).toBe("warren/run_abc");
+		expect(pushedBranch({ targetBranch: null, branch: null })).toBeNull();
+	});
+});
+
+describe("pullRequestTone", () => {
+	test("reads merged as success, open as waiting, closed as a loss, unknown as neutral", () => {
+		expect(pullRequestTone("merged")).toBe("success");
+		expect(pullRequestTone("open")).toBe("warning");
+		expect(pullRequestTone("closed_unmerged")).toBe("danger");
+		expect(pullRequestTone(null)).toBe("neutral");
+	});
+});

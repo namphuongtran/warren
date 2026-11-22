@@ -43,7 +43,7 @@
 		},
 		{
 			"a": "src/server/handlers/runs/analytics.projection.ts",
-			"b": "src/ui/src/api/types.ts",
+			"b": "src/ui/src/api/run-analytics-types.ts",
 			"why": "The RunAnalyticsTokensSection interface, declared in the handler and mirrored into the UI types. An interface, not guardable enum vocabulary; hoisting wire interfaces to src/core is warren-42f1's scope, after which this entry goes away."
 		},
 		{

@@ -44,13 +44,6 @@ import type {
 	WhoamiResponse,
 } from "./types.ts";
 
-export type {
-	DimensionTokenSeries,
-	RunAnalyticsTokensSection,
-	TokenBreakdown,
-	TokenDayBucket,
-} from "./types.ts";
-
 const TOKEN_KEY = "warren.apiToken";
 
 export class UnauthorizedError extends Error {

@@ -4,6 +4,7 @@ import type { RunEvent } from "@/api/types.ts";
 import { cn } from "@/lib/utils.ts";
 import { eventKindLabel, isEventError, summarizeEvent } from "@/pages/run-detail/event-summary.ts";
 import { formatWallClock } from "@/pages/run-detail-format.ts";
+import type { SeqRange } from "./summary-model.ts";
 
 /**
  * The Direction C structured event tail (warren-8c85 / pl-7e38 step 4),
@@ -14,6 +15,10 @@ import { formatWallClock } from "@/pages/run-detail-format.ts";
  * payload behind an expand toggle. Live tailing rides the existing
  * NDJSON stream reader (useEventStream feeds `events`); Tail toggles
  * auto-scroll, matching the export's "Tail: on" control.
+ *
+ * `highlight` (namphuongtran/warren#38) marks a judge evidence range: the
+ * rows in it get a primary left rule and `aria-current`, the tail stops
+ * auto-scrolling, and the first marked row scrolls into view.
  */
 
 const FILTERS = ["all", "agent", "system", "errors"] as const;
@@ -108,12 +113,23 @@ function TailToggle({
 	);
 }
 
-function EventRow({ event }: { event: RunEvent }) {
+function inRange(seq: number, range: SeqRange | null | undefined): boolean {
+	return range !== null && range !== undefined && seq >= range.fromSeq && seq <= range.toSeq;
+}
+
+function EventRow({ event, highlighted }: { event: RunEvent; highlighted: boolean }) {
 	const expanded =
 		typeof event.payload === "string" ? event.payload : JSON.stringify(event.payload, null, 2);
 	const summary = summarizeEvent(event);
 	return (
-		<details className="group md:border-(--color-border) md:border-b md:last:border-b-0">
+		<details
+			data-seq={event.seq}
+			aria-current={highlighted ? "true" : undefined}
+			className={cn(
+				"group md:border-(--color-border) md:border-b md:last:border-b-0",
+				highlighted && "border-(--color-primary) border-l-2 bg-(--color-surface-raised)",
+			)}
+		>
 			<summary className="flex cursor-pointer select-none items-start gap-[7px] px-3 py-[7px] hover:bg-(--color-surface-hover) md:px-2.5 md:py-1.5 [&::-webkit-details-marker]:hidden">
 				<span className="hidden w-[42px] shrink-0 font-mono text-(--color-text-3) text-[9px] leading-3 md:block">
 					{String(event.seq).padStart(6, "0")}
@@ -151,15 +167,17 @@ export function EventTail({
 	status,
 	error,
 	terminal,
+	highlight,
 }: {
 	runId: string;
 	events: RunEvent[];
 	status: string;
 	error: string | null;
 	terminal: boolean;
+	highlight?: SeqRange | null;
 }) {
 	const ref = useRef<HTMLDivElement>(null);
-	const [autoScroll, setAutoScroll] = useState(true);
+	const [autoScroll, setAutoScroll] = useState(highlight === null || highlight === undefined);
 	const [filter, setFilter] = useState<EventFilter>("all");
 	// Below md the filter fieldset + Tail toggle live behind a compact
 	// disclosure (warren-bb02): the 39px header cannot hold ~410px of
@@ -180,6 +198,24 @@ export function EventTail({
 			ref.current.scrollTop = ref.current.scrollHeight;
 		}
 	}, [sorted.length, autoScroll]);
+
+	// Scroll the first highlighted row into view once per range, as soon as
+	// it has arrived. Keyed on the range's numbers, not the object, which is
+	// rebuilt on every render.
+	const fromSeq = highlight?.fromSeq ?? null;
+	const toSeq = highlight?.toSeq ?? null;
+	const scrolledTo = useRef<string | null>(null);
+	// biome-ignore lint/correctness/useExhaustiveDependencies: sorted.length is the trigger, not a read
+	useEffect(() => {
+		if (fromSeq === null || toSeq === null || ref.current === null) return;
+		const key = `${fromSeq}-${toSeq}`;
+		if (scrolledTo.current === key) return;
+		const row = ref.current.querySelector<HTMLElement>('[aria-current="true"]');
+		if (row === null) return;
+		scrolledTo.current = key;
+		setAutoScroll(false);
+		row.scrollIntoView({ block: "center" });
+	}, [fromSeq, toSeq, sorted.length]);
 
 	// Disable autoscroll on user intent (wheel up, touch drag), not on
 	// scroll position: programmatic scrolls also fire `scroll`, and during
@@ -264,7 +300,9 @@ export function EventTail({
 						{sorted.length === 0 ? "No events yet." : "No events match this filter."}
 					</p>
 				) : (
-					visible.map((e) => <EventRow key={e.id} event={e} />)
+					visible.map((e) => (
+						<EventRow key={e.id} event={e} highlighted={inRange(e.seq, highlight)} />
+					))
 				)}
 			</div>
 			<footer className="flex shrink-0 items-center border-(--color-border) border-t px-3 py-[9px] md:hidden">

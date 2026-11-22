@@ -27,10 +27,23 @@ import { getApiToken } from "../../api/client.ts";
  *   `X-Verdicts-Max-Id` high-water header).
  */
 
-/** One class assignment in a verdict row (rubric v1, 15 classes). */
+/** An inclusive range of run event sequence numbers a class points at. */
+export interface JudgeEvidenceRange {
+	readonly fromSeq: number;
+	readonly toSeq: number;
+}
+
+/**
+ * One class assignment in a verdict row (rubric v1, 15 classes). The
+ * extension's wire (extensions/judge/src/wire.ts) always carries
+ * `evidence`; it stays optional here so a row from an older judge build
+ * still reads.
+ */
 export interface JudgeAssignment {
 	readonly class: string;
 	readonly confidence: "low" | "medium" | "high";
+	readonly evidence?: readonly JudgeEvidenceRange[];
+	readonly note?: string;
 }
 
 /** The rubric-v1 verdict payload inside a `kind: "verdict"` row. */
