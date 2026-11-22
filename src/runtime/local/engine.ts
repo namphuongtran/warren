@@ -178,6 +178,7 @@ export class LocalEngine {
 				workspace,
 				homePath,
 				gitScope,
+				hostEnv: this.serverEnv ?? process.env,
 				...(frontmatter !== undefined ? { frontmatter } : {}),
 			});
 		} catch (err) {

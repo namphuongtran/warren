@@ -242,6 +242,17 @@ docker tag myproject-agent:candidate myproject-agent:latest
 
 The next run uses the new image. A run that is already active keeps its old image. You do not have to restart warren. To roll back, move the tag back to `previous`.
 
+### Give the agent one more credential
+
+An agent container receives only the model credentials of its harness. A quality gate can need one more credential, for example a token for a private npm registry. Name the host variables in `WARREN_AGENT_ENV_PASSTHROUGH`, separated by commas, and set each named variable in the warren server's environment:
+
+```bash
+WARREN_AGENT_ENV_PASSTHROUGH=NODE_AUTH_TOKEN
+NODE_AUTH_TOKEN=<a token that can only read packages>
+```
+
+Every run of every project receives these variables, and the agent can read their values. Give each one the smallest scope that the gate needs. Only the operator sets this list. A repository cannot add a name to it. Restart warren after you change it.
+
 ## Persistence and security
 
 The data directory contains the database, project clones, workspaces, and the minted operator token. Back it up and restrict host access.
