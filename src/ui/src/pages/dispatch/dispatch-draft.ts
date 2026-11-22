@@ -128,15 +128,19 @@ export function parseCostCap(text: string): { value: number } | { error: string 
 /**
  * Build the `POST /runs` body from the draft (plus parsed cost cap and
  * continuation/replicate route state). Pure — the page only fires it.
+ * The provider goes out only when the operator typed it: an auto-filled
+ * project default is the server's to apply, and the server drops it under
+ * a model override it cannot serve (namphuongtran/warren#43).
  */
 export function buildCreateRunInput(args: {
 	readonly draft: DispatchDraft;
+	readonly providerTouched: boolean;
 	readonly routeState: DispatchRouteState;
 	readonly maxCostUsd: number | undefined;
 }): CreateRunInput {
 	const { draft } = args;
 	const trimmedRef = draft.ref.trim();
-	const trimmedProvider = draft.providerOverride.trim();
+	const trimmedProvider = args.providerTouched ? draft.providerOverride.trim() : "";
 	const trimmedModel = draft.modelOverride.trim();
 	const trimmedSeed = draft.seedId.trim();
 	return {

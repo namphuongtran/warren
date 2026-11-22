@@ -35,9 +35,9 @@ import {
 	detectMigrationJournalCollisions,
 	runDispatchMigrationPreflight,
 } from "./migration-preflight.ts";
-import { recordIgnoredModelSelection } from "./model-selection.ts";
+import { recordModelSelectionWarnings } from "./model-selection.ts";
 import { gateAgentPrompts, withMulchArm } from "./prompt-capabilities.ts";
-import { assertNoKnownProviderModelMismatch } from "./provider-model.ts";
+import { assertNoKnownProviderModelMismatch, resolveDispatchProvider } from "./provider-model.ts";
 import {
 	bindRunLogger,
 	compensateCreatedRuntime,
@@ -139,10 +139,9 @@ async function dispatchRun(input: SpawnRunInput): Promise<SpawnRunResult> {
 		projectAfterRefresh.id,
 		projectAfterRefresh.localPath,
 	);
-	const effectiveProvider = resolveOverride(
-		input.providerOverride,
-		projectDefaults?.defaultProvider,
-	);
+	// namphuongtran/warren#43: a model-only override drops an incompatible inherited provider.
+	const providerChoice = resolveDispatchProvider(input, projectDefaults?.defaultProvider);
+	const effectiveProvider = providerChoice.provider;
 	const effectiveModel = resolveOverride(input.modelOverride, projectDefaults?.defaultModel);
 	// warren-a63d: fold the per-dispatch spend cap on top. The full chain
 	// (override > agent frontmatter > project default, with malformed agent
@@ -269,9 +268,9 @@ async function dispatchRun(input: SpawnRunInput): Promise<SpawnRunResult> {
 	});
 	// warren-e7b7: warn once per dispatch when agent git identity is unset (K8s).
 	warnIfGitIdentityUnconfigured(log, input.serverEnv ?? process.env);
-	// namphuongtran/warren#7: warn when the harness drops the resolved provider/model.
-	const selection = { provider: declaredProvider, model: declaredModel };
-	await recordIgnoredModelSelection(input, { runId: run.id, runtimeId, selection, log });
+	// namphuongtran/warren#7 / #43: warn about a dropped provider/model.
+	const selection = { ...providerChoice, provider: declaredProvider, model: declaredModel };
+	await recordModelSelectionWarnings(input, { runId: run.id, runtimeId, selection, log });
 	// Runtime-provider seam (warren-c42c: burrow-client eviction, bucket 2).
 	// `provider.create` collapses burrow's provision + dispatch (`sandboxUp` +
 	// `runs.create`) into one call and owns the sandbox-half rollback on a partial

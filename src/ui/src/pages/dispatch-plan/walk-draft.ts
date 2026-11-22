@@ -119,15 +119,17 @@ export function costCapErrorOf(costCap: string): string | null {
 
 /**
  * Build the `POST /plan-runs` body from the draft (plus the parsed cost
- * cap). Pure — the page only fires it.
+ * cap). Pure — the page only fires it. Like `buildCreateRunInput`, the
+ * provider goes out only when the operator typed it (namphuongtran/warren#43).
  */
 export function buildCreatePlanRunInput(args: {
 	readonly draft: WalkDraft;
+	readonly providerTouched: boolean;
 	readonly maxCostUsd: number | undefined;
 }): CreatePlanRunInput {
 	const { draft } = args;
 	const trimmedRef = draft.ref.trim();
-	const trimmedProvider = draft.providerOverride.trim();
+	const trimmedProvider = args.providerTouched ? draft.providerOverride.trim() : "";
 	const trimmedModel = draft.modelOverride.trim();
 	const base = {
 		project: draft.project,

@@ -209,7 +209,7 @@ Common flags:
 | Flag | Effect |
 |---|---|
 | `--max-cost-usd 3` | Cost cap for this run only. It overrides all other configuration. |
-| `--model <name>` / `--provider <name>` | Change the model for this run only |
+| `--model <name>` / `--provider <name>` | Change the model for this run only. A `--model` alone drops a project `defaultProvider` that cannot serve it. |
 | `--seed <id>` | Attach the run to a seeds issue. When the run succeeds with new commits, Warren closes the issue. |
 | `--base-commit <sha>` | Cut the workspace from a fixed commit |
 | `--existing-branch <branch>` | Continue work on an existing branch and push back to it. No PR opens. |

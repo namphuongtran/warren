@@ -43,7 +43,53 @@ describe("spawnRun: provider/model compatibility (warren-bad5)", () => {
 		await db.close();
 	});
 
-	test("rejects an Anthropic model override against the OpenRouter project default", async () => {
+	test("drops an incompatible inherited project provider under a model-only override (namphuongtran/warren#43)", async () => {
+		const { client, calls } = makeSandboxClient();
+		const result = await spawnRun({
+			repos,
+			runtimeProvider: makeProvider(client),
+			agentName: "refactor-bot",
+			projectId: "prj_xxxxxxxxxxxx",
+			prompt: "run",
+			modelOverride: "claude-opus-4-8",
+			warrenConfigs: configWith({
+				defaultProvider: "openrouter",
+				defaultModel: "moonshotai/kimi-k3",
+			}),
+		});
+
+		expect(result.run.model).toBe("claude-opus-4-8");
+		expect(result.run.provider).toBeNull();
+		expect(calls).toHaveLength(2);
+	});
+
+	test("falls back to the agent frontmatter provider and records the dropped one", async () => {
+		await repos.agents.upsert({
+			name: "refactor-bot",
+			renderedJson: makeAgentJson({ frontmatter: { provider: "anthropic" } }),
+		});
+		const { client } = makeSandboxClient();
+		const result = await spawnRun({
+			repos,
+			runtimeProvider: makeProvider(client),
+			agentName: "refactor-bot",
+			projectId: "prj_xxxxxxxxxxxx",
+			prompt: "run",
+			modelOverride: "claude-opus-4-8",
+			warrenConfigs: configWith({ defaultProvider: "openrouter" }),
+		});
+
+		expect(result.run.provider).toBe("anthropic");
+		expect(result.run.model).toBe("claude-opus-4-8");
+		const events = await repos.events.listByRun(result.run.id);
+		const dropped = events.filter((e) => e.kind === "project_provider_dropped");
+		expect(dropped.map((e) => e.payloadJson)).toEqual([
+			{ droppedProvider: "openrouter", model: "claude-opus-4-8" },
+		]);
+		expect(dropped[0]?.stream).toBe("system");
+	});
+
+	test("rejects an explicit incompatible provider/model pair over the project default", async () => {
 		const { client, calls } = makeSandboxClient();
 		const error = await captureValidation(
 			spawnRun({
@@ -52,6 +98,7 @@ describe("spawnRun: provider/model compatibility (warren-bad5)", () => {
 				agentName: "refactor-bot",
 				projectId: "prj_xxxxxxxxxxxx",
 				prompt: "run",
+				providerOverride: "openrouter",
 				modelOverride: "claude-opus-4-8",
 				warrenConfigs: configWith({ defaultProvider: "openrouter" }),
 			}),
@@ -63,6 +110,28 @@ describe("spawnRun: provider/model compatibility (warren-bad5)", () => {
 		expect(calls).toHaveLength(0);
 		expect(await repos.runs.listAll()).toHaveLength(0);
 	});
+
+	test.each<[string, string]>([
+		["openrouter", "moonshotai/kimi-k3"],
+		["anthropic", "claude-opus-4-8"],
+	])(
+		"keeps a compatible project provider %s under a model-only override %s",
+		async (provider, model) => {
+			const { client } = makeSandboxClient();
+			const result = await spawnRun({
+				repos,
+				runtimeProvider: makeProvider(client),
+				agentName: "refactor-bot",
+				projectId: "prj_xxxxxxxxxxxx",
+				prompt: "run",
+				modelOverride: model,
+				warrenConfigs: configWith({ defaultProvider: provider }),
+			});
+
+			expect(result.run.provider).toBe(provider);
+			expect(result.run.model).toBe(model);
+		},
+	);
 
 	test("rejects an OpenRouter-shaped agent model against an Anthropic override", async () => {
 		await repos.agents.upsert({
