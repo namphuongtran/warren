@@ -72,6 +72,7 @@ const RUN_FAILURE_REASON_LABELS: Readonly<Record<string, string>> = {
 	preempted: "Preempted (Spot node reclaimed)",
 	duration_exceeded: "Wall-clock limit exceeded",
 	handoff_missing: "No valid handoff report",
+	quota_exhausted: "Usage limit reached",
 } satisfies Record<RunFailureReason, string>;
 
 /** Prose for a run's `failureReason`. */

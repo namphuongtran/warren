@@ -73,6 +73,8 @@ export const RUN_FAILURE_REASONS = [
 	"duration_exceeded",
 	// namphuongtran/warren#21: the project requires a handoff report and the run left none.
 	"handoff_missing",
+	// namphuongtran/warren#74: the provider refused the run on a spent usage window.
+	"quota_exhausted",
 ] as const;
 export type RunFailureReason = (typeof RUN_FAILURE_REASONS)[number];
 

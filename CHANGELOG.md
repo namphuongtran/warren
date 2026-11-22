@@ -91,6 +91,17 @@ Releases **0.9.10 and earlier** live in
   already set the flag starts fixer runs after this upgrade. Turn the flag
   off to keep the old behaviour.
 
+### Fixed
+
+- **Usage-limit runs no longer reap as `crashed` (namphuongtran/warren#74).** A
+  claude-code run that ends because the subscription usage window is spent now
+  reaps `failed` with the new `failureReason` `quota_exhausted`, in place of
+  `crashed`, `no_model_response` or `provider_error`. Reap emits
+  `reap.quota_exhausted` with `{ provider, model, httpStatus, apiError,
+  rateLimitType, resetsAt }` (`resetsAt` in unix seconds). Pushed work still
+  pushes. The recognizer is an adapter hook (`detectQuotaExhausted`); pi and
+  codex do not declare one yet.
+
 ## [0.19.3] — 2026-10-07
 
 The hardening patch. Local runs get a narrowed git-metadata sandbox, the

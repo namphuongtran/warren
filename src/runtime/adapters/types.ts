@@ -29,6 +29,7 @@
  * dispatcher rewiring onto these hooks is warren-0efe.
  */
 
+import type { EventEnvelopeInput } from "../../core/event-envelope.ts";
 import type { EventStream, InboxPriority, RuntimeId } from "../../core/wire.ts";
 
 /**
@@ -197,6 +198,26 @@ export interface AgentRuntimeAdapter {
 	ignoredModelSelection?(
 		frontmatter: AgentFrontmatter | undefined,
 	): IgnoredModelSelection | undefined;
+
+	/**
+	 * Reap-time check (namphuongtran/warren#74): did the provider end this run
+	 * because the account's usage window is spent? Reads the run's persisted
+	 * events in order. Returns `null` when the run did not end that way, or
+	 * when the harness has no evidence of what such an ending looks like.
+	 */
+	detectQuotaExhausted?(events: readonly EventEnvelopeInput[]): QuotaExhaustedSignal | null;
+}
+
+/** What {@link AgentRuntimeAdapter.detectQuotaExhausted} read off the terminal envelope. */
+export interface QuotaExhaustedSignal {
+	/** The provider's HTTP status (429 for a usage limit), when the envelope names one. */
+	readonly httpStatus: number | null;
+	/** The provider's error code (e.g. `usage_limit_reached`), when named. */
+	readonly apiError: string | null;
+	/** Which window ran out (e.g. `five_hour`), off the last rejected rate-limit event. */
+	readonly rateLimitType: string | null;
+	/** When that window reopens, in unix seconds, off the same event. */
+	readonly resetsAt: number | null;
 }
 
 /** What {@link AgentRuntimeAdapter.ignoredModelSelection} reports as dropped. */
