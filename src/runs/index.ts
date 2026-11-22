@@ -193,6 +193,18 @@ export {
 	type ProviderRetryLogger,
 } from "./retry/provider-retry.ts";
 export {
+	createQuotaResumer,
+	MAX_QUOTA_RESUMES,
+	QUOTA_RESUME_EVENTS,
+	type QuotaResumer,
+	type QuotaResumerInput,
+} from "./retry/quota-resume.ts";
+export {
+	createQuotaResumeLifecycleExtension,
+	type QuotaResumeWorkerHandle,
+	startQuotaResumeWorker,
+} from "./retry/quota-resume-worker.ts";
+export {
 	type BuildSeedFilesResult,
 	buildSeedFiles,
 	type SeedFile,

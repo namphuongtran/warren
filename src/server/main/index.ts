@@ -49,7 +49,7 @@ import { armSetupHandoffFromBoot, setupRedemptionUrl } from "../setup-handoff.ts
 import { loadEventStreamLimitsFromEnv } from "../stream-limits.ts";
 import type { AuthProvider, RunActivityCheck, ServeHandle } from "../types.ts";
 import { seedAgentsAtBoot } from "./agent-seeding.ts";
-import { bindReapWithBootDeps, bootBridgesAndProviderRetry } from "./bridges-wiring.ts";
+import { bindReapWithBootDeps, bootBridgesAndRetries } from "./bridges-wiring.ts";
 import { buildServerDeps } from "./deps.ts";
 import { bootBackgroundDetectors } from "./detector-wiring.ts";
 import { bootGitHubAppActivation } from "./github-app-activation-wiring.ts";
@@ -258,8 +258,8 @@ export async function bootServer(opts: BootServerOptions = {}): Promise<WarrenSe
 	});
 	const bindReap = bindReapWithBootDeps({ forge, previewSidecars, salvageDir, onInfraLostRun });
 
-	// warren-339d: bridge boot + provider-retry registration (see bridges-wiring.ts).
-	const { bridgesBoot, providerRetryRegistration } = await bootBridgesAndProviderRetry({
+	// warren-339d, namphuongtran/warren#30: bridge boot + automatic retries (bridges-wiring.ts).
+	const { bridgesBoot, retryWorkers } = await bootBridgesAndRetries({
 		bridges: {
 			repos,
 			broker,
@@ -467,15 +467,15 @@ export async function bootServer(opts: BootServerOptions = {}): Promise<WarrenSe
 			await planRunCoordinator.stop();
 			await watchdog.stop();
 			await scheduler.stop();
+			await retryWorkers.stop();
 			await previewEvictionWorker.stop();
 			await workspaceGcWorker.stop();
 			await opsStatsWorker.stop();
 			forgeHeartbeat?.stop();
 			await k8sRuntime?.stop();
 			await bridgesBoot.registry.stopAll();
-			// Detach the lifecycle-bus consumers + uninstall the singleton so a
+			// Uninstall the lifecycle-bus singleton (consumers detached above) so a
 			// teardown leaves no global emit target behind (warren-4e74).
-			providerRetryRegistration.unregister();
 			lifecycleBusHandle.stop();
 			// warren-f796: close the local backend's burrow client (undefined under k8s).
 			await localBackend?.close();

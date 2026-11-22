@@ -12,6 +12,20 @@ Releases **0.9.10 and earlier** live in
 
 ### Added
 
+- **Quota auto-resume (namphuongtran/warren#30, Phase 2).** A run that reaps
+  `quota_exhausted` is now resumed after its usage window resets, instead of
+  waiting for an operator. Reap schedules the resume for `resetsAt` plus a
+  minute and up to two minutes of jitter (`reap.quota_resume_scheduled`). A
+  60-second worker then dispatches a `continue` run from the stopped run's
+  pushed branch, or a `replicate` run when it pushed nothing, with dispatch
+  origin `resume_quota`. A lineage gets at most three resumes. The schedule
+  lives in the failed run's events, so it survives a restart, and a claim
+  event stops a crash mid-dispatch from spawning twice. A resume that the
+  dispatch guard still refuses waits for the new reset and keeps its attempt.
+  Automatic-trigger runs stay under the automatic-run cap. Plan-run children
+  stay with the coordinator. `dispatch_context.retry_kind` gains
+  `quota_exhausted`. No schema change.
+
 - **Approach note before the first edit (namphuongtran/warren#33).** The
   source-editing built-ins (`claude-code`, `pi`, `codex`, `pr-fixer`,
   `healer`) now write `.warren/approach.md` before their first edit, under

@@ -21,7 +21,13 @@ import { readMaxCostUsd } from "../cost-cap.ts";
 import type { DispatchOrigin, SpawnLogger, SpawnRunInput } from "./types.ts";
 
 /** Closed vocabulary for `dispatch_context.retry_kind` (warren-36e7). */
-export const RETRY_KINDS = ["none", "infra_lost", "provider_error", "plan_child"] as const;
+export const RETRY_KINDS = [
+	"none",
+	"infra_lost",
+	"provider_error",
+	"plan_child",
+	"quota_exhausted",
+] as const;
 export type RetryKind = (typeof RETRY_KINDS)[number];
 
 /** Closed vocabulary for override-source columns (warren-36e7). */
@@ -284,6 +290,8 @@ export function resolveCapSource(input: {
  *   - plan-child retry: no marker on the run row at all (origin stays
  *     `plan_run`) — recorded as `none` here; the plan-run coordinator owns
  *     the retry_count on the child row, not the runs table
+ *   - quota resume (namphuongtran/warren#30): `parent_run_id` + `clone_kind`
+ *     `continue` or `replicate`; origin `resume_quota`
  *   - plain continuation (`clone_kind=continue`) is NOT a retry
  */
 export async function resolveRetryLineage(
@@ -301,9 +309,8 @@ export async function resolveRetryLineage(
 	const parentRunId = run.parentRunId;
 	const retryOfRunId = run.retryOf ?? (retryKind === "provider_error" ? run.parentRunId : null);
 
-	// Only infra_lost / provider_error carry a walkable runs-table chain.
-	// plan_child has no run-row marker; none is a root.
-	if (retryKind !== "infra_lost" && retryKind !== "provider_error") {
+	// plan_child has no run-row marker; none is a root. The rest walk a chain.
+	if (retryKind === "none" || retryKind === "plan_child") {
 		return {
 			retryKind,
 			retryOfRunId: run.retryOf,
@@ -329,6 +336,7 @@ export function deriveRetryKind(
 ): RetryKind {
 	if (dispatchOrigin === "retry_infra_lost") return "infra_lost";
 	if (dispatchOrigin === "retry_provider") return "provider_error";
+	if (dispatchOrigin === "resume_quota") return "quota_exhausted";
 	// Fallback for callers that forgot the origin stamp (or tests):
 	// infra-lost is retry_of without a parent link; provider-retry is a
 	// replicate parent link (retry_of may also be set post warren-eaa6).
@@ -372,6 +380,7 @@ function parentIdForKind(
 	kind: Exclude<RetryKind, "none" | "plan_child">,
 ): string | null {
 	if (kind === "infra_lost") return run.retryOf;
+	if (kind === "quota_exhausted") return run.parentRunId;
 	// provider_error: prefer retry_of (warren-eaa6), fall back to parent.
 	return run.retryOf ?? run.parentRunId;
 }
