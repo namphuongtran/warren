@@ -6,14 +6,11 @@
  * cache of burrow's stream — see the event-durability rationale in
  * docs/design/runtime-and-supervisor.md), triggers
  * (R-06 scheduler bookkeeping), planRuns + planRunChildren, and
- * runInbox. The plots projection table was dropped in warren-0b13 (0031)
- * as part of the plot deletion pass (pl-3a79). The conversations + messages
- * tables were dropped in
- * warren-d93e (0030) as part of the conversations deletion pass
- * (pl-3a79). The workers + burrows multi-worker placement
- * tables were dropped in warren-3743 (0028) once LocalProvider absorbed the
- * single-burrow runtime; `runs.worker_id` is retained (nullable, unwritten)
- * for historical rows only.
+ * runInbox. Dropped tables: plots (warren-0b13, 0031) and conversations +
+ * messages (warren-d93e, 0030), both in the pl-3a79 deletion pass, and the
+ * workers + burrows placement tables (warren-3743, 0028) once LocalProvider
+ * absorbed the single-burrow runtime; `runs.worker_id` is retained
+ * (nullable, unwritten) for historical rows only.
  *
  * Timestamps are ISO8601 TEXT, mirroring the burrow event envelope `ts` field
  * so we don't translate at the stream boundary. JSON columns use drizzle's
@@ -49,6 +46,7 @@ import {
 	RUN_COST_BASES,
 	RUN_FAILURE_REASONS,
 	RUN_MODES,
+	RUN_QUALITY_GATE_OUTCOMES,
 	RUN_STATES,
 	TABLE_NAMES,
 } from "./columns.ts";
@@ -234,13 +232,11 @@ export const runs = sqliteTable(
 		// FK) for symmetry with the other run back-links.
 		retryOf: text("retry_of"),
 		// Provider/model frozen at dispatch (warren-2ede / pl-103e) from the
-		// rendered agent frontmatter once the override chain resolves. The
-		// bridge then overwrites `model` with the model a harness names in its
-		// init envelope (claude-code, namphuongtran/warren#7), so it reads as the model actually
-		// used; `provider` stays the declared one. Nullable:
-		// historical rows predate the columns — analytics labels them
-		// "unknown" and excludes them from denominators rather than folding
-		// them into a real bucket.
+		// rendered agent frontmatter once the override chain resolves. The bridge
+		// then overwrites `model` with the model a harness names in its init
+		// envelope (claude-code, namphuongtran/warren#7); `provider` stays the
+		// declared one. Nullable: historical rows predate the columns, and
+		// analytics labels them "unknown" rather than folding them into a bucket.
 		provider: text("provider"),
 		model: text("model"),
 		// Merge-watcher PR facts (warren-3bc6 / pl-103e step 6). The post_reap
@@ -263,6 +259,10 @@ export const runs = sqliteTable(
 		filesChanged: integer("files_changed"),
 		insertions: integer("insertions"),
 		deletions: integer("deletions"),
+		// Quality gate (namphuongtran/warren#36): `qualityGate` frozen at dispatch
+		// (null = unconfigured) and the outcome reap derived (null = not derived).
+		qualityGate: text("quality_gate"),
+		qualityGateOutcome: text("quality_gate_outcome", { enum: RUN_QUALITY_GATE_OUTCOMES }),
 	},
 	(t) => [
 		index(INDEX_NAMES.runsState).on(t.state),

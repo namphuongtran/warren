@@ -23,6 +23,7 @@ import { parseBurrowConfig } from "../burrow-config.ts";
 import { resolveCapOverride } from "../cost-cap.ts";
 import { withDurationLimit } from "../duration-limit.ts";
 import { lifecycleBus } from "../lifecycle-bus.ts";
+import { QUALITY_GATE_ENV_VAR } from "../quality-gate/command.ts";
 import { buildSeedFiles } from "../seed.ts";
 import { validateTargetBranch } from "../target-branch.ts";
 import { readCachedAgent, readProjectDefaults, resolveOverride } from "./agent-cache.ts";
@@ -210,6 +211,7 @@ async function dispatchRun(input: SpawnRunInput): Promise<SpawnRunResult> {
 		// gets `subscription_estimate` so costUsd reads as an estimate, not a
 		// bill. Resolved beside the provider env registry (core/providers.ts).
 		costBasis: resolveRunCostBasis(declaredProvider, input.serverEnv ?? process.env),
+		qualityGate: projectDefaults?.qualityGate ?? null, // namphuongtran/warren#36
 		trigger: input.trigger ?? "manual",
 		...(input.seedId !== undefined ? { seedId: input.seedId } : {}),
 		...(input.mode !== undefined ? { mode: input.mode } : {}),
@@ -446,7 +448,7 @@ function composeRunEnv(
 	serverEnv?: Readonly<Record<string, string | undefined>>,
 ): Record<string, string> {
 	const env: Record<string, string> = { BUN_INSTALL_CACHE_DIR };
-	if (qualityGate !== undefined) env.WARREN_QUALITY_GATE = qualityGate;
+	if (qualityGate !== undefined) env[QUALITY_GATE_ENV_VAR] = qualityGate;
 	// warren-57fd: inject a per-run SCOPED callback token (valid only for this
 	// run's own inbox + finalize surface), not the operator bearer. See
 	// callback-env.ts + run-token.ts for the trust-boundary rationale.

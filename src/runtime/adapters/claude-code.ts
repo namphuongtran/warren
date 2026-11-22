@@ -134,6 +134,8 @@ export const claudeCodeAdapter: AgentRuntimeAdapter = {
 	 * `providerErrorEnvelopeTypes` in `./index.ts`.
 	 */
 	terminalErrorEnvelopeTypes: [],
+	// The Anthropic file-writing tools (namphuongtran/warren#36).
+	fileEditToolNames: ["Write", "Edit", "MultiEdit", "NotebookEdit"],
 
 	buildSpawnCommand(ctx: AdapterSpawnContext): SpawnCommand {
 		return {

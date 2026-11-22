@@ -400,6 +400,13 @@
 			"when": 1788471838003,
 			"tag": "0056_brown_tiger_shark",
 			"breakpoints": true
+		},
+		{
+			"idx": 57,
+			"version": "6",
+			"when": 1795324457581,
+			"tag": "0057_neat_crusher_hogan",
+			"breakpoints": true
 		}
 	]
 }

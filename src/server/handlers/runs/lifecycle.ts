@@ -89,6 +89,10 @@ export const PUBLIC_RUN_FIELDS = [
 	"filesChanged",
 	"insertions",
 	"deletions",
+	// namphuongtran/warren#36: the reap-derived gate outcome is a verdict word
+	// over the same work the diff totals describe. The gate command stays
+	// redacted, like `qualityGate` in the warren-config projection.
+	"qualityGateOutcome",
 	"costUsd",
 	// warren-f3c3: how costUsd was priced — the same spectator-safe class as
 	// costUsd itself (it qualifies the number, adds nothing new).
@@ -115,6 +119,8 @@ export const PUBLIC_RUN_FIELDS = [
  * - `previewFailureMessage` — free text carrying a subprocess stderr tail.
  * - `salvagePath` — a host filesystem path (warren-cd3b); internal topology,
  *   same posture as the runtime handles.
+ * - `qualityGate` — an executable command string, redacted for the same
+ *   reason the warren-config projection redacts it (namphuongtran/warren#36).
  */
 export const REDACTED_RUN_FIELDS = [
 	"renderedAgentJson",
@@ -123,6 +129,7 @@ export const REDACTED_RUN_FIELDS = [
 	"workerId",
 	"previewFailureMessage",
 	"salvagePath",
+	"qualityGate",
 ] as const satisfies readonly (keyof RunRow)[];
 
 /** A run row as a `readPublic`-only caller sees it. */

@@ -79,6 +79,9 @@ export const piAdapter: AgentRuntimeAdapter = {
 	 * the seam existed, moved verbatim.
 	 */
 	terminalErrorEnvelopeTypes: ["turn_end", "agent_end"],
+	// Pi's native lowercase tools, plus the Anthropic names its rows can arrive
+	// normalized into (namphuongtran/warren#36; see src/core/file-shape.ts).
+	fileEditToolNames: ["write", "edit", "Write", "Edit", "MultiEdit"],
 
 	buildSpawnCommand(ctx: AdapterSpawnContext): SpawnCommand {
 		return {

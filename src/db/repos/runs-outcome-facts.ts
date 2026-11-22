@@ -8,7 +8,7 @@
 import { eq } from "drizzle-orm";
 import { NotFoundError } from "../../core/errors.ts";
 import type { SqliteDrizzleDb } from "../client.ts";
-import type { RunRow } from "../schema.ts";
+import type { RunQualityGateOutcome, RunRow } from "../schema.ts";
 import type { DrizzleAdapter } from "./drizzle-adapter.ts";
 
 /**
@@ -50,4 +50,20 @@ export async function setOutcomeFacts(
 	};
 	await adapter.runWrite(db.update(runs).set(patch).where(eq(runs.id, id)));
 	return { ...current, ...patch };
+}
+
+/**
+ * Stamp the quality-gate outcome reap derived from the run's tool calls
+ * (namphuongtran/warren#36). Last write wins, like the outcome facts above.
+ */
+export async function setQualityGateOutcome(
+	adapter: DrizzleAdapter,
+	id: string,
+	outcome: RunQualityGateOutcome,
+): Promise<void> {
+	const db = adapter.drizzle as SqliteDrizzleDb;
+	const runs = adapter.schema.runs;
+	await adapter.runWrite(
+		db.update(runs).set({ qualityGateOutcome: outcome }).where(eq(runs.id, id)),
+	);
 }

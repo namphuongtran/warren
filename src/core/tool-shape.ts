@@ -64,6 +64,12 @@ export interface ToolShape {
 	readonly runtime: RuntimeId;
 	readToolUse(payload: Record<string, unknown>): ToolUseReading | null;
 	readToolResult(payload: Record<string, unknown>): ToolResultReading | null;
+	/**
+	 * The text body of a `tool_result` payload, or `null` when it carries none
+	 * (namphuongtran/warren#36: the quality-gate outcome reads an `exit=N`
+	 * marker from it when the command masked the exit status).
+	 */
+	readResultText(payload: Record<string, unknown>): string | null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -94,6 +100,14 @@ function bytesOf(value: unknown): number | null {
 		}
 	}
 	return null;
+}
+
+/** A result body as text: a string as-is, a content-block array as its joined `text` fields. */
+function textOf(value: unknown): string | null {
+	if (typeof value === "string") return value;
+	if (!Array.isArray(value)) return null;
+	const parts = value.map((block) => asRecord(block)?.text).filter((t) => typeof t === "string");
+	return parts.length > 0 ? parts.join("\n") : null;
 }
 
 function firstStr(...values: readonly unknown[]): string | null {
@@ -151,6 +165,9 @@ const CLAUDE_CODE_TOOL_SHAPE: ToolShape = {
 			bytesOf(payload.content),
 		);
 	},
+	readResultText(payload) {
+		return textOf(payload.content);
+	},
 };
 
 /**
@@ -182,6 +199,9 @@ const PI_TOOL_SHAPE: ToolShape = {
 			payload.is_error === true || payload.isError === true,
 			bytesOf(payload.content) ?? bytesOf(payload.result) ?? bytesOf(payload.output),
 		);
+	},
+	readResultText(payload) {
+		return textOf(payload.content) ?? textOf(payload.result) ?? textOf(payload.output);
 	},
 };
 

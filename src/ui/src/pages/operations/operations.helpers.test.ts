@@ -33,6 +33,7 @@ function run(overrides: Partial<RunRow>): RunRow {
 		filesChanged: null,
 		insertions: null,
 		deletions: null,
+		qualityGateOutcome: null,
 		prompt: "do the thing",
 		trigger: "manual",
 		prUrl: null,

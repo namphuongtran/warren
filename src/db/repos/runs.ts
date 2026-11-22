@@ -10,6 +10,7 @@ import type {
 	RunCostBasis,
 	RunFailureReason,
 	RunMode,
+	RunQualityGateOutcome,
 	RunRow,
 	RunState,
 	RunTerminalState,
@@ -20,6 +21,7 @@ import { deleteNeverStarted } from "./runs-delete.ts";
 import {
 	type RunOutcomeFacts,
 	setOutcomeFacts as setOutcomeFactsBody,
+	setQualityGateOutcome as setQualityGateOutcomeBody,
 } from "./runs-outcome-facts.ts";
 import { setBranch, setModel, setPrState, setPrUrl } from "./runs-pr.ts";
 import { type AttachPreviewInput, attachPreview } from "./runs-preview.ts";
@@ -87,10 +89,10 @@ export interface CreateRunInput {
 	ref?: string | null;
 	/** Base-commit pin (warren-aaf7): 40-hex SHA the workspace is cut at; null = none. */
 	baseCommit?: string | null;
-	/** Declared provider/model frozen at dispatch (warren-2ede / pl-103e).
-	 * Null = agent declares none (or a historical row). */
+	/** Declared provider/model frozen at dispatch (warren-2ede); null = none declared. */
 	provider?: string | null;
 	model?: string | null;
+	qualityGate?: string | null; // frozen at dispatch (namphuongtran/warren#36); null = unconfigured
 	/** Cost basis (warren-f3c3); defaults to `api`. */
 	costBasis?: RunCostBasis;
 	/** Queued-instant override (warren-0af9); defaults to the wall clock at insert. */
@@ -123,7 +125,7 @@ export class RunsRepo {
 	}
 
 	async create(input: CreateRunInput): Promise<RunRow> {
-		const { costBasis = "api" } = input;
+		const { costBasis = "api", qualityGate = null } = input;
 		const row: RunRow = {
 			id: input.id ?? generateId("run"),
 			agentName: input.agentName,
@@ -166,6 +168,8 @@ export class RunsRepo {
 			filesChanged: null,
 			insertions: null,
 			deletions: null,
+			qualityGate,
+			qualityGateOutcome: null,
 			salvageRef: null,
 			salvagePath: null,
 			costUsd: null,
@@ -455,6 +459,11 @@ export class RunsRepo {
 	 */
 	async setOutcomeFacts(id: string, facts: RunOutcomeFacts): Promise<RunRow> {
 		return setOutcomeFactsBody(this.adapter, id, facts);
+	}
+
+	/** Reap-derived gate outcome (namphuongtran/warren#36); body in runs-outcome-facts.ts. */
+	async setQualityGateOutcome(id: string, outcome: RunQualityGateOutcome): Promise<void> {
+		await setQualityGateOutcomeBody(this.adapter, id, outcome);
 	}
 
 	/** CI-fixer queries (warren-0b75); bodies live in runs-ci-fixer.ts. */

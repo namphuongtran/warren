@@ -152,6 +152,15 @@ describe("spawnRun: guardrail config fails closed (warren-02aa)", () => {
 		expect(specs[0]?.env.WARREN_QUALITY_GATE).toBe("bun run check:all");
 	});
 
+	test("freezes the project's quality gate onto the run row (namphuongtran/warren#36)", async () => {
+		const cache = makeCache({ ".warren/config.yaml": "qualityGate: bun run check:all\n" });
+		const { provider, specs } = makeRecordingProvider();
+
+		await dispatch(repos, provider, cache);
+		const run = await repos.runs.require(specs[0]?.runId ?? "");
+		expect(run.qualityGate).toBe("bun run check:all");
+	});
+
 	test("a project with no .warren/ directory keeps today's uncapped behavior", async () => {
 		const cache = makeCache({});
 		const { provider, specs } = makeRecordingProvider();

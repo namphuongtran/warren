@@ -1,0 +1,4 @@
+{"type":"system","subtype":"init","cwd":"/workspace","session_id":"5a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d","tools":["Bash","Edit","Read","Write"],"model":"claude-sonnet-4-5"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01EnvGate","name":"Bash","input":{"command":"cd /workspace && ${WARREN_QUALITY_GATE}","description":"Run the configured quality gate"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01EnvGate","content":"Exit code 1\nlint ok\ntypecheck FAIL\n10/12 gates passed","is_error":true}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"Gate failed on typecheck.","usage":{"input_tokens":10,"output_tokens":20}}

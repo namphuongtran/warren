@@ -1,0 +1,8 @@
+{"type":"system","subtype":"init","cwd":"/workspace","session_id":"8f0c2a4e-1b7d-4c39-9e51-3a6d2f0b7c11","tools":["Bash","Edit","Read","Write"],"model":"claude-sonnet-4-5"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01EditA","name":"Edit","input":{"file_path":"/workspace/src/app.ts","old_string":"const x = 1;","new_string":"const x = 2;"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01EditA","content":"The file /workspace/src/app.ts has been updated."}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Running the quality gate."},{"type":"tool_use","id":"toolu_01GateA","name":"Bash","input":{"command":"bun run check:all --bail","description":"Run the quality gate"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01GateA","content":"lint ok\ntypecheck ok\ntest ok\n12/12 gates passed","is_error":false}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01Commit","name":"Bash","input":{"command":"git add -A && git commit -m \"feat: bump x\"","description":"Commit"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01Commit","content":"[warren/run_abc 1a2b3c4] feat: bump x\n 1 file changed, 1 insertion(+), 1 deletion(-)","is_error":false}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"Done.","usage":{"input_tokens":10,"output_tokens":20}}

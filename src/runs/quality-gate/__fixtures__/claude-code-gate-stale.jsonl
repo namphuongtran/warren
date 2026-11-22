@@ -1,0 +1,10 @@
+{"type":"system","subtype":"init","cwd":"/workspace","session_id":"0d3e6b1a-77c2-4f0e-8a5b-9c1d2e3f4a5b","tools":["Bash","Edit","Read","Write","MultiEdit"],"model":"claude-sonnet-4-5"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01GateS","name":"Bash","input":{"command":"bun run check:all --bail","description":"Run the quality gate"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01GateS","content":"12/12 gates passed","is_error":false}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01ReadS","name":"Read","input":{"file_path":"/workspace/README.md"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01ReadS","content":"# demo"}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01EditBad","name":"Edit","input":{"file_path":"/workspace/README.md","old_string":"missing","new_string":"x"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01EditBad","content":"<tool_use_error>String to replace not found in file.</tool_use_error>","is_error":true}]}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01WriteS","name":"Write","input":{"file_path":"/workspace/README.md","content":"# demo\n\nUpdated after the gate.\n"}}]}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_01WriteS","content":"The file /workspace/README.md has been updated."}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"Done.","usage":{"input_tokens":10,"output_tokens":20}}

@@ -7,6 +7,7 @@ import { runWorkspaceDestroy } from "./destroy.ts";
 import { classifyInfraLoss, infraLossEventPayload, REAP_INFRA_LOSS_KIND } from "./infra-loss.ts";
 import { createPipelineState, runReapPipeline } from "./pipeline.ts";
 import { detectTerminalProviderError, providerErrorEventPayload } from "./provider-error.ts";
+import { recordQualityGateOutcome } from "./quality-gate.ts";
 import {
 	salvageLocalWorkspace,
 	surfacePodSalvage,
@@ -190,6 +191,8 @@ export async function reapRun(input: ReapRunInput): Promise<ReapRunResult> {
 			message: "project was deleted; skipping mulch merge, seeds close, and branch push",
 		});
 	}
+
+	await recordQualityGateOutcome({ repos: input.repos, run, emit, log }); // namphuongtran/warren#36
 
 	// Flip succeeded→failed: dropped_commit (72b9), ref-dispatch no_changes (ba08;
 	// fresh-branch no-ops stay succeeded/89b0), provider_error (edc3), finalize_failed (495d).

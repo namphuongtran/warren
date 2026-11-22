@@ -40,6 +40,8 @@ describe("run field classification (warren-946f)", () => {
 	test("the redacted set is exactly the fields pl-b82d named", () => {
 		expect([...REDACTED_RUN_FIELDS].sort()).toEqual([
 			"previewFailureMessage",
+			// namphuongtran/warren#36: the gate is an executable command string.
+			"qualityGate",
 			"renderedAgentJson",
 			// warren-cd3b: a host filesystem path is internal topology.
 			"salvagePath",

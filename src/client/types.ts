@@ -21,6 +21,7 @@ import type {
 	RunCostBasis,
 	RunFailureReason,
 	RunMode,
+	RunQualityGateOutcome,
 	RunState,
 } from "../core/wire.ts";
 import type {
@@ -43,10 +44,12 @@ export {
 	isTerminalRunState,
 	type PreviewState,
 	type PullRequestLifecycle,
+	RUN_QUALITY_GATE_OUTCOMES,
 	RUN_TERMINAL_STATES,
 	type RunCostBasis,
 	type RunFailureReason,
 	type RunMode,
+	type RunQualityGateOutcome,
 	type RunState,
 	type RunTerminalState,
 } from "../core/wire.ts";
@@ -124,6 +127,16 @@ export interface RunRow {
 	filesChanged: number | null;
 	insertions: number | null;
 	deletions: number | null;
+	/**
+	 * The `qualityGate` frozen at dispatch (namphuongtran/warren#36), null when
+	 * the project set none. Operator-only: absent for spectators.
+	 */
+	qualityGate?: string | null;
+	/**
+	 * The gate outcome reap derived from the agent's tool calls. Null = not
+	 * derived (pre-column rows, or a run that has not reaped yet).
+	 */
+	qualityGateOutcome: RunQualityGateOutcome | null;
 	prompt: string;
 	trigger: string;
 	prUrl: string | null;

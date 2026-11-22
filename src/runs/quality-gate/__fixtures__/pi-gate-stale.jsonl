@@ -1,0 +1,6 @@
+{"type":"agent_start"}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"toolu_01PiStaleGate","name":"bash","arguments":{"command":"bun run check:all --bail"}}],"api":"anthropic-messages","provider":"anthropic","model":"claude-haiku-4-5","stopReason":"toolUse","timestamp":1780853750000}}
+{"type":"message_end","message":{"role":"toolResult","toolCallId":"toolu_01PiStaleGate","toolName":"bash","content":[{"type":"text","text":"12/12 gates passed"}],"isError":false,"timestamp":1780853751000}}
+{"type":"message_end","message":{"role":"assistant","content":[{"type":"toolCall","id":"toolu_01PiStaleWrite","name":"write","arguments":{"path":"NOTES.md","content":"follow-up notes\n"}}],"api":"anthropic-messages","provider":"anthropic","model":"claude-haiku-4-5","stopReason":"toolUse","timestamp":1780853752000}}
+{"type":"message_end","message":{"role":"toolResult","toolCallId":"toolu_01PiStaleWrite","toolName":"write","content":[{"type":"text","text":"Successfully wrote 16 bytes to NOTES.md"}],"isError":false,"timestamp":1780853753000}}
+{"type":"agent_end","messages":[]}
