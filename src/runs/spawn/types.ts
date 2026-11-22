@@ -212,6 +212,14 @@ export interface SpawnRunInput {
 	 * are byte-identical to the composed `${prefix}/${runId}` path.
 	 */
 	readonly existingBranch?: string;
+	/**
+	 * Name of the fresh run branch (namphuongtran/warren#58), in place of the
+	 * composed `${prefix}/${runId}`. The workspace is still cut from the base
+	 * ref, and reap still pushes the branch and opens a PR. The branch must not
+	 * exist on the push remote yet (a fail-closed 400). Mutually exclusive with
+	 * `targetBranch` and `existingBranch`.
+	 */
+	readonly newBranch?: string;
 	/** Override the project refresher; defaults to `refreshProject`. */
 	readonly refreshProjectFn?: typeof refreshProject;
 	/**

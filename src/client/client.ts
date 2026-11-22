@@ -233,6 +233,7 @@ export class WarrenClient {
 		if (input.baseCommit !== undefined) body.baseCommit = input.baseCommit;
 		if (input.targetBranch !== undefined) body.targetBranch = input.targetBranch;
 		if (input.existingBranch !== undefined) body.existingBranch = input.existingBranch;
+		if (input.newBranch !== undefined) body.newBranch = input.newBranch;
 		if (input.model !== undefined) body.modelOverride = input.model;
 		if (input.provider !== undefined) body.providerOverride = input.provider;
 		if (input.trigger !== undefined) body.trigger = input.trigger;

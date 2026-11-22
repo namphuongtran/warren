@@ -71,6 +71,7 @@ warren run [options] [agent] [project]
 | `--seed <id>` |  |  | link the run to a seeds issue (POST /runs seedId) |
 | `--base-commit <sha>` |  |  | pin the workspace cut to a 40-hex commit SHA |
 | `--existing-branch <branch>` |  |  | run on an existing push-remote branch and push back to it; no PR |
+| `--new-branch <branch>` |  |  | name the run's new branch instead of <prefix>/<runId>; it must not exist yet, and gets a PR |
 | `--rescue-from <runId>` |  |  | re-dispatch a salvaged run's recovered work off its warren/rescue/<runId> branch |
 | `--url <url>` |  |  | warren server base URL (env WARREN_BASE_URL) |
 | `--token <token>` |  |  | bearer token (env WARREN_API_TOKEN) |

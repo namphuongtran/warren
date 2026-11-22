@@ -61,6 +61,10 @@
           "description": "run on an existing push-remote branch and push back to it; no PR"
         },
         {
+          "flags": "--new-branch <branch>",
+          "description": "name the run's new branch instead of <prefix>/<runId>; it must not exist yet, and gets a PR"
+        },
+        {
           "flags": "--rescue-from <runId>",
           "description": "re-dispatch a salvaged run's recovered work off its warren/rescue/<runId> branch"
         },
