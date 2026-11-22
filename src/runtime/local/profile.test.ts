@@ -244,6 +244,18 @@ describe("buildLocalSandboxProfile", () => {
 		expect(profile.envPassthrough).toContain("ANTHROPIC_API_KEY");
 	});
 
+	test("adds the operator's WARREN_AGENT_ENV_PASSTHROUGH names to the harness allowlist", async () => {
+		const profile = await buildLocalSandboxProfile({
+			spec: makeSpec(),
+			env: {},
+			workspace: fakeWorkspace(),
+			homePath: "/tmp/home",
+			hostEnv: { WARREN_AGENT_ENV_PASSTHROUGH: "NODE_AUTH_TOKEN" },
+		});
+		expect(profile.envPassthrough).toContain("CLAUDE_CODE_OAUTH_TOKEN");
+		expect(profile.envPassthrough).toContain("NODE_AUTH_TOKEN");
+	});
+
 	test("points the sandbox at the workspace gitconfig only when an identity was written", async () => {
 		const bare = await buildLocalSandboxProfile({
 			spec: makeSpec(),

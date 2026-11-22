@@ -40,6 +40,7 @@ import type { MaterializedWorkspace } from "../../workspace/materialize.ts";
 import { adapterFor } from "../adapters/index.ts";
 import type { AgentRuntimeAdapter } from "../adapters/types.ts";
 import type { RunSpec } from "../contract.ts";
+import { withOperatorEnvPassthrough } from "./operator-env.ts";
 import { privateGitDenyRoots } from "./paths.ts";
 
 /* -------------------------------------------------------------------------- */
@@ -325,6 +326,8 @@ export interface BuildProfileInput {
 	readonly which?: (name: string) => string | null;
 	/** The validated private git scope the engine pinned (warren-3c1e). */
 	readonly gitScope?: PrivateGitScope | null;
+	/** Test seam for the host env that `WARREN_AGENT_ENV_PASSTHROUGH` is read from. */
+	readonly hostEnv?: Record<string, string | undefined>;
 }
 
 /**
@@ -367,7 +370,10 @@ export async function buildLocalSandboxProfile(input: BuildProfileInput): Promis
 		readOnlyMounts,
 		network: spec.network,
 		allowedDomains: toml.allowedDomains ?? [],
-		envPassthrough: resolveEnvPassthrough(spec.runtimeId, input.frontmatter),
+		envPassthrough: withOperatorEnvPassthrough(
+			resolveEnvPassthrough(spec.runtimeId, input.frontmatter),
+			input.hostEnv ?? process.env,
+		),
 		setEnv: input.env,
 		toolchainPaths: resolveToolchainPaths(spec.runtimeId, input.which),
 		...(workspace.identity !== null ? { gitconfigFile: WORKSPACE_GITCONFIG_FILENAME } : {}),
