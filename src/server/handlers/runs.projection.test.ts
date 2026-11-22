@@ -68,6 +68,8 @@ describe("run field classification (warren-946f)", () => {
 			"prUrl",
 			"startedAt",
 			"endedAt",
+			// namphuongtran/warren#21: agent output, the same class as the event stream.
+			"handoff",
 		] as const) {
 			expect(PUBLIC_RUN_FIELDS).toContain(kept);
 		}
@@ -172,6 +174,24 @@ describe("GET /runs projections under WARREN_AUTH=public (warren-946f)", () => {
 		// The ref-less sibling row reads null, never undefined/absent.
 		const other = await get(`/runs/${runId}`);
 		expect((other.run as Record<string, unknown>).ref).toBeNull();
+	});
+
+	test("GET /runs/:id serves the stored handoff report (namphuongtran/warren#21)", async () => {
+		const handoff = {
+			status: "done",
+			summary: "Fixed the flaky test.",
+			verification: [{ command: "bun test", outcome: "pass" }],
+			howToTry: [],
+			openQuestions: [],
+		} as const;
+		await repos.runs.setHandoff(runId, { state: "recorded", handoff });
+		for (const token of [undefined, TOKEN]) {
+			const body = await get(`/runs/${runId}`, token);
+			expect((body.run as Record<string, unknown>).handoff).toEqual({
+				state: "recorded",
+				handoff,
+			});
+		}
 	});
 
 	test("anonymous GET /runs/:id wraps the public field set in {run} (warren-7d84)", async () => {

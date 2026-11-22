@@ -27,12 +27,16 @@ export interface SucceededReapProjectConfig {
 	readonly prTemplate: PrTemplateOverrides | undefined;
 	/** The project's own `pr.autoMerge` block — off is `undefined`, silent. */
 	readonly prAutoMerge: AutoMergeConfig | undefined;
+	/** `handoff.required` (namphuongtran/warren#21); `undefined` = flag only. */
+	readonly handoffRequired: boolean | undefined;
 }
 
-const NO_PROJECT_CONFIG: SucceededReapProjectConfig = {
+/** Every feature off: a non-succeeded run, or a project config that did not load. */
+export const NO_PROJECT_CONFIG: SucceededReapProjectConfig = {
 	previewConfig: undefined,
 	prTemplate: undefined,
 	prAutoMerge: undefined,
+	handoffRequired: undefined,
 };
 
 /**
@@ -66,6 +70,7 @@ export async function resolveSucceededReapProjectConfig(
 					? template
 					: undefined,
 			prAutoMerge: config.defaults?.pr?.autoMerge,
+			handoffRequired: config.defaults?.handoff?.required,
 		};
 	} catch (err) {
 		log.warn(

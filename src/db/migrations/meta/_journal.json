@@ -407,6 +407,13 @@
 			"when": 1795324457581,
 			"tag": "0057_neat_crusher_hogan",
 			"breakpoints": true
+		},
+		{
+			"idx": 58,
+			"version": "6",
+			"when": 1795335269818,
+			"tag": "0058_new_mad_thinker",
+			"breakpoints": true
 		}
 	]
 }

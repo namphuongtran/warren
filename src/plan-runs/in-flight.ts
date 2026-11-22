@@ -10,10 +10,10 @@
  */
 
 import { formatError } from "../core/errors.ts";
-import { renderPlanRunPrompt } from "../core/plan-run-prompt.ts";
 import { IssueNotFoundError } from "../core/wire.ts";
 import type { PlanRunChildRow, PlanRunRow, RunRow } from "../db/schema.ts";
 import type { PrMergeChecker } from "../runs/pr-merge.ts";
+import { renderChildPrompt } from "./child-prompt.ts";
 import type {
 	AdvanceResult,
 	CoordinatorCloseChildSeedFn,
@@ -367,7 +367,7 @@ async function retryChild(
 	run: RunRow,
 ): Promise<HandleInFlightDecision> {
 	const { repos, planRun, child, emit, spawn, now } = input;
-	const prompt = renderPlanRunPrompt(planRun.promptTemplate, child.seedId);
+	const prompt = await renderChildPrompt(repos, planRun, child);
 	let spawnResult: CoordinatorSpawnResult;
 	try {
 		spawnResult = await spawn({ planRun, child, prompt });

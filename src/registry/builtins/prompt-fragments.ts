@@ -10,6 +10,8 @@
  * never assumes `bun run check:all` on an unknown repo.
  */
 
+import { RUN_HANDOFF_MAX_BYTES, RUN_HANDOFF_PATH } from "../../core/wire.ts";
+
 /**
  * The neutral quality-gate resolution chain (warren-cb46):
  * `$WARREN_QUALITY_GATE` → CLAUDE.md / AGENTS.md → discover the project's
@@ -60,3 +62,27 @@ export const TRACKER_FRAGMENT = `## Project issue queue (seeds)
 /** Workspace-map bullets shared by every harness builtin (ungated). */
 export const BASE_WORKSPACE_BULLETS = `- The project repo is mounted at the burrow workspace root.
 - /workspace/.warren/agent.json is the rendered agent definition (warren seeded it).`;
+
+/**
+ * The run closure contract (namphuongtran/warren#21), shared by every
+ * builtin. Reap reads the file off the workspace, validates it against
+ * `parseRunHandoff` (src/core/wire-handoff.ts), stores it with the run, and
+ * renders it into the PR body. The schema below must match that validator.
+ */
+export const HANDOFF_FRAGMENT = `## Handoff report (required)
+
+Before the run ends, write your handoff report to /workspace/${RUN_HANDOFF_PATH}. Warren reads it after the run, stores it with the run, and shows it to the operator and in the pull request. Write it even when the work failed or you are blocked. Git ignores the file, so do not commit it. If you write it more than once, the last version counts. Keep it under ${RUN_HANDOFF_MAX_BYTES / 1024} KiB of JSON in this shape:
+
+\`\`\`json
+{
+  "status": "done | partial | blocked",
+  "summary": "What changed and why, in a few sentences.",
+  "verification": [{ "command": "a command you ran", "outcome": "what it reported" }],
+  "howToTry": ["A step a human can follow to see the change work."],
+  "openQuestions": ["A decision you could not make and need a human for."]
+}
+\`\`\`
+
+- \`status\` and \`summary\` are required. The three lists may be empty.
+- \`status\` is \`done\` when the task is complete, \`partial\` when only some of it landed (say what is left in the summary), and \`blocked\` when you could not proceed (say why in \`openQuestions\`).
+- List only verification commands you actually ran, with their real outcome.`;

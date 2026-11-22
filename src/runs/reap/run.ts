@@ -201,8 +201,13 @@ export async function reapRun(input: ReapRunInput): Promise<ReapRunResult> {
 		state.noChanges &&
 		(run.ref !== null || run.targetBranch !== null) &&
 		input.outcome === "succeeded";
+	const handoffFailure = state.handoffShortfall; // namphuongtran/warren#21 (required handoff)
 	const effectiveOutcome: RunTerminalState =
-		state.droppedCommit || noChangesFailure || failedFromProviderError || finalizeFailed
+		state.droppedCommit ||
+		noChangesFailure ||
+		failedFromProviderError ||
+		finalizeFailed ||
+		handoffFailure
 			? "failed"
 			: input.outcome;
 
@@ -254,6 +259,8 @@ export async function reapRun(input: ReapRunInput): Promise<ReapRunResult> {
 		} else {
 			failureReason = state.pushRejectedByPolicy ? "push_rejected_policy" : "finalize_failed";
 		}
+	} else if (handoffFailure) {
+		failureReason = "handoff_missing";
 	} else if (effectiveOutcome === "failed") {
 		failureReason =
 			input.failureReason ?? (await inferFailureReason(input.repos, run.id, stateOnEntry));

@@ -14,7 +14,7 @@
  * holds the pure config, the threshold math, and the run-row resolution.
  */
 
-import type { SteeringCapability } from "../../core/wire.ts";
+import { RUN_HANDOFF_PATH, type SteeringCapability } from "../../core/wire.ts";
 import type { Repos } from "../../db/repos/index.ts";
 import type { RuntimeProvider } from "../../runtime/contract.ts";
 import { resolveCostCapUsd } from "../cost-cap.ts";
@@ -99,7 +99,7 @@ export function warningSteer(input: {
 export function budgetWarningSteerBody(costUsd: number, capUsd: number): string {
 	return (
 		`You are near the spend cap ($${costUsd.toFixed(2)} of $${capUsd.toFixed(2)} spent). ` +
-		"Finish, commit, and write your final message now."
+		`Finish, commit, write ${RUN_HANDOFF_PATH}, and write your final message now.`
 	);
 }
 

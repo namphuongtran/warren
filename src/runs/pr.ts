@@ -1,3 +1,4 @@
+import type { RunHandoffRecord } from "../core/wire.ts";
 import {
 	composeBody,
 	composeTitle,
@@ -75,6 +76,8 @@ export interface BuildPrContentInput {
 	 * absent → no section.
 	 */
 	readonly agentNotes?: string;
+	/** The reap-validated handoff → `## Handoff` (namphuongtran/warren#21). */
+	readonly handoff?: RunHandoffRecord;
 	/**
 	 * The run's final assistant message (namphuongtran/warren#42), rendered
 	 * into a fenced, size-capped `## Agent report` section. Absent → no section.
@@ -129,8 +132,8 @@ export interface PrContent {
  *
  * Body fragments (in order, omitted when their data is absent and
  * the project hasn't overridden):
- *   - summary, agent_notes, agent_report, run, seeds, preview_url_or_placeholder, commits,
- *     files_changed, prompt, trailer
+ *   - summary, handoff, agent_notes, agent_report, run, seeds, preview_url_or_placeholder,
+ *     commits, files_changed, prompt, trailer
  */
 export function buildPrContent(input: BuildPrContentInput): PrContent {
 	const ctx: PrFragmentContext = buildContext(input);
@@ -157,6 +160,7 @@ function buildContext(input: BuildPrContentInput): PrFragmentContext {
 		tokensOutput?: number;
 		tokensCacheRead?: number;
 		previewOptedIn?: boolean;
+		handoff?: RunHandoffRecord;
 		agentNotes?: string;
 		agentReport?: string;
 		providerError?: string | null;
@@ -176,6 +180,7 @@ function buildContext(input: BuildPrContentInput): PrFragmentContext {
 	if (input.tokensOutput !== undefined) ctx.tokensOutput = input.tokensOutput;
 	if (input.tokensCacheRead !== undefined) ctx.tokensCacheRead = input.tokensCacheRead;
 	if (input.previewOptedIn !== undefined) ctx.previewOptedIn = input.previewOptedIn;
+	if (input.handoff !== undefined) ctx.handoff = input.handoff;
 	if (input.agentNotes !== undefined) ctx.agentNotes = input.agentNotes;
 	if (input.agentReport !== undefined) ctx.agentReport = input.agentReport;
 	if (input.providerError !== undefined) ctx.providerError = input.providerError;

@@ -44,6 +44,7 @@ function runRow(over: Partial<RunRow> = {}): RunRow {
 		insertions: null,
 		deletions: null,
 		qualityGateOutcome: null,
+		handoff: null,
 		startedAt: "2026-08-04T00:00:00.000Z",
 		workspaceReadyAt: null,
 		agentReadyAt: null,

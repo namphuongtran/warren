@@ -56,9 +56,9 @@ export const PUBLIC_WARREN_CONFIG_DEFAULTS_FIELDS = [
  * - `migrations` — carries a regeneration command string (warren-4371).
  * - `maxCostUsd`, `maxDurationMinutes` — admission-cap disclosures.
  * - `agentImage`, `preview`, `agent`, `interactiveAgents`, `resources`,
- *   `admission`, `ciFixer`, `healer`, `tracker`, `pr` — nested operator
- *   configuration blocks (image names, ports, pod specs, prompt knobs,
- *   PR auto-merge policy).
+ *   `admission`, `ciFixer`, `healer`, `tracker`, `pr`, `handoff` — nested
+ *   operator configuration blocks (image names, ports, pod specs, prompt
+ *   knobs, PR auto-merge policy, the required-handoff policy).
  */
 export const REDACTED_WARREN_CONFIG_FIELDS = [
 	"triggers",
@@ -80,6 +80,7 @@ export const REDACTED_WARREN_CONFIG_FIELDS = [
 	"healer",
 	"tracker",
 	"pr",
+	"handoff",
 ] as const satisfies readonly (keyof LoadedWarrenConfig | keyof DefaultsConfig)[];
 
 /**

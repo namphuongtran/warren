@@ -195,6 +195,13 @@ admission:
 - The agent should run the gate as `$WARREN_QUALITY_GATE` or as the exact configured command.
   A pipe or `; echo` hides the exit status, so such a command should print `exit=$?`.
   Otherwise the outcome reads `unknown`.
+- Every built-in agent writes a handoff report to `.warren/handoff.json` before it ends:
+  `status` (`done`, `partial`, or `blocked`), `summary`, `verification`, `howToTry`, and
+  `openQuestions`. Git ignores the file. Reap validates it, serves it as `handoff` on
+  `GET /runs/:id`, emits `handoff.recorded`, and renders it as `## Handoff` in the PR body.
+  A missing or invalid report is flagged with a reason (`handoff.missing`). Set
+  `handoff: { required: true }` to fail such a run with `handoff_missing`. In a plan-run,
+  the next child's prompt carries the previous child's report.
 - Optional: a `.seeds/` directory for the issue tracker, and `.mulch/` for agent memory across
   runs. Warren detects these directories when they exist.
 
@@ -264,6 +271,7 @@ Common `failureReason` values:
 | `provider_error` | The model API failed, for example out of credit | Check the key or the credit. If the code was pushed, the PR still opens. |
 | `finalize_failed` | The push failed | See the `reap.workspace_salvaged` event. Run again with `--rescue-from`. |
 | `push_rejected_policy` | The remote rejected the push because of a policy, for example secret scanning | Read the `reap.push_rejected` event to get the unblock link |
+| `handoff_missing` | The project sets `handoff.required`, and the run left no valid `.warren/handoff.json` | Read the `handoff.missing` event for the reason. The PR still opens, but Warren does not arm auto-merge, dispatch auto-plan-runs, or launch a preview for it. |
 | infra loss (OOM, lost pod, Spot) | Infrastructure failure | Warren retries **once** automatically |
 
 When a push fails, or the agent finishes without committing its changes, Warren saves

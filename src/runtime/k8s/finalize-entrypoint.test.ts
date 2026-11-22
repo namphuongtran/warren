@@ -197,6 +197,21 @@ describe("collectFinalizeResult", () => {
 		expect(skipped).toContain("seeds_commit");
 	});
 
+	test("collects the workspace handoff report, omitted when absent (namphuongtran/warren#21)", async () => {
+		const body = '{"status":"done","summary":"x"}';
+		const withFile = fakeFs({ "/ws/.warren/handoff.json": body });
+		const r = await collectFinalizeResult(intent({ push: false }), "/ws", {
+			fs: withFile,
+			git: fakeGit().git,
+		});
+		expect(r.handoffBody).toBe(body);
+		const without = await collectFinalizeResult(intent({ push: false }), "/ws", {
+			fs: fakeFs({}),
+			git: fakeGit().git,
+		});
+		expect(without).not.toHaveProperty("handoffBody");
+	});
+
 	test("push:false skips the push + count and produces empty-push=false", async () => {
 		const { git } = fakeGit();
 		const r = await collectFinalizeResult(intent({ push: false }), "/ws", { fs: fakeFs({}), git });

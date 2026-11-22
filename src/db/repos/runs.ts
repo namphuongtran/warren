@@ -9,6 +9,7 @@ import type {
 	PullRequestLifecycle,
 	RunCostBasis,
 	RunFailureReason,
+	RunHandoffRecord,
 	RunMode,
 	RunQualityGateOutcome,
 	RunRow,
@@ -20,6 +21,7 @@ import { fixAttemptHistoryByPrUrl, listPrCandidatesByProject } from "./runs-ci-f
 import { deleteNeverStarted } from "./runs-delete.ts";
 import {
 	type RunOutcomeFacts,
+	setHandoff as setHandoffBody,
 	setOutcomeFacts as setOutcomeFactsBody,
 	setQualityGateOutcome as setQualityGateOutcomeBody,
 } from "./runs-outcome-facts.ts";
@@ -170,6 +172,7 @@ export class RunsRepo {
 			deletions: null,
 			qualityGate,
 			qualityGateOutcome: null,
+			handoff: null,
 			salvageRef: null,
 			salvagePath: null,
 			costUsd: null,
@@ -424,20 +427,13 @@ export class RunsRepo {
 		return setPrState(this.adapter, id, prState, prMergedAt);
 	}
 
-	/**
-	 * Runs whose PR the merge watcher still has to settle (warren-3bc6):
-	 * `pr_url` set and `pr_state` NULL or `open`. Boot re-adoption
-	 * enumerates these so a restart never orphans an in-flight poll.
-	 */
+	/** PRs the merge watcher still has to settle (warren-3bc6): boot re-adopts these. */
 	listWithUnresolvedPr(): Promise<RunRow[]> {
 		return listWithUnresolvedPr(this.adapter);
 	}
 
-	/**
-	 * Persist where a failed finalize's work was salvaged to (warren-cd3b):
-	 * the rescue branch on origin (`salvageRef`) and/or the durable git-bundle
-	 * file (`salvagePath`). Last write wins.
-	 */
+	/** Where a failed finalize's work was salvaged (warren-cd3b): rescue ref and/or
+	 * git bundle. Last write wins. */
 	async setSalvage(
 		id: string,
 		salvage: { rescueRef: string | null; bundlePath: string | null },
@@ -452,11 +448,7 @@ export class RunsRepo {
 		return { ...current, salvageRef: salvage.rescueRef, salvagePath: salvage.bundlePath };
 	}
 
-	/**
-	 * Persist the reap-time outcome facts (warren-ab2b / pl-103e). Last
-	 * write wins; NULL means unknown, never zero. Body lives in
-	 * runs-outcome-facts.ts (file-size budget).
-	 */
+	/** Reap-time outcome facts (warren-ab2b); NULL = unknown. Body in runs-outcome-facts.ts. */
 	async setOutcomeFacts(id: string, facts: RunOutcomeFacts): Promise<RunRow> {
 		return setOutcomeFactsBody(this.adapter, id, facts);
 	}
@@ -464,6 +456,11 @@ export class RunsRepo {
 	/** Reap-derived gate outcome (namphuongtran/warren#36); body in runs-outcome-facts.ts. */
 	async setQualityGateOutcome(id: string, outcome: RunQualityGateOutcome): Promise<void> {
 		await setQualityGateOutcomeBody(this.adapter, id, outcome);
+	}
+
+	/** Reap-validated handoff report (namphuongtran/warren#21); body in runs-outcome-facts.ts. */
+	async setHandoff(id: string, record: RunHandoffRecord): Promise<void> {
+		await setHandoffBody(this.adapter, id, record);
 	}
 
 	/** CI-fixer queries (warren-0b75); bodies live in runs-ci-fixer.ts. */

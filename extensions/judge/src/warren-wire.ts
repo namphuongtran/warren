@@ -71,6 +71,8 @@ export const RUN_FAILURE_REASONS = [
 	// retryable (the substrate lost the run, not the agent).
 	"preempted",
 	"duration_exceeded",
+	// namphuongtran/warren#21: the project requires a handoff report and the run left none.
+	"handoff_missing",
 ] as const;
 export type RunFailureReason = (typeof RUN_FAILURE_REASONS)[number];
 

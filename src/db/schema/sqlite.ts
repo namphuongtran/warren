@@ -1,25 +1,22 @@
 /**
  * SQLite physical schema for warren's durable state (docs/design/runtime-and-supervisor.md).
  *
- * Tables: agents (canopy registry cache), projects (cloned repos), runs
- * (warren-side run rows that mirror burrow's lifecycle), events (write-through
- * cache of burrow's stream — see the event-durability rationale in
- * docs/design/runtime-and-supervisor.md), triggers
- * (R-06 scheduler bookkeeping), planRuns + planRunChildren, and
- * runInbox. Dropped tables: plots (warren-0b13, 0031) and conversations +
- * messages (warren-d93e, 0030), both in the pl-3a79 deletion pass, and the
- * workers + burrows placement tables (warren-3743, 0028) once LocalProvider
- * absorbed the single-burrow runtime; `runs.worker_id` is retained
- * (nullable, unwritten) for historical rows only.
+ * Tables: agents (registry cache), projects (cloned repos), runs (run rows
+ * mirroring the runtime lifecycle), events (write-through cache of the agent
+ * stream; durability rationale in docs/design/runtime-and-supervisor.md),
+ * triggers (R-06 scheduler bookkeeping), planRuns + planRunChildren, runInbox.
+ * Dropped tables: plots (warren-0b13, 0031) and conversations + messages
+ * (warren-d93e, 0030), both in the pl-3a79 deletion pass, and the workers +
+ * burrows placement tables (warren-3743, 0028) once LocalProvider absorbed the
+ * single-burrow runtime; `runs.worker_id` is kept (nullable, unwritten) for history.
  *
  * Timestamps are ISO8601 TEXT, mirroring the burrow event envelope `ts` field
  * so we don't translate at the stream boundary. JSON columns use drizzle's
  * `mode: "json"` (stored as TEXT under the hood; drizzle (de)serializes); the
  * Postgres mirror uses `jsonb`.
  *
- * Constants and table/index names live in `./columns.ts`; the parallel pg
- * physical schema is in `./postgres.ts`. Drift between the two is caught by
- * `./drift.test.ts`.
+ * Constants and table/index names live in `./columns.ts`; the pg mirror is
+ * `./postgres.ts`, and `./drift.test.ts` catches drift between the two.
  */
 
 import { sql } from "drizzle-orm";
@@ -48,6 +45,7 @@ import {
 	RUN_MODES,
 	RUN_QUALITY_GATE_OUTCOMES,
 	RUN_STATES,
+	type RunHandoffRecord,
 	TABLE_NAMES,
 } from "./columns.ts";
 
@@ -263,6 +261,8 @@ export const runs = sqliteTable(
 		// (null = unconfigured) and the outcome reap derived (null = not derived).
 		qualityGate: text("quality_gate"),
 		qualityGateOutcome: text("quality_gate_outcome", { enum: RUN_QUALITY_GATE_OUTCOMES }),
+		// The validated handoff report reap recorded (namphuongtran/warren#21); null = not derived.
+		handoff: text("handoff_json", { mode: "json" }).$type<RunHandoffRecord>(),
 	},
 	(t) => [
 		index(INDEX_NAMES.runsState).on(t.state),

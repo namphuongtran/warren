@@ -51,6 +51,7 @@ import type {
 	PullRequestLifecycle,
 	RunCostBasis,
 	RunFailureReason,
+	RunHandoffRecord,
 	RunMode,
 	RunQualityGateOutcome,
 	RunState,
@@ -153,17 +154,11 @@ export interface RunRow {
 	insertions: number | null;
 	deletions: number | null;
 	qualityGateOutcome: RunQualityGateOutcome | null; // reap-derived (namphuongtran/warren#36)
+	handoff: RunHandoffRecord | null; // reap-validated handoff report (namphuongtran/warren#21)
 	prompt: string;
 	trigger: string;
-	/**
-	 * URL of the PR reap opened (warren-f6af). Null when reap's `pr_open` sub-step
-	 * was skipped or the GitHub call errored.
-	 */
-	prUrl: string | null;
-	/**
-	 * Merge-watcher PR facts (warren-3bc6): forge-reported lifecycle + merge instant.
-	 * Null reads as "unknown" (historical rows, no PR), never "not merged".
-	 */
+	prUrl: string | null; // PR reap opened (warren-f6af); null = skipped or the forge call errored
+	/** Merge-watcher PR facts (warren-3bc6); null = unknown (no PR, old rows), never "not merged". */
 	prState: PullRequestLifecycle | null;
 	prMergedAt: string | null;
 	/** Existing branch reap pushes the workspace back to (#419). Null when unset. */

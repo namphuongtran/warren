@@ -52,6 +52,7 @@ import {
 	RUN_MODES,
 	RUN_QUALITY_GATE_OUTCOMES,
 	RUN_STATES,
+	type RunHandoffRecord,
 	TABLE_NAMES,
 } from "./columns.ts";
 
@@ -175,6 +176,7 @@ export const runs = pgTable(
 		// Mirror of sqlite quality_gate/quality_gate_outcome (namphuongtran/warren#36).
 		qualityGate: text("quality_gate"),
 		qualityGateOutcome: text("quality_gate_outcome", { enum: RUN_QUALITY_GATE_OUTCOMES }),
+		handoff: jsonb("handoff_json").$type<RunHandoffRecord>(), // namphuongtran/warren#21
 	},
 	(t) => [
 		index(INDEX_NAMES.runsState).on(t.state),
