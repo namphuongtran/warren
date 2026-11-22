@@ -52,7 +52,7 @@ commit by hand.
 | `claude-code` | General-purpose coding agent that runs on Claude Code |
 | `pi` | General-purpose coding agent that runs on Pi (works with many providers, for example OpenRouter) |
 | `codex` | General-purpose coding agent that runs on OpenAI's Codex CLI (OpenAI models only) |
-| `planner` | Writes plans and splits work into issues |
+| `planner` | Writes a spec for an issue, with questions and recommended answers, then a plan once the spec is final |
 | `pr-fixer` | Fixes PRs with red CI (the default role of ci-fixer) |
 | `healer` | Responds to production alerts (Sentry / Grafana) |
 | `nightwatch`, `bugwatch` | Patrol agents, usually attached to a scheduled trigger |

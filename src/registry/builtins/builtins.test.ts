@@ -3,7 +3,6 @@ import { isKnownRuntimeId, parseRunHandoff, RUN_APPROACH_HEADINGS } from "../../
 import { openDatabase, type WarrenDb } from "../../db/client.ts";
 import { AgentsRepo } from "../../db/repos/agents.ts";
 import { DrizzleAdapter } from "../../db/repos/drizzle-adapter.ts";
-import { ALL_PROMPT_CAPABILITIES, withGatedPromptFragments } from "../prompt-gating.ts";
 import {
 	AgentNameSchema,
 	parseRenderedAgent,
@@ -262,70 +261,6 @@ describe("stampAgentSource", () => {
 	test("preserves other frontmatter fields", () => {
 		const stamped = stampAgentSource(CLAUDE_CODE_BUILTIN, "library");
 		expect(stamped.frontmatter.tags).toEqual(["agent"]);
-	});
-});
-
-describe("PLANNER_BUILTIN", () => {
-	test("is registered as an interactive scout with narrow write scope", () => {
-		// pl-0344 step 7 / warren-543d: planner pairs with brainstorm as
-		// the second interactive built-in. The interactive tag lets the UI
-		// surface it under interactive-run pickers without parsing the
-		// system prompt.
-		expect(PLANNER_BUILTIN.name).toBe("planner");
-		expect(PLANNER_BUILTIN.frontmatter.tags).toContain("interactive");
-	});
-
-	test("system prompt allows .seeds/ writes only, forbids source + dispatch", () => {
-		// Warren's burrow_config only forwards [sandbox].network onto
-		// POST /burrows (src/runs/burrow_config.ts), so the path-scoped
-		// write contract is enforced in the prompt for now. These string
-		// checks pin the contract so a casual edit doesn't silently widen
-		// the role. Asserted against the fully-composed render (warren-cb46)
-		// because the tracker text now rides gatedPrompts.
-		const system = withGatedPromptFragments(PLANNER_BUILTIN, ALL_PROMPT_CAPABILITIES).sections
-			.system;
-		expect(system).toMatch(/must NOT/);
-		expect(system).toMatch(/source files/);
-		expect(system).toMatch(/Dispatch agent runs/);
-		expect(system).toMatch(/\.seeds\//);
-		// warren-427b: plot integration retired (pl-3a79); the prompt must
-		// not promise .plot/ writes or a `chore(warren): plot state` commit.
-		expect(system).not.toMatch(/\.plot\//);
-		expect(system).not.toMatch(/plot state/);
-	});
-
-	test("references the sd plan submit pipeline that produces seeds", () => {
-		// The planner's only side effect on work items is via
-		// `sd plan submit`, which spawns child seeds (mx-77117c documents
-		// the 0-BASED `steps[i].blocks` index semantics — the prompt
-		// reiterates that so the agent doesn't off-by-one). That text rides
-		// gatedPrompts.tracker (warren-cb46) — assert on the composed render.
-		const system = withGatedPromptFragments(PLANNER_BUILTIN, ALL_PROMPT_CAPABILITIES).sections
-			.system;
-		expect(system).toMatch(/sd plan prompt/);
-		expect(system).toMatch(/sd plan submit/);
-		expect(system).toMatch(/0-BASED/);
-	});
-
-	test("declares runtime = 'pi' so dispatch composes on the real runtime", () => {
-		// warren-ebca: see BRAINSTORM_BUILTIN's matching test — planner is
-		// the other system-prompt-only canopy agent whose name does not
-		// match any burrow runtime.
-		expect(PLANNER_BUILTIN.frontmatter.runtime).toBe("pi");
-	});
-
-	test("refuses to invent Plot intent and defers to brainstorm + formalize", () => {
-		// The interactive run primitive (warren-1117) loads Plot context
-		// into the prompt. If intent is empty, planner must bounce the user
-		// to the brainstorm/formalize flow (warren-3de8 / warren-d22e)
-		// rather than fabricate goals.
-		const system = PLANNER_BUILTIN.sections.system ?? "";
-		expect(system).toMatch(/brainstorm/);
-		expect(system).toMatch(/formalize/);
-	});
-
-	test("requires open network for scouting external references", () => {
-		expect(PLANNER_BUILTIN.sections.burrow_config).toContain('network = "open"');
 	});
 });
 

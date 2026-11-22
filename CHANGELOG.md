@@ -99,6 +99,21 @@ Releases **0.9.10 and earlier** live in
 
 ### Changed
 
+- **`planner` is now a spec agent (namphuongtran/warren#35).** The built-in
+  `planner` prompt no longer reads a Plot intent, writes Plot attachments, or
+  waits on an interactive turn: those surfaces were already retired, and the
+  prompt no longer refers to them. The planner now reads one issue and the code it touches, then writes a
+  spec with these sections: goal, non-goals, constraints, acceptance criteria,
+  affected modules, decisions, and open questions. Each open question carries a
+  recommended answer and the reason. With a seeds tracker, the spec goes into
+  the issue description between `warren:spec` markers, and a seeds plan is
+  submitted once no questions remain. Both land on the default branch when the
+  run branch merges. Without a tracker, the handoff `summary` holds the spec. A run with open questions ends with handoff `status: "blocked"`. A
+  continuation run (`continueFromRunId`) takes the answers and finalizes the
+  spec. pi's `edit` tool is turned off for the planner
+  (`frontmatter.pi.excludeTools`). The change touches
+  `src/registry/builtins/`, so it needs human review under Article IX.
+
 - **Campaign-controller review fix loop (namphuongtran/warren#18).** The
   tick now drives the follow-up coordinator when the repository policy
   sets `mutations.followUpPush: true`. A reviewer `request_changes`

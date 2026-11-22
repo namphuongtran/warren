@@ -20,8 +20,9 @@
  * `extensions/campaign-controller/src/review/verdict.ts` reads it. A test
  * pins every example below against that validator.
  *
- * Read-only is enforced in the system prompt, like the planner's write
- * scope: warren's sandbox profile has no per-tool ACL yet. No quality-gate
+ * Read-only is enforced in the system prompt: warren's sandbox profile has
+ * no per-path ACL, and the reviewer needs pi's bash tool for read-only
+ * commands, so a tool denylist would not make it read-only. No quality-gate
  * fragment rides along, and the tracker and expertise fragments are
  * read-only variants (no `sd create`, no `ml record`), because the reviewer
  * changes nothing.
