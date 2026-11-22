@@ -4,14 +4,19 @@
  * For a work item with an open PR, one `step` call moves the review of the
  * PR's CURRENT head SHA forward by one stage:
  *
- * 1. **No round for this SHA** → dispatch a read-only reviewer run over
- *    `POST /runs`, pinned to the SHA with `baseCommit`, under the policy's
- *    agent/provider/model and spend cap, and publish a `pending` commit
- *    status on the SHA.
- * 2. **Round live** → poll the run. When it ends, read its verdict from the
- *    run's text events and publish it: a `success`/`failure` commit status
- *    on the SHA plus a COMMENT review with the findings.
+ * 1. **No round for this SHA** → dispatch one read-only reviewer run per
+ *    panel seat over `POST /runs`, each pinned to the SHA with `baseCommit`,
+ *    under that seat's agent/provider/model and the policy's spend cap, and
+ *    publish a `pending` commit status on the SHA.
+ * 2. **Round live** → poll each live seat's run. A finished run settles its
+ *    seat with the verdict read from the run's text events. Once every seat
+ *    has settled, the quorum rule (`./quorum.ts`) decides the round, which
+ *    is published as a `success`/`failure` commit status on the SHA plus one
+ *    COMMENT review listing each reviewer's findings.
  * 3. **Round settled** → nothing to do; a re-tick never re-publishes.
+ *
+ * Phase 1 is the one-seat panel: a policy without `additionalReviewers`
+ * dispatches, decides, and publishes exactly as before.
  *
  * Invariants:
  *
@@ -24,8 +29,9 @@
  *   status context therefore blocks the merge until the new head is
  *   reviewed.
  * - **Fail closed.** A failed reviewer run, a missing or malformed verdict,
- *   or an unconfirmed dispatch publishes an `error` status and opens an
- *   attention item. Nothing approves by default.
+ *   or an unconfirmed dispatch fails its seat. A round whose failed seats
+ *   leave the quorum unmet, with no seat asking for changes, publishes an
+ *   `error` status and opens an attention item. Nothing approves by default.
  * - **Bounded fix loop.** `request_changes` findings become
  *   `review_feedback` rows the follow-up coordinator turns into fixer runs,
  *   at most `maxRounds` times per work item. The next change request
@@ -58,16 +64,23 @@ import {
 	MUTATION_FAILED_REASON,
 	MUTATION_UNCERTAIN_REASON,
 } from "../pr-execute/mutation-journal.ts";
-import type { RepositoryPolicy, ReviewPolicy } from "../repository-policy.ts";
+import {
+	type RepositoryPolicy,
+	type ReviewerIdentity,
+	type ReviewPanel,
+	type ReviewPolicy,
+	reviewPanel,
+} from "../repository-policy.ts";
 import type { CampaignStateStore } from "../store/state-store.ts";
-import { type ReviewRoundRow, TERMINAL_ACTION_STATES } from "../store/types.ts";
+import { type ReviewRoundRow, type ReviewSeatRow, TERMINAL_ACTION_STATES } from "../store/types.ts";
 import {
 	DispatchUncertainError,
 	isTerminalRunState,
 	type WarrenDispatchInput,
 	type WarrenRunView,
 } from "../warren-client.ts";
-import { renderReviewComment, renderReviewPrompt } from "./render.ts";
+import { decideRound, type SeatResult } from "./quorum.ts";
+import { type ReviewCommentSeat, renderReviewComment, renderReviewPrompt } from "./render.ts";
 import { extractReviewVerdict, type ReviewVerdict } from "./verdict.ts";
 
 /** Action types whose live run will move the PR head; a new review waits for them. */
@@ -86,6 +99,8 @@ export const REVIEW_COMMENT_ACTION_TYPE = "review_comment";
 export const REVIEW_FEEDBACK_CATEGORY = "warren_review";
 /** Attention reason: the reviewer could not produce a usable verdict. */
 export const REVIEW_FAILED_REASON = "review_failed";
+/** Attention reason: a panel passed its quorum, but at least one seat produced no verdict. */
+export const REVIEW_SEAT_FAILED_REASON = "review_seat_failed";
 /** Attention reason: the fix loop hit `maxRounds`. */
 export const REVIEW_NEEDS_HUMAN_REASON = "review_needs_human";
 
@@ -145,7 +160,10 @@ export interface ReviewStepOutcome {
 	readonly headSha: string;
 	readonly roundId: string | null;
 	readonly round: number | null;
+	/** Seat 0's run (the primary reviewer), kept for one-seat callers. */
 	readonly runId: string | null;
+	/** Every dispatched seat's run, in panel order. */
+	readonly runIds: readonly string[];
 	/** Failure reason or settled state, when there is one. */
 	readonly detail: string | null;
 	/** Rounds on older SHAs this step superseded. */
@@ -158,6 +176,7 @@ export class ReviewCoordinator {
 	readonly #publisher: GithubReviewPublisherTransport;
 	readonly #policy: RepositoryPolicy;
 	readonly #review: ReviewPolicy;
+	readonly #panel: ReviewPanel;
 
 	constructor(deps: ReviewCoordinatorDeps) {
 		if (deps.policy.review === null) {
@@ -170,6 +189,7 @@ export class ReviewCoordinator {
 		this.#publisher = deps.publisher;
 		this.#policy = deps.policy;
 		this.#review = deps.policy.review;
+		this.#panel = reviewPanel(deps.policy.review);
 	}
 
 	/** Advance the review of the PR's current head by one stage. */
@@ -194,12 +214,25 @@ export class ReviewCoordinator {
 		return this.#outcome(ctx, "settled", round, { detail: round.state, superseded });
 	}
 
-	/** A head move voids every live verdict on an older SHA. */
+	/** A head move voids every live verdict on an older SHA, every seat included. */
 	#supersedeStale(ctx: ReviewContext): number {
 		let count = 0;
 		for (const round of this.#store.reviews.listForWorkItem(ctx.workItemId)) {
 			if (round.state === "dispatched" && round.headSha !== ctx.headSha) {
-				this.#store.reviews.settle(round.id, { state: "superseded", failureReason: "head_moved" });
+				this.#store.transaction(() => {
+					this.#store.reviews.settle(round.id, {
+						state: "superseded",
+						failureReason: "head_moved",
+					});
+					for (const seat of this.#store.reviews.listSeats(round.id)) {
+						if (seat.state === "dispatched") {
+							this.#store.reviews.settleSeat(seat.id, {
+								state: "superseded",
+								failureReason: "head_moved",
+							});
+						}
+					}
+				});
 				count += 1;
 			}
 		}
@@ -207,7 +240,8 @@ export class ReviewCoordinator {
 	}
 
 	async #dispatch(ctx: ReviewContext): Promise<ReviewStepOutcome> {
-		const neededCents = Math.round(this.#review.maxCostUsd * 100);
+		const seatCents = Math.round(this.#review.maxCostUsd * 100);
+		const neededCents = seatCents * this.#panel.seats.length;
 		if (ctx.budgetHeadroomUsdCents < neededCents) {
 			return this.#outcome(ctx, "no_budget_headroom", null, {
 				detail: `review needs ${neededCents}c, campaign headroom is ${ctx.budgetHeadroomUsdCents}c`,
@@ -222,87 +256,173 @@ export class ReviewCoordinator {
 			baseSha: ctx.baseSha ?? null,
 			issueRef: ctx.issueRef,
 		});
-		const request: Omit<WarrenDispatchInput, "idempotencyKey"> = {
-			project: ctx.project,
-			agent: this.#review.agent,
-			prompt,
-			...(this.#review.provider !== null ? { provider: this.#review.provider } : {}),
-			...(this.#review.model !== null ? { model: this.#review.model } : {}),
-			maxCostUsd: this.#review.maxCostUsd,
-			baseCommit: ctx.headSha,
-		};
-		const { round, actionId, idempotencyKey } = this.#store.transaction(() => {
+		// Journal the round and every seat's intent before any POST.
+		const { round, planned } = this.#store.transaction(() => {
 			const opened = this.#store.reviews.insertDispatched({
 				campaignId: ctx.campaignId,
 				workItemId: ctx.workItemId,
 				prNumber: ctx.prNumber,
 				headSha: ctx.headSha,
 			});
-			// Keyed by round, not SHA: a head that returns to a superseded SHA
-			// opens a new round and must dispatch a new run.
-			const key = `review:${ctx.campaignId}:${opened.id}`;
-			const action = this.#store.actions.beginAction({
-				actionKey: key,
-				campaignId: ctx.campaignId,
-				actionType: REVIEW_RUN_ACTION_TYPE,
-				requestDigest: sha256Hex(canonicalJson({ ...request, idempotencyKey: key })),
-				reservedUsdCents: neededCents,
-			});
-			this.#store.actions.markExecuting(action.id);
-			this.#store.reviews.recordActionId(opened.id, action.id);
-			return { round: opened, actionId: action.id, idempotencyKey: key };
+			const seats = this.#panel.seats.map((identity, index) =>
+				this.#planSeat(ctx, opened, identity, index, prompt, seatCents),
+			);
+			return { round: opened, planned: seats };
 		});
+		for (const seat of planned) {
+			await this.#dispatchSeat(seat);
+		}
+		const seats = this.#store.reviews.listSeats(round.id);
+		if (seats.every((seat) => seat.state !== "dispatched")) {
+			// Every POST was refused or ambiguous: decide (and fail) now.
+			return this.#decide(ctx, round, seats);
+		}
+		await this.#publishRound(ctx, round);
+		return this.#outcome(ctx, "dispatched", round);
+	}
+
+	/** Open one seat and journal its `review_run` action. Runs inside the dispatch transaction. */
+	#planSeat(
+		ctx: ReviewContext,
+		round: ReviewRoundRow,
+		identity: ReviewerIdentity,
+		index: number,
+		prompt: string,
+		seatCents: number,
+	): PlannedSeat {
+		const seat = this.#store.reviews.insertSeat({ roundId: round.id, seat: index, ...identity });
+		const request: Omit<WarrenDispatchInput, "idempotencyKey"> = {
+			project: ctx.project,
+			agent: identity.agent,
+			prompt,
+			...(identity.provider !== null ? { provider: identity.provider } : {}),
+			...(identity.model !== null ? { model: identity.model } : {}),
+			maxCostUsd: this.#review.maxCostUsd,
+			baseCommit: ctx.headSha,
+		};
+		// Keyed by round, not SHA: a head that returns to a superseded SHA
+		// opens a new round and must dispatch new runs. Seat 0 keeps the
+		// pre-panel key shape.
+		const key = `review:${ctx.campaignId}:${round.id}${index === 0 ? "" : `:${index}`}`;
+		const action = this.#store.actions.beginAction({
+			actionKey: key,
+			campaignId: ctx.campaignId,
+			actionType: REVIEW_RUN_ACTION_TYPE,
+			requestDigest: sha256Hex(canonicalJson({ ...request, idempotencyKey: key })),
+			reservedUsdCents: seatCents,
+		});
+		this.#store.actions.markExecuting(action.id);
+		this.#store.reviews.recordSeatActionId(seat.id, action.id);
+		return { seatId: seat.id, actionId: action.id, request: { ...request, idempotencyKey: key } };
+	}
+
+	/** POST one seat's run. A refusal or ambiguous response fails that seat alone. */
+	async #dispatchSeat(planned: PlannedSeat): Promise<void> {
 		let run: WarrenRunView;
 		try {
-			run = await this.#warren.dispatchRun({ ...request, idempotencyKey });
+			run = await this.#warren.dispatchRun(planned.request);
 		} catch (error) {
 			// Never re-POST: an ambiguous dispatch settles uncertain, a refusal
-			// settles failed, and either way the round fails closed.
+			// settles failed, and either way the seat fails closed.
 			const uncertain = error instanceof DispatchUncertainError;
-			this.#store.actions.settleAction(actionId, {
-				state: uncertain ? "uncertain" : "permanent_failure",
-				errorClass: uncertain ? "ambiguous_response" : "dispatch_rejected",
-				errorJson: canonicalJson({
-					message: error instanceof Error ? error.message : String(error),
-				}),
+			this.#store.transaction(() => {
+				this.#store.actions.settleAction(planned.actionId, {
+					state: uncertain ? "uncertain" : "permanent_failure",
+					errorClass: uncertain ? "ambiguous_response" : "dispatch_rejected",
+					errorJson: canonicalJson({
+						message: error instanceof Error ? error.message : String(error),
+					}),
+				});
+				this.#store.reviews.settleSeat(planned.seatId, {
+					state: "failed",
+					failureReason: uncertain ? "dispatch_uncertain" : "dispatch_rejected",
+				});
 			});
-			return this.#fail(ctx, round, uncertain ? "dispatch_uncertain" : "dispatch_rejected");
+			return;
 		}
-		const live = this.#store.transaction(() => {
-			this.#store.actions.settleAction(actionId, { state: "succeeded", resultRunId: run.id });
-			this.#store.reviews.recordRunId(round.id, run.id);
-			return this.#store.reviews.getRound(round.id) as ReviewRoundRow;
+		this.#store.transaction(() => {
+			this.#store.actions.settleAction(planned.actionId, {
+				state: "succeeded",
+				resultRunId: run.id,
+			});
+			this.#store.reviews.recordSeatRunId(planned.seatId, run.id);
 		});
-		await this.#publishRound(ctx, live);
-		return this.#outcome(ctx, "dispatched", live);
 	}
 
 	async #reconcile(ctx: ReviewContext, round: ReviewRoundRow): Promise<ReviewStepOutcome> {
-		if (round.runId === null) {
-			// A crash between journal and POST: the run may or may not exist.
-			const action = round.actionId !== null ? this.#store.actions.getAction(round.actionId) : null;
-			if (action !== null && (action.state === "planned" || action.state === "executing")) {
-				this.#store.actions.settleAction(action.id, {
-					state: "uncertain",
-					errorClass: "ambiguous_response",
-				});
+		for (const seat of this.#store.reviews.listSeats(round.id)) {
+			if (seat.state === "dispatched") {
+				await this.#reconcileSeat(seat);
 			}
-			return this.#fail(ctx, round, "dispatch_unconfirmed");
 		}
-		const run = await this.#warren.getRun(round.runId);
-		if (!isTerminalRunState(run.state)) {
+		const seats = this.#store.reviews.listSeats(round.id);
+		if (seats.some((seat) => seat.state === "dispatched")) {
 			return this.#outcome(ctx, "in_progress", round);
 		}
+		return this.#decide(ctx, round, seats);
+	}
+
+	/** Settle one live seat if its run has ended; leave it live otherwise. */
+	async #reconcileSeat(seat: ReviewSeatRow): Promise<void> {
+		if (seat.runId === null) {
+			// A crash between journal and POST: the run may or may not exist.
+			const action = seat.actionId !== null ? this.#store.actions.getAction(seat.actionId) : null;
+			this.#store.transaction(() => {
+				if (action !== null && (action.state === "planned" || action.state === "executing")) {
+					this.#store.actions.settleAction(action.id, {
+						state: "uncertain",
+						errorClass: "ambiguous_response",
+					});
+				}
+				this.#store.reviews.settleSeat(seat.id, {
+					state: "failed",
+					failureReason: "dispatch_unconfirmed",
+				});
+			});
+			return;
+		}
+		const run = await this.#warren.getRun(seat.runId);
+		if (!isTerminalRunState(run.state)) {
+			return;
+		}
 		if (run.state !== "succeeded") {
-			return this.#fail(ctx, round, `run_${run.state}`);
+			this.#store.reviews.settleSeat(seat.id, {
+				state: "failed",
+				failureReason: `run_${run.state}`,
+			});
+			return;
 		}
-		const parsed = extractReviewVerdict(await this.#readAllEvents(round.runId));
+		const parsed = extractReviewVerdict(await this.#readAllEvents(seat.runId));
 		if (!parsed.ok) {
-			return this.#fail(ctx, round, parsed.reason);
+			this.#store.reviews.settleSeat(seat.id, { state: "failed", failureReason: parsed.reason });
+			return;
 		}
-		return parsed.verdict.verdict === "approve"
-			? this.#approve(ctx, round, parsed.verdict)
-			: this.#requestChanges(ctx, round, parsed.verdict);
+		this.#store.reviews.settleSeat(seat.id, {
+			state: parsed.verdict.verdict === "approve" ? "approved" : "changes_requested",
+			verdictJson: canonicalJson(parsed.verdict),
+		});
+	}
+
+	/** Every seat has settled: apply the quorum rule and settle the round. */
+	async #decide(
+		ctx: ReviewContext,
+		round: ReviewRoundRow,
+		seats: readonly ReviewSeatRow[],
+	): Promise<ReviewStepOutcome> {
+		const decision = decideRound(seats.map(toSeatResult), this.#quorumFor(seats));
+		switch (decision.outcome) {
+			case "failed":
+				return this.#fail(ctx, round, decision.reason);
+			case "approved":
+				return this.#approve(ctx, round, decision.verdict);
+			case "changes_requested":
+				return this.#requestChanges(ctx, round, decision.verdict);
+		}
+	}
+
+	/** The policy quorum, clamped to the seats a round actually has (a pre-panel round has one). */
+	#quorumFor(seats: readonly ReviewSeatRow[]): number {
+		return Math.min(this.#panel.quorum, seats.length);
 	}
 
 	async #approve(
@@ -310,9 +430,27 @@ export class ReviewCoordinator {
 		round: ReviewRoundRow,
 		verdict: ReviewVerdict,
 	): Promise<ReviewStepOutcome> {
-		const settled = this.#store.reviews.settle(round.id, {
-			state: "approved",
-			verdictJson: canonicalJson(verdict),
+		const seatFailures = this.#seatFailures(round);
+		const settled = this.#store.transaction(() => {
+			const row = this.#store.reviews.settle(round.id, {
+				state: "approved",
+				verdictJson: canonicalJson(verdict),
+			});
+			// The quorum held without these seats. Surface them anyway, so a
+			// reviewer that fails every round does not go unnoticed.
+			if (seatFailures.length > 0) {
+				this.#store.events.addAttentionOnce({
+					campaignId: ctx.campaignId,
+					workItemId: ctx.workItemId,
+					reason: REVIEW_SEAT_FAILED_REASON,
+					detailJson: canonicalJson({
+						key: `review:${round.id}`,
+						headSha: ctx.headSha,
+						seatFailures,
+					}),
+				});
+			}
+			return row;
 		});
 		await this.#publishRound(ctx, settled);
 		return this.#outcome(ctx, "approved", settled);
@@ -351,7 +489,7 @@ export class ReviewCoordinator {
 					campaignId: ctx.campaignId,
 					workItemId: ctx.workItemId,
 					category: REVIEW_FEEDBACK_CATEGORY,
-					sourceEventNodeId: `warren-review:${round.runId ?? round.id}`,
+					sourceEventNodeId: `warren-review:${round.id}`,
 					fieldsJson: canonicalJson({ ...finding, headSha: ctx.headSha }),
 				});
 			});
@@ -366,13 +504,20 @@ export class ReviewCoordinator {
 		round: ReviewRoundRow,
 		reason: string,
 	): Promise<ReviewStepOutcome> {
+		const panelRound = this.#store.reviews.listSeats(round.id).length > 1;
+		const seatFailures = this.#seatFailures(round);
 		const settled = this.#store.transaction(() => {
 			const row = this.#store.reviews.settle(round.id, { state: "failed", failureReason: reason });
 			this.#store.events.addAttentionOnce({
 				campaignId: ctx.campaignId,
 				workItemId: ctx.workItemId,
 				reason: REVIEW_FAILED_REASON,
-				detailJson: canonicalJson({ key: `review:${round.id}`, headSha: ctx.headSha, reason }),
+				detailJson: canonicalJson({
+					key: `review:${round.id}`,
+					headSha: ctx.headSha,
+					reason,
+					...(panelRound ? { seatFailures } : {}),
+				}),
 			});
 			return row;
 		});
@@ -393,6 +538,14 @@ export class ReviewCoordinator {
 		return events;
 	}
 
+	/** Each failed seat of a round and why, for an attention item's detail. */
+	#seatFailures(round: ReviewRoundRow): Array<{ seat: number; reason: string | null }> {
+		return this.#store.reviews
+			.listSeats(round.id)
+			.filter((seat) => seat.state === "failed")
+			.map((seat) => ({ seat: seat.seat, reason: seat.failureReason }));
+	}
+
 	/** Change-request rounds before this one (round order, so a re-derive agrees). */
 	#priorChangeRequests(round: ReviewRoundRow): number {
 		return this.#store.reviews
@@ -410,7 +563,8 @@ export class ReviewCoordinator {
 	 * verdict) the review comment. Idempotent per action key.
 	 */
 	async #publishRound(ctx: ReviewContext, round: ReviewRoundRow): Promise<void> {
-		const status = this.#statusFor(round);
+		const seats = this.#store.reviews.listSeats(round.id);
+		const status = this.#statusFor(round, seats);
 		if (status === null) {
 			return;
 		}
@@ -429,8 +583,7 @@ export class ReviewCoordinator {
 			statusIntent,
 			() => this.#publisher.postCommitStatus(statusIntent),
 		);
-		const verdict =
-			round.verdictJson !== null ? (JSON.parse(round.verdictJson) as ReviewVerdict) : null;
+		const verdict = round.verdictJson !== null ? parseVerdictJson(round.verdictJson) : null;
 		if (verdict === null) {
 			return;
 		}
@@ -443,7 +596,8 @@ export class ReviewCoordinator {
 				verdict,
 				headSha: round.headSha,
 				round: round.round,
-				review: this.#review,
+				seats: seats.flatMap((seat) => this.#commentSeat(seat)),
+				maxRounds: this.#review.maxRounds,
 				needsHuman: round.state === "needs_human",
 			}),
 		});
@@ -457,14 +611,23 @@ export class ReviewCoordinator {
 	}
 
 	/** The commit status a round owes, or null (superseded, or not yet dispatched). */
-	#statusFor(round: ReviewRoundRow): { state: CommitStatusState; description: string } | null {
+	#statusFor(
+		round: ReviewRoundRow,
+		seats: readonly ReviewSeatRow[],
+	): { state: CommitStatusState; description: string } | null {
 		switch (round.state) {
 			case "dispatched":
-				return round.runId !== null
+				return seats.some((seat) => seat.runId !== null)
 					? { state: "pending", description: "Review in progress" }
 					: null;
 			case "approved":
-				return { state: "success", description: "Approved by the reviewer" };
+				return {
+					state: "success",
+					description:
+						seats.length === 1
+							? "Approved by the reviewer"
+							: `Approved by ${seats.filter((seat) => seat.state === "approved").length} of ${seats.length} reviewers`,
+				};
 			case "changes_requested":
 				return {
 					state: "failure",
@@ -483,6 +646,36 @@ export class ReviewCoordinator {
 			case "superseded":
 				return null;
 		}
+	}
+
+	/** A settled seat as the comment shows it; a superseded or live seat is not shown. */
+	#commentSeat(seat: ReviewSeatRow): ReviewCommentSeat[] {
+		if (seat.state === "dispatched" || seat.state === "superseded") {
+			return [];
+		}
+		return [
+			{
+				identity: this.#identityOf(seat),
+				state: seat.state,
+				verdict: seat.verdictJson !== null ? parseVerdictJson(seat.verdictJson) : null,
+				failureReason: seat.failureReason,
+			},
+		];
+	}
+
+	/**
+	 * Who a seat dispatched. A seat backfilled from a pre-panel round recorded
+	 * no identity; it was the policy's primary reviewer.
+	 */
+	#identityOf(seat: ReviewSeatRow): ReviewerIdentity {
+		if (seat.agent !== null) {
+			return { agent: seat.agent, provider: seat.provider, model: seat.model };
+		}
+		return {
+			agent: this.#review.agent,
+			provider: this.#review.provider,
+			model: this.#review.model,
+		};
 	}
 
 	/**
@@ -551,14 +744,44 @@ export class ReviewCoordinator {
 		round: ReviewRoundRow | null,
 		extra: { runId?: string; detail?: string; superseded?: number } = {},
 	): ReviewStepOutcome {
+		const runIds =
+			round === null
+				? []
+				: this.#store.reviews
+						.listSeats(round.id)
+						.flatMap((seat) => (seat.runId !== null ? [seat.runId] : []));
 		return {
 			status,
 			headSha: ctx.headSha,
 			roundId: round?.id ?? null,
 			round: round?.round ?? null,
-			runId: extra.runId ?? round?.runId ?? null,
+			runId: extra.runId ?? runIds[0] ?? null,
+			runIds,
 			detail: extra.detail ?? null,
 			superseded: extra.superseded ?? 0,
 		};
 	}
+}
+
+/** What `#dispatchSeat` needs about one journaled seat. */
+interface PlannedSeat {
+	readonly seatId: string;
+	readonly actionId: string;
+	readonly request: WarrenDispatchInput;
+}
+
+/** A settled seat as the quorum rule reads it. */
+function toSeatResult(seat: ReviewSeatRow): SeatResult {
+	if (
+		(seat.state === "approved" || seat.state === "changes_requested") &&
+		seat.verdictJson !== null
+	) {
+		return { state: seat.state, verdict: parseVerdictJson(seat.verdictJson) };
+	}
+	return { state: "failed", failureReason: seat.failureReason ?? "unknown" };
+}
+
+/** A stored verdict. Only canonical JSON of a parsed `ReviewVerdict` is ever written. */
+function parseVerdictJson(json: string): ReviewVerdict {
+	return JSON.parse(json) as ReviewVerdict;
 }

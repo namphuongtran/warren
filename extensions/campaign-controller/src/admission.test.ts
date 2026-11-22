@@ -851,3 +851,44 @@ describe("importCampaign evidence tiers", () => {
 		expect(result.warnings).toEqual([]);
 	});
 });
+
+describe("importCampaign review-vendor advisory (namphuongtran/warren#18)", () => {
+	// The manifest builds with provider "anthropic".
+	function withReview(review: Record<string, unknown>): Record<string, unknown> {
+		return {
+			...basePolicy(),
+			review: { version: 2, agent: "reviewer", maxRounds: 2, maxCostUsd: 1, ...review },
+		};
+	}
+
+	function warningsFor(policy: Record<string, unknown>): readonly string[] {
+		return importCampaign(harness().store, { manifest: signedManifest(), policy, nowMs: NOW })
+			.warnings;
+	}
+
+	test("warns when every reviewer runs on the builder's provider", () => {
+		const warnings = warningsFor(withReview({ provider: "anthropic", model: "claude-opus" }));
+		expect(warnings).toHaveLength(1);
+		expect(warnings[0]).toContain("advisory");
+		expect(warnings[0]).toContain("anthropic");
+	});
+
+	test("counts a reviewer with no provider override as not proven different", () => {
+		expect(warningsFor(withReview({}))).toHaveLength(1);
+	});
+
+	test("stays silent once any seat names another provider", () => {
+		expect(
+			warningsFor(
+				withReview({
+					provider: "anthropic",
+					additionalReviewers: [{ agent: "reviewer", provider: "openai" }],
+				}),
+			),
+		).toEqual([]);
+	});
+
+	test("stays silent without a review block", () => {
+		expect(warningsFor(basePolicy())).toEqual([]);
+	});
+});

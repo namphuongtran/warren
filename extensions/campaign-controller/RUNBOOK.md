@@ -227,6 +227,11 @@ repository policy, the tick has no `review` stage and nothing below runs.
    `reviewer` built-in's default (the opus tier). The reviewer dispatches
    on the `pi` runtime, so the warren deployment needs that provider's
    credential.
+   For an independent panel, list more seats under `additionalReviewers`
+   and set `quorum` (see the README). Give each seat a different
+   `provider`, and make sure the deployment holds every one of those
+   credentials. Import adds an advisory to `warnings` when no seat names
+   a provider other than the manifest's `warren.provider`.
 2. To close the fix loop, also set `mutations.followUpPush: true` in the
    same snapshot. Each change request then starts a follow-up run on the
    PR branch under the manifest's agent, provider, and model, and the
@@ -248,17 +253,23 @@ repository policy, the tick has no `review` stage and nothing below runs.
 | State on the head SHA | Meaning | Operator action |
 |---|---|---|
 | none | The head moved and no tick has reviewed it yet | Wait for the next tick |
-| `pending` | A reviewer run is working on this exact SHA | None |
-| `success` | The reviewer approved this SHA | None; a new push resets it |
-| `failure` | Changes requested; findings recorded for the fixer | With `followUpPush`, none: a fixer run is on its way. Without it, fix by hand |
+| `pending` | Reviewer runs are working on this exact SHA; with a panel, until every seat finishes | None |
+| `success` | The reviewer (or a quorum of the panel) approved this SHA | None; a new push resets it |
+| `success` + `review_seat_failed` attention | The panel's quorum approved, but a seat produced no verdict (refused dispatch, failed run, missing verdict); the detail lists each failed seat | Check that seat's provider credential and agent; a seat that fails every round silently narrows the panel |
+| `failure` | Changes requested; findings recorded for the fixer. With a panel, the quorum was missed and at least one seat objected | With `followUpPush`, none: a fixer run is on its way. Without it, fix by hand |
 | `failure` + `follow_up_stopped` attention | The fixer run failed, pushed elsewhere, left the head unchanged, or its dispatch was refused or unconfirmed | Read the run; push a fix by hand (the new head is reviewed) |
 | `failure` + `review_needs_human` attention | The fix loop hit `maxRounds` | Take the PR over by hand |
-| `error` + `review_failed` attention | The run failed, or ended without a valid verdict | Read the run; push again or fix by hand |
+| `error` + `review_failed` attention | The run failed, or ended without a valid verdict. With a panel (`quorum_unmet`), failed seats kept the approvals below the quorum and no seat objected; the attention detail lists each failed seat | Read the runs; push again or fix by hand |
 
 A review runs once per SHA. A failed review is not retried on the same
 SHA; a new push gets a new review.
 
 ### Known limits
+
+- A panel decides only after every seat has finished, so the slowest
+  reviewer sets the latency. A seat whose dispatch was refused fails at
+  once and counts as a non-approval. An outvoted dissent appears in the PR
+  comment but never reaches the fixer.
 
 - The verdict rides the reviewer's transcript (`GET /runs/:id/events`)
   until the structured handoff report (namphuongtran/warren#21) lands.
