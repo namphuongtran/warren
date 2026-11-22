@@ -76,6 +76,11 @@ export interface BuildPrContentInput {
 	 */
 	readonly agentNotes?: string;
 	/**
+	 * The run's final assistant message (namphuongtran/warren#42), rendered
+	 * into a fenced, size-capped `## Agent report` section. Absent → no section.
+	 */
+	readonly agentReport?: string;
+	/**
 	 * warren-cbd3: the terminal provider-error message when the run ended in
 	 * one after committing and pushing. The `run` fragment labels the body
 	 * with the outcome so a reviewer knows the run itself did not finish
@@ -124,7 +129,7 @@ export interface PrContent {
  *
  * Body fragments (in order, omitted when their data is absent and
  * the project hasn't overridden):
- *   - summary, run, seeds, preview_url_or_placeholder, commits,
+ *   - summary, agent_notes, agent_report, run, seeds, preview_url_or_placeholder, commits,
  *     files_changed, prompt, trailer
  */
 export function buildPrContent(input: BuildPrContentInput): PrContent {
@@ -153,6 +158,7 @@ function buildContext(input: BuildPrContentInput): PrFragmentContext {
 		tokensCacheRead?: number;
 		previewOptedIn?: boolean;
 		agentNotes?: string;
+		agentReport?: string;
 		providerError?: string | null;
 	} = {
 		prompt: input.prompt,
@@ -171,6 +177,7 @@ function buildContext(input: BuildPrContentInput): PrFragmentContext {
 	if (input.tokensCacheRead !== undefined) ctx.tokensCacheRead = input.tokensCacheRead;
 	if (input.previewOptedIn !== undefined) ctx.previewOptedIn = input.previewOptedIn;
 	if (input.agentNotes !== undefined) ctx.agentNotes = input.agentNotes;
+	if (input.agentReport !== undefined) ctx.agentReport = input.agentReport;
 	if (input.providerError !== undefined) ctx.providerError = input.providerError;
 	return ctx;
 }

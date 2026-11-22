@@ -18,6 +18,8 @@ Unspecified fragments keep their defaults. A fragment with a whitespace-only bod
 
 - `title`
 - `summary`
+- `agent_notes`
+- `agent_report`
 - `run`
 - `seeds`
 - `preview_url_or_placeholder`
@@ -30,8 +32,10 @@ Unknown fragment names and unbalanced preview markers surface through `warren do
 
 ## Default information
 
-The generated body can include the run link, commits, changed files, prompt, tracker context, preview URL, and a warren trailer. The exact content depends on the finalization result and configured integrations.
+The generated body can include the agent's notes from the final commit body, the agent's report, the run link, commits, changed files, prompt, tracker context, preview URL, and a warren trailer. The exact content depends on the finalization result and configured integrations.
 
 PR opening is not the core run guarantee. Warren always treats the pushed branch as its delivery boundary. Forge configuration and permissions determine whether it can open or find a pull request after that push.
+
+The `agent_report` fragment holds the run's final assistant message. That is the text of the last assistant `text` event before the terminal `result` event. Warren fences the message so it cannot break the surrounding markdown and caps it at 8 KiB, keeping the first and last 4 KiB, with a truncation note. A run with no assistant text renders no section.
 
 For the complete fragment and preview-placeholder contract, read [Preview environments](previews.md) and the [preview design record](design/preview-environments.md).
