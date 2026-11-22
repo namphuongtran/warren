@@ -12,6 +12,15 @@ Releases **0.9.10 and earlier** live in
 
 ### Added
 
+- **Stalled tool calls on the runs list and run page, and an opt-in kill
+  (namphuongtran/warren#83).** While a running run's warned tool call stays
+  open, `GET /runs` and `GET /runs/:id` carry the operator-only `toolStall`
+  overlay (tool, command excerpt, opened and warned times). The runs list
+  shows the run as `stalled`, and the run page shows a "Tool call stalled"
+  warning. `WARREN_TOOL_STALL_KILL_MS` (project `toolStallKillMinutes`,
+  default off) force-fails a run whose tool call stays open past it, through
+  the watchdog's reap path, so partial work is still pushed.
+
 - **Held dispatches on a spent provider quota (namphuongtran/warren#30).**
   `POST /runs` takes `onQuotaExhausted: "hold"` (`warren run
   --hold-on-quota`, SDK `CreateRunInput.onQuotaExhausted`). While the

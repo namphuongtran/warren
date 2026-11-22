@@ -370,7 +370,7 @@ echo "exit=$?"     # 0 = succeeded, 1 = failed/cancelled
 | Overview | The Operations page in the UI, `GET /ops/overview` |
 | Cost | `GET /analytics/cost`, the Analytics page |
 | Stuck run | The watchdog fails a run that is silent for more than 45 minutes. Change it with `WARREN_RUN_HEARTBEAT_TIMEOUT_MS`. Harness keep-alives such as claude-code's `tool_progress` heartbeat do not count as activity. |
-| Stalled tool call | When one tool call stays open for more than 15 minutes, the watchdog writes a `watchdog.tool_stalled` event to the run's log. The run keeps running. Change the threshold with `WARREN_TOOL_STALL_WARN_MS` or the project's `toolStallWarnMinutes`. |
+| Stalled tool call | When one tool call stays open for more than 15 minutes, the watchdog writes a `watchdog.tool_stalled` event to the run's log. The run keeps running. The runs list and run page show the run as stalled. Change the threshold with `WARREN_TOOL_STALL_WARN_MS` or the project's `toolStallWarnMinutes`. To fail the run instead past a longer threshold, set `WARREN_TOOL_STALL_KILL_MS` or `toolStallKillMinutes` (off by default) below the 45-minute heartbeat budget. |
 | Warren restart | `local` runtime: running runs are marked lost. `k8s` runtime: pods keep running and are reattached at boot. |
 
 More detail: [operations.md](operations.md), [credentials.md](credentials.md).

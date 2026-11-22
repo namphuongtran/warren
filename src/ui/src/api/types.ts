@@ -36,6 +36,7 @@ export {
 	type RunFailureReason,
 	type RunMode,
 	type RunState,
+	type RunToolStallView,
 } from "../../../core/wire.ts";
 
 import type {
@@ -56,6 +57,7 @@ import type {
 	RunMode,
 	RunQualityGateOutcome,
 	RunState,
+	RunToolStallView,
 } from "../../../core/wire.ts";
 
 export interface ProjectRow {
@@ -182,6 +184,7 @@ export interface RunRow {
 	costBasis: RunCostBasis; // warren-f3c3: `subscription_estimate` = estimate, not a bill
 	maxCostUsd?: number | null; // warren-f8a2: cap overlay (list + detail GET, warren-b19e); absent for spectators
 	runtimeBackend?: string | null; // warren-a0f4: local|docker|k8s frozen at dispatch; operator-only overlay beside maxCostUsd
+	toolStall?: RunToolStallView | null; // namphuongtran/warren#83: stalled tool call; operator-only
 	/** Input/output tokens consumed/produced (warren-a7dc); see `costUsd` for nullability. */
 	tokensInput: number | null;
 	tokensOutput: number | null;

@@ -12,7 +12,8 @@
  *   `WARREN_RUN_HEARTBEAT_TIMEOUT_MS`, opt out via
  *   `WARREN_WATCHDOG_DISABLED=1`. See `src/runs/watchdog.ts`. It also warns
  *   once about a tool call open past `WARREN_TOOL_STALL_WARN_MS` (15 min,
- *   project override `toolStallWarnMinutes`; namphuongtran/warren#83).
+ *   project override `toolStallWarnMinutes`; namphuongtran/warren#83), and
+ *   force-fails one open past the opt-in `WARREN_TOOL_STALL_KILL_MS`.
  */
 
 import type { DrizzleAdapter } from "../../db/repos/drizzle-adapter.ts";
@@ -60,9 +61,9 @@ export interface WatchdogWiringInput {
 	 */
 	readonly runtimeProvider: RuntimeProvider;
 	/**
-	 * Per-project config cache (namphuongtran/warren#83): the tool-stall warning
-	 * reads `toolStallWarnMinutes` through it. Absent ⇒ the env default applies
-	 * to every run.
+	 * Per-project config cache (namphuongtran/warren#83): the tool-stall check
+	 * reads `toolStallWarnMinutes` and `toolStallKillMinutes` through it.
+	 * Absent ⇒ the env defaults apply to every run.
 	 */
 	readonly warrenConfigs?: WarrenConfigCache;
 	readonly logger: Logger;
@@ -85,9 +86,10 @@ export function bootWatchdogFromEnv(input: WatchdogWiringInput): WatchdogHandle 
 		terminalReconcileGraceMs: config.terminalReconcileGraceMs,
 		cancelReconcileGraceMs: config.cancelReconcileGraceMs,
 		toolStallWarnMs: config.toolStallWarnMs,
+		toolStallKillMs: config.toolStallKillMs,
 		...(input.warrenConfigs !== undefined
 			? {
-					resolveToolStallWarnMs: projectToolStallResolver({
+					resolveToolStallLimits: projectToolStallResolver({
 						repos: input.repos,
 						warrenConfigs: input.warrenConfigs,
 					}),
@@ -108,6 +110,7 @@ export function bootWatchdogFromEnv(input: WatchdogWiringInput): WatchdogHandle 
 				terminalReconcileGraceMs: config.terminalReconcileGraceMs,
 				cancelReconcileGraceMs: config.cancelReconcileGraceMs,
 				toolStallWarnMs: config.toolStallWarnMs,
+				toolStallKillMs: config.toolStallKillMs,
 			},
 			"run watchdog running",
 		);

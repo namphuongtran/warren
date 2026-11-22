@@ -61,7 +61,8 @@
 			"qualityGateOutcome": null,
 			"handoff": null,
 			"approach": null,
-			"maxCostUsd": null
+			"maxCostUsd": null,
+			"toolStall": null
 		}
 	}
 }

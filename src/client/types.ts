@@ -27,6 +27,7 @@ import type {
 	RunMode,
 	RunQualityGateOutcome,
 	RunState,
+	RunToolStallView,
 } from "../core/wire.ts";
 import type {
 	DispatchAnalytics,
@@ -71,6 +72,7 @@ export {
 	type RunQualityGateOutcome,
 	type RunState,
 	type RunTerminalState,
+	type RunToolStallView,
 } from "../core/wire.ts";
 
 /**
@@ -216,13 +218,13 @@ export interface RunRow {
 	 * the run authenticated via CLAUDE_CODE_OAUTH_TOKEN — an API-priced
 	 * estimate, not a bill. `api` otherwise (and for legacy rows). */
 	costBasis: RunCostBasis;
-	/** Runtime backend kind frozen at dispatch (warren-a0f4):
-	 * `local` | `docker` | `k8s`. Operator-only runs-list overlay; absent
-	 * for spectators and detail GETs, null when no dispatch-context row. */
+	/** Runtime backend kind frozen at dispatch (warren-a0f4): `local` | `docker` | `k8s`.
+	 * Operator-only runs-list overlay; absent for spectators and detail GETs, null with no row. */
 	runtimeBackend?: string | null;
-	/** Per-run USD spend cap (warren-f8a2 list / warren-b19e detail GET):
-	 * from the dispatch-context row; operator-only overlay, absent for
-	 * spectators, null when no dispatch-context row. */
+	/** The tool call a running run is stuck on (namphuongtran/warren#83); operator-only. */
+	toolStall?: RunToolStallView | null;
+	/** Per-run USD spend cap (warren-f8a2 list / warren-b19e detail GET): operator-only
+	 * overlay from the dispatch-context row; absent for spectators, null when no row. */
 	maxCostUsd?: number | null;
 	tokensInput: number | null;
 	tokensOutput: number | null;

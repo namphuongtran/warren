@@ -1,6 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import type { RunRow } from "@/api/types.ts";
-import { capPctOf, costNoteToneOf, stateCellOf, sublineOf } from "./runs-card.helpers.ts";
+import {
+	capPctOf,
+	costNoteToneOf,
+	displayStateOf,
+	stateCellOf,
+	sublineOf,
+} from "./runs-card.helpers.ts";
 
 /** Minimal run-shaped fixture — only the fields the card helpers read. */
 function run(overrides: Partial<RunRow>): RunRow {
@@ -54,9 +60,22 @@ function run(overrides: Partial<RunRow>): RunRow {
 	};
 }
 
+/** A stall overlay on a running run (namphuongtran/warren#83). */
+const STALL = {
+	toolUseId: "toolu_1",
+	toolName: "Bash",
+	command: "uv run pytest -q",
+	openedAt: "2026-11-22T10:05:00.000Z",
+	warnedAt: "2026-11-22T10:20:00.000Z",
+};
+
 describe("stateCellOf", () => {
 	test("routes cancelled to the neutral tone with the short word", () => {
 		expect(stateCellOf(run({ state: "cancelled" }))).toEqual({ tone: "neutral", label: "cancel" });
+	});
+
+	test("flags a running run stuck on a tool call as stalled, on the warning tone", () => {
+		expect(stateCellOf(run({ toolStall: STALL }))).toEqual({ tone: "warning", label: "stalled" });
 	});
 
 	test("picks merged / PR open from a succeeded run's PR facts", () => {
@@ -72,6 +91,18 @@ describe("stateCellOf", () => {
 			tone: "success",
 			label: "succeeded",
 		});
+	});
+});
+
+describe("displayStateOf", () => {
+	test("reads stalled for a running run with a stalled tool call", () => {
+		expect(displayStateOf(run({ toolStall: STALL }))).toBe("stalled");
+	});
+
+	test("keeps the plain state when there is no stall, or the run has ended", () => {
+		expect(displayStateOf(run({ toolStall: null }))).toBe("running");
+		expect(displayStateOf(run({}))).toBe("running");
+		expect(displayStateOf(run({ state: "failed", toolStall: STALL }))).toBe("failed");
 	});
 });
 
@@ -111,6 +142,13 @@ describe("sublineOf", () => {
 	test("running rows near cap carry the cap percent, not branch noise", () => {
 		const row = run({ costUsd: 4.72, maxCostUsd: 5, targetBranch: "main" });
 		expect(sublineOf(row, "os-eco/mulch")).toBe("claude-code · os-eco/mulch · cap 94%");
+	});
+
+	test("names the tool a stalled row is stuck in, ahead of the cap percent", () => {
+		const row = run({ costUsd: 4.72, maxCostUsd: 5, toolStall: STALL });
+		expect(sublineOf(row, "os-eco/mulch")).toBe("claude-code · os-eco/mulch · stuck in Bash");
+		const unnamed = run({ toolStall: { ...STALL, toolName: null } });
+		expect(sublineOf(unnamed, "os-eco/mulch")).toBe("claude-code · os-eco/mulch · stuck in a tool");
 	});
 });
 

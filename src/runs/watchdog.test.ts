@@ -168,6 +168,13 @@ describe("loadWatchdogConfigFromEnv", () => {
 		);
 	});
 
+	test("leaves the tool-stall kill off unless WARREN_TOOL_STALL_KILL_MS sets it", () => {
+		expect(loadWatchdogConfigFromEnv({}).toolStallKillMs).toBe(0);
+		expect(
+			loadWatchdogConfigFromEnv({ WARREN_TOOL_STALL_KILL_MS: "3600000" }).toolStallKillMs,
+		).toBe(3_600_000);
+	});
+
 	test("rejects a non-positive tick", () => {
 		expect(() => loadWatchdogConfigFromEnv({ WARREN_WATCHDOG_TICK_MS: "0" })).toThrow(
 			/positive integer/,

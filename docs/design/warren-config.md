@@ -70,7 +70,7 @@ never silently cancels every run. `config.yaml` and legacy
 `defaults.json` share the same
 schema — `{ defaultRole?, defaultBranch?, defaultPrompt?, defaultProvider?,
 defaultModel?, runBranchPrefix?, agentImage?, preview?, maxCostUsd?, maxDurationMinutes?,
-toolStallWarnMinutes?, pr?, handoff? }` — all optional,
+toolStallWarnMinutes?, toolStallKillMinutes?, pr?, handoff? }` — all optional,
 all strict. `maxCostUsd` on `config.yaml` is the project-wide default
 spend cap, the weakest source in the warren-a63d chain: an explicit
 dispatch override (a `POST /runs` `maxCostUsd` body field / `warren run
@@ -102,7 +102,17 @@ one tool call stays open past it, the heartbeat watchdog writes one
 `watchdog.tool_stalled` event naming the tool, a command excerpt, and the
 elapsed time. It is a warning: the run keeps running. The watchdog reads the
 key through the project config cache on every tick, so after a project
-refresh a change also applies to runs already in flight.
+refresh a change also applies to runs already in flight. While the call stays
+open, `GET /runs` and `GET /runs/:id` carry it as the operator-only
+`toolStall` overlay, and the runs list and run page show the run as stalled.
+`toolStallKillMinutes` overrides `WARREN_TOOL_STALL_KILL_MS` (default off).
+A tool call open past it force-fails the run through the watchdog's reap path
+with `failureReason: timed_out`, so partial work is still pushed. The
+`watchdog.timed_out` event then carries `cause: "tool_stall"` and the call.
+Set it below the heartbeat budget (`WARREN_RUN_HEARTBEAT_TIMEOUT_MS`, 45
+minutes). Keep-alives do not count as activity, so a call that only emits
+heartbeats reaches the heartbeat timeout first, and a kill threshold at or
+above the budget fires only when other events keep the run's idle clock low.
 `handoff` (namphuongtran/warren#21) is `{ required: boolean }`, default
 `false`. Reap always validates the run's `.warren/handoff.json` and flags a
 missing or invalid report. `required: true` also finalizes a run that would

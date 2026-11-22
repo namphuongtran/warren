@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { RunRow } from "@/api/types.ts";
 import { cn, relativeTime } from "../../lib/utils.ts";
+import { displayStateOf, stuckInOf } from "./runs-card.helpers.ts";
 import {
 	branchLabelOf,
 	formatDuration,
@@ -20,12 +21,15 @@ import {
  * stays the keyboard-accessible path.
  */
 
-/** State → token color. Running is information-blue, queued warning. */
-function stateColor(state: RunRow["state"]): string {
+type DisplayState = ReturnType<typeof displayStateOf>;
+
+/** State → token color. Running is information-blue; queued and stalled warning. */
+function stateColor(state: DisplayState): string {
 	switch (state) {
 		case "running":
 			return "text-(--color-info)";
 		case "queued":
+		case "stalled":
 			return "text-(--color-warning)";
 		case "succeeded":
 			return "text-(--color-success)";
@@ -36,11 +40,12 @@ function stateColor(state: RunRow["state"]): string {
 	}
 }
 
-function stateDotColor(state: RunRow["state"]): string {
+function stateDotColor(state: DisplayState): string {
 	switch (state) {
 		case "running":
 			return "bg-(--color-info)";
 		case "queued":
+		case "stalled":
 			return "bg-(--color-warning)";
 		case "succeeded":
 			return "bg-(--color-success)";
@@ -185,20 +190,20 @@ function RunsTableRow({
 }) {
 	const navigate = useNavigate();
 	const runPath = `/runs/${encodeURIComponent(row.id)}`;
+	const state = displayStateOf(row);
+	const stallTitle = stuckInOf(row) ?? undefined;
 	return (
 		<tr
 			className="cursor-pointer border-(--color-border) border-b last:border-b-0 hover:bg-(--color-surface-hover)"
 			onClick={() => navigate(runPath)}
 		>
 			<td className="w-[78px] px-2.5 py-1.5 align-middle">
-				<span className="flex items-center gap-[7px]">
+				<span className="flex items-center gap-[7px]" title={stallTitle}>
 					<span
-						className={cn("h-1.5 w-1.5 shrink-0 rounded-full", stateDotColor(row.state))}
+						className={cn("h-1.5 w-1.5 shrink-0 rounded-full", stateDotColor(state))}
 						aria-hidden
 					/>
-					<span className={cn("font-mono text-[10px] leading-3", stateColor(row.state))}>
-						{row.state}
-					</span>
+					<span className={cn("font-mono text-[10px] leading-3", stateColor(state))}>{state}</span>
 				</span>
 			</td>
 			<td className="w-[128px] px-2.5 py-1.5 align-middle">

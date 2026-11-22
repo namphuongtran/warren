@@ -234,10 +234,12 @@ describe("GET /runs projections under WARREN_AUTH=public (warren-946f)", () => {
 		const list = body.runs as Record<string, unknown>[];
 		// The list overlays the dispatch-context spend cap and runtime backend
 		// on each row — fields the stored row itself does not carry. No context
-		// row exists for this run, so both read null, never absent.
+		// row exists for this run, so both read null, never absent. The same
+		// holds for the stalled tool call (namphuongtran/warren#83).
 		expect(new Set(Object.keys(list[0] ?? {}))).toEqual(
-			new Set([...Object.keys(stored), "maxCostUsd", "runtimeBackend"]),
+			new Set([...Object.keys(stored), "maxCostUsd", "runtimeBackend", "toolStall"]),
 		);
+		expect(list[0]?.toolStall).toBeNull();
 		expect(list[0]?.maxCostUsd).toBeNull();
 		expect(list[0]?.runtimeBackend).toBeNull();
 		expect(body.costTotalUsd).toBe(1.25);
@@ -248,7 +250,9 @@ describe("GET /runs projections under WARREN_AUTH=public (warren-946f)", () => {
 		// The detail GET overlays the dispatch-context cap too (warren-b19e,
 		// operator-only, for the Spend panel's "$X of $Y cap"). No context row
 		// here, so it reads null, never absent.
-		expect(new Set(Object.keys(detail))).toEqual(new Set([...Object.keys(stored), "maxCostUsd"]));
+		expect(new Set(Object.keys(detail))).toEqual(
+			new Set([...Object.keys(stored), "maxCostUsd", "toolStall"]),
+		);
 		expect(detail.maxCostUsd).toBeNull();
 		expect(detail.sandboxId).toBe("bur_1");
 		expect(detail.renderedAgentJson).toEqual({

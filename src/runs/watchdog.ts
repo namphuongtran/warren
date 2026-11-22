@@ -33,20 +33,18 @@
  * it hung — same philosophy as `cancelRun` (warren-a69a).
  *
  * Below the budget, a tool call open past the stall threshold gets one
- * `watchdog.tool_stalled` warning event (`./watchdog-tool-stall.ts`). The
- * run keeps running.
+ * `watchdog.tool_stalled` warning event (`./watchdog-tool-stall.ts`); the run
+ * keeps running. Past the opt-in kill threshold it is force-failed as above.
  *
  * The single-flight boot wrapper (mx-985743 / mx-094b64) drops an
  * in-flight tick when the next interval fires, isolates per-run errors so
  * one bad row can't tear down the loop, and `stop()` drains the in-flight
  * tick before resolving.
  *
- * On by default (warren-b2dc) —
- * this is a lifecycle-reclaim safety net that must not depend on an
- * operator remembering an env var, so a fresh deploy is protected without
- * one. The built-in budget (`DEFAULT_WATCHDOG_HEARTBEAT_TIMEOUT_MS`, 45
- * min) is deliberately generous — well above any legitimately
- * slow-but-silent tool such as a cold `bun install` — and can be tuned via
+ * On by default (warren-b2dc): a lifecycle-reclaim safety net must not depend
+ * on an operator remembering an env var. The built-in budget is 45 min
+ * (`DEFAULT_WATCHDOG_HEARTBEAT_TIMEOUT_MS`), well above any slow-but-silent
+ * tool such as a cold `bun install`; tune it via
  * `WARREN_RUN_HEARTBEAT_TIMEOUT_MS`. Opt out entirely with
  * `WARREN_WATCHDOG_DISABLED=1` (or by pinning the budget to 0). The
  * default tick cadence is 30s.
@@ -64,9 +62,11 @@ import type { ReapRunInput, ReapRunResult } from "./reap/index.ts";
 import { type BridgeLogger, bindBridgeLogger } from "./stream/index.ts";
 import { hasCancelIntent, maybeReconcileTerminal } from "./watchdog-reconcile.ts";
 import {
-	maybeWarnToolStall,
+	checkToolStall,
 	type ToolStall,
 	type ToolStallDeps,
+	type ToolStallKill,
+	toolStallCause,
 	WATCHDOG_TOOL_STALLED_KIND,
 } from "./watchdog-tool-stall.ts";
 
@@ -285,10 +285,15 @@ async function evaluateRun(
 		await forceFail(deps, run, idleMs, now);
 		return { kind: "timedOut", idleMs };
 	}
-	// namphuongtran/warren#83: below the kill budget, warn once about a tool
-	// call that has stayed open past the stall threshold. The run keeps going.
-	const stall = await maybeWarnToolStall(deps, run, now);
-	if (stall !== null) stalled.push(stall);
+	// namphuongtran/warren#83: a tool call open past the opt-in kill threshold fails the run.
+	const verdict = await checkToolStall(deps, run, now);
+	switch (verdict?.kind) {
+		case "kill":
+			await forceFail(deps, run, idleMs, now, verdict.stall);
+			return { kind: "timedOut", idleMs };
+		case "warned":
+			stalled.push(verdict.stall);
+	}
 	// warren-c433: terminal-reconcile safety net. Below the heartbeat budget but idle
 	// past the grace, probe the backend: if the pod is terminal-or-gone yet the row is
 	// still `running`, the normal terminal-detect → reap path is wedged (the K8s
@@ -320,6 +325,7 @@ async function forceFail(
 	run: RunRow,
 	idleMs: number,
 	now: Date,
+	stall?: ToolStallKill,
 ): Promise<void> {
 	// warren-9f06: bind run_id (+ sandbox_run_id when present) once per
 	// force-fail so the timeout/cancel lines share correlation fields.
@@ -327,7 +333,7 @@ async function forceFail(
 		run_id: run.id,
 		...(run.sandboxRunId !== null ? { sandbox_run_id: run.sandboxRunId } : {}),
 	});
-	await emitTimedOutEvent(deps, run, idleMs, now);
+	await emitTimedOutEvent(deps, run, idleMs, now, stall);
 	await cancelBurrowRun(deps, run, log);
 
 	await deps.reap({
@@ -389,6 +395,7 @@ async function emitTimedOutEvent(
 	run: RunRow,
 	idleMs: number,
 	now: Date,
+	stall: ToolStallKill | undefined,
 ): Promise<void> {
 	const seq = ((await deps.repos.events.maxSeqForRun(run.id)) ?? 0) + 1;
 	const row = await deps.repos.events.append({
@@ -401,6 +408,7 @@ async function emitTimedOutEvent(
 			idleMs,
 			heartbeatTimeoutMs: deps.heartbeatTimeoutMs,
 			sandboxRunId: run.sandboxRunId,
+			...(stall !== undefined ? toolStallCause(stall) : {}),
 		},
 	});
 	deps.broker?.publish(run.id, row);
