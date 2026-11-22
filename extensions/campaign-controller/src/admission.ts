@@ -39,6 +39,7 @@ import { EXECUTABLE_MUTATION_FLAGS, MUTATION_FLAGS } from "./mutations.ts";
 import {
 	DEFAULT_EVIDENCE_TIER,
 	type RepositoryPolicy,
+	reviewPanel,
 	validateRepositoryPolicy,
 } from "./repository-policy.ts";
 import type { CampaignStateStore } from "./store/state-store.ts";
@@ -137,6 +138,28 @@ function evidenceTierAdvisories(manifest: CampaignManifest, policy: RepositoryPo
 	return [];
 }
 
+/**
+ * A different vendor catches different mistakes (namphuongtran/warren#18). Advise, never
+ * refuse, when no review seat names a provider other than the builder's. A
+ * seat without a provider override inherits a default the controller cannot
+ * see, so it does not count as different.
+ */
+function reviewVendorAdvisories(manifest: CampaignManifest, policy: RepositoryPolicy): string[] {
+	if (policy.review === null) {
+		return [];
+	}
+	const builder = manifest.warren.provider;
+	const crossVendor = reviewPanel(policy.review).seats.some(
+		(seat) => seat.provider !== null && seat.provider !== builder,
+	);
+	if (crossVendor) {
+		return [];
+	}
+	return [
+		`advisory: no review seat names a provider other than the builder's ('${builder}') — a reviewer from a different vendor catches different mistakes; set 'provider' on a seat in the policy's review block`,
+	];
+}
+
 function parseManifestRow(row: CampaignRow): CampaignManifest {
 	try {
 		const parsed: unknown = JSON.parse(row.manifestJson);
@@ -179,7 +202,10 @@ export function importCampaign(
 		);
 	}
 
-	const advisory = evidenceTierAdvisories(manifest, policy);
+	const advisory = [
+		...evidenceTierAdvisories(manifest, policy),
+		...reviewVendorAdvisories(manifest, policy),
+	];
 
 	const existing = store.campaigns.getCampaignByDigest(digest);
 	if (existing !== null) {

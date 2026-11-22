@@ -204,6 +204,43 @@ export interface ReviewPolicy {
 	maxRounds: number;
 	/** Per-review-run USD cap; also the budget headroom each review needs. */
 	maxCostUsd: number;
+	/**
+	 * Phase 2 panel: reviewers dispatched beside the one named above, each
+	 * reviewing the same SHA independently. `undefined` when the block
+	 * declares none, so a pre-panel block keeps its digest.
+	 */
+	additionalReviewers?: ReviewerIdentity[];
+	/**
+	 * Approvals needed to pass the review. `undefined` when undeclared, which
+	 * means every seat must approve (see `reviewPanel`).
+	 */
+	quorum?: number;
+}
+
+/** Who one review seat dispatches: the agent and its optional overrides. */
+export interface ReviewerIdentity {
+	agent: string;
+	provider: string | null;
+	model: string | null;
+}
+
+/** The resolved reviewer panel: every seat in dispatch order, and the approvals required. */
+export interface ReviewPanel {
+	readonly seats: readonly ReviewerIdentity[];
+	readonly quorum: number;
+}
+
+/**
+ * Resolve the panel a review block describes. Seat 0 is the block's own
+ * reviewer; an undeclared quorum is unanimous, so adding a seat never
+ * loosens the gate by default.
+ */
+export function reviewPanel(review: ReviewPolicy): ReviewPanel {
+	const seats: ReviewerIdentity[] = [
+		{ agent: review.agent, provider: review.provider, model: review.model },
+		...(review.additionalReviewers ?? []),
+	];
+	return { seats, quorum: review.quorum ?? seats.length };
 }
 
 /** The commit-status context used when the review block names none. */
@@ -440,13 +477,60 @@ const REVIEW_FIELDS = [
 	"statusContext",
 	"maxRounds",
 	"maxCostUsd",
+	"additionalReviewers",
+	"quorum",
 ] as const;
+
+const REVIEWER_FIELDS = ["agent", "provider", "model"] as const;
 
 /** Status contexts stay plain tokens such as `warren/review`: no whitespace or control characters. */
 const STATUS_CONTEXT_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/:-]{0,99}$/;
 
 /** Hard ceiling on one review run's USD cap. */
 const MAX_REVIEW_COST_USD = 100;
+
+/** Most seats beside the primary reviewer; a panel holds at most five. */
+const MAX_ADDITIONAL_REVIEWERS = 4;
+
+/** One identity field that may be absent or null. */
+function optionalIdentityField(
+	raw: ReturnType<typeof asObject>,
+	key: "provider" | "model",
+	path: string,
+): string | null {
+	return raw[key] === undefined || raw[key] === null
+		? null
+		: requireString(raw, key, path, { min: 1, max: 128 });
+}
+
+/** The optional `additionalReviewers` list. Absent stays `undefined` for digest stability. */
+function requireAdditionalReviewers(
+	raw: ReturnType<typeof asObject>,
+	path: string,
+): ReviewerIdentity[] | undefined {
+	if (raw.additionalReviewers === undefined || raw.additionalReviewers === null) {
+		return undefined;
+	}
+	const listPath = `${path}.additionalReviewers`;
+	if (!Array.isArray(raw.additionalReviewers)) {
+		throw new ValidationError(`expected an array at '${listPath}'`);
+	}
+	if (raw.additionalReviewers.length > MAX_ADDITIONAL_REVIEWERS) {
+		throw new ValidationError(
+			`expected at most ${MAX_ADDITIONAL_REVIEWERS} entries at '${listPath}', got ${raw.additionalReviewers.length}`,
+		);
+	}
+	return raw.additionalReviewers.map((entry, index) => {
+		const seatPath = `${listPath}[${index}]`;
+		const seat = asObject(entry, seatPath);
+		rejectUnknownKeys(seat, REVIEWER_FIELDS, seatPath);
+		return {
+			agent: requireString(seat, "agent", seatPath, { min: 1, max: 128 }),
+			provider: optionalIdentityField(seat, "provider", seatPath),
+			model: optionalIdentityField(seat, "model", seatPath),
+		};
+	});
+}
 
 /** Validate the optional cross-model review block (namphuongtran/warren#18). Absent → off. */
 function requireReviewPolicy(root: ReturnType<typeof asObject>): ReviewPolicy | null {
@@ -456,10 +540,6 @@ function requireReviewPolicy(root: ReturnType<typeof asObject>): ReviewPolicy | 
 	const path = "repository policy.review";
 	const raw = asObject(root.review, path);
 	rejectUnknownKeys(raw, REVIEW_FIELDS, path);
-	const optional = (key: "provider" | "model"): string | null =>
-		raw[key] === undefined || raw[key] === null
-			? null
-			: requireString(raw, key, path, { min: 1, max: 128 });
 	let statusContext = DEFAULT_REVIEW_STATUS_CONTEXT;
 	if (raw.statusContext !== undefined && raw.statusContext !== null) {
 		statusContext = requireString(raw, "statusContext", path, { min: 1, max: 100 });
@@ -469,14 +549,22 @@ function requireReviewPolicy(root: ReturnType<typeof asObject>): ReviewPolicy | 
 			);
 		}
 	}
+	const additionalReviewers = requireAdditionalReviewers(raw, path);
+	const panelSize = 1 + (additionalReviewers?.length ?? 0);
+	const quorum =
+		raw.quorum === undefined || raw.quorum === null
+			? undefined
+			: requireInt(raw, "quorum", path, { min: 1, max: panelSize });
 	return {
 		version: requireInt(raw, "version", path, { min: 1, max: 1_000 }),
 		agent: requireString(raw, "agent", path, { min: 1, max: 128 }),
-		provider: optional("provider"),
-		model: optional("model"),
+		provider: optionalIdentityField(raw, "provider", path),
+		model: optionalIdentityField(raw, "model", path),
 		statusContext,
 		maxRounds: requireInt(raw, "maxRounds", path, { min: 1, max: 10 }),
 		maxCostUsd: requirePositiveNumber(raw, "maxCostUsd", path, MAX_REVIEW_COST_USD),
+		additionalReviewers,
+		quorum,
 	};
 }
 

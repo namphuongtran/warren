@@ -2,7 +2,7 @@
  * Pure renderers for the cross-model review policy (namphuongtran/warren#18): the reviewer
  * dispatch prompt and the PR review comment. No I/O, no clock.
  */
-import type { ReviewPolicy } from "../repository-policy.ts";
+import type { ReviewerIdentity } from "../repository-policy.ts";
 import { REVIEW_VERDICT_CLOSE, REVIEW_VERDICT_OPEN, type ReviewVerdict } from "./verdict.ts";
 
 export interface ReviewPromptInput {
@@ -55,45 +55,99 @@ export function neutralizeMentions(text: string): string {
 	return text.replace(/@(?=[A-Za-z0-9])/g, "@\u200b");
 }
 
+/** One panel seat as the comment shows it. */
+export interface ReviewCommentSeat {
+	readonly identity: ReviewerIdentity;
+	readonly state: "approved" | "changes_requested" | "failed";
+	readonly verdict: ReviewVerdict | null;
+	readonly failureReason: string | null;
+}
+
 export interface ReviewCommentInput {
+	/** The decided verdict: the lone seat's own, or the panel's quorum aggregate. */
 	readonly verdict: ReviewVerdict;
 	readonly headSha: string;
 	readonly round: number;
-	readonly review: ReviewPolicy;
+	/** Every seat of the round, in panel order. */
+	readonly seats: readonly ReviewCommentSeat[];
+	readonly maxRounds: number;
 	/** True when this change request hands the PR to a human. */
 	readonly needsHuman: boolean;
 }
 
-/** The PR review comment body: verdict, reviewer identity, summary, findings. */
+/** `` `agent` on `provider/model` ``, or just the agent when no override is set. */
+function describeReviewer(identity: ReviewerIdentity): string {
+	const target = [identity.provider, identity.model].filter((part) => part !== null).join("/");
+	return `\`${inlineSafe(identity.agent)}\`${target !== "" ? ` on \`${inlineSafe(target)}\`` : ""}`;
+}
+
+/** The numbered findings list, every agent-written string neutralized. */
+function renderFindings(findings: ReviewVerdict["findings"]): string[] {
+	const lines: string[] = [];
+	findings.forEach((finding, index) => {
+		const where =
+			finding.path !== null
+				? ` (\`${inlineSafe(finding.path)}${finding.line !== null ? `:${finding.line}` : ""}\`)`
+				: "";
+		lines.push(`${index + 1}. **${neutralizeMentions(inlineSafe(finding.title))}**${where}`);
+		for (const bodyLine of neutralizeMentions(finding.body).split("\n")) {
+			lines.push(`   ${bodyLine}`);
+		}
+	});
+	return lines;
+}
+
+const SEAT_STATE_LABEL = { approved: "approved", changes_requested: "changes requested" } as const;
+
+/** One reviewer's section of a panel comment. */
+function renderSeat(seat: ReviewCommentSeat, index: number): string[] {
+	const label =
+		seat.state === "failed"
+			? `no verdict: ${inlineSafe(seat.failureReason ?? "unknown")}`
+			: SEAT_STATE_LABEL[seat.state];
+	const lines = ["", `#### Reviewer ${index + 1}: ${describeReviewer(seat.identity)} (${label})`];
+	if (seat.verdict !== null) {
+		lines.push("", neutralizeMentions(seat.verdict.summary));
+		if (seat.verdict.findings.length > 0) {
+			lines.push("", ...renderFindings(seat.verdict.findings));
+		}
+	}
+	return lines;
+}
+
+/**
+ * The PR review comment body. A lone reviewer renders its verdict directly;
+ * a panel renders the decided outcome, then one section per reviewer.
+ */
 export function renderReviewComment(input: ReviewCommentInput): string {
-	const { verdict, review } = input;
-	const reviewer = [review.provider, review.model].filter((part) => part !== null).join("/");
+	const { verdict, seats } = input;
 	const heading =
 		verdict.verdict === "approve" ? "Warren review: approved" : "Warren review: changes requested";
-	const lines = [
-		`### ${heading}`,
-		"",
-		`Reviewed commit \`${input.headSha}\` (round ${input.round}) with \`${review.agent}\`${reviewer !== "" ? ` on \`${reviewer}\`` : ""}.`,
-		"",
-		neutralizeMentions(verdict.summary),
-	];
-	if (verdict.findings.length > 0) {
-		lines.push("", "**Findings**", "");
-		verdict.findings.forEach((finding, index) => {
-			const where =
-				finding.path !== null
-					? ` (\`${inlineSafe(finding.path)}${finding.line !== null ? `:${finding.line}` : ""}\`)`
-					: "";
-			lines.push(`${index + 1}. **${neutralizeMentions(inlineSafe(finding.title))}**${where}`);
-			for (const bodyLine of neutralizeMentions(finding.body).split("\n")) {
-				lines.push(`   ${bodyLine}`);
-			}
-		});
-	}
+	const [only] = seats;
+	const lines =
+		seats.length === 1 && only !== undefined
+			? [
+					`### ${heading}`,
+					"",
+					`Reviewed commit \`${input.headSha}\` (round ${input.round}) with ${describeReviewer(only.identity)}.`,
+					"",
+					neutralizeMentions(verdict.summary),
+					...(verdict.findings.length > 0
+						? ["", "**Findings**", "", ...renderFindings(verdict.findings)]
+						: []),
+				]
+			: [
+					`### ${heading}`,
+					"",
+					`Reviewed commit \`${input.headSha}\` (round ${input.round}) by ${seats.length} independent reviewers.`,
+					"",
+					neutralizeMentions(verdict.summary),
+					...seats.flatMap(renderSeat),
+				];
 	if (input.needsHuman) {
 		lines.push(
 			"",
-			`The fix loop stopped after ${review.maxRounds} round(s). A human needs to take this over.`,
+			`The fix loop stopped after ${input.maxRounds} round(s). A human needs to take this over.`,
 		);
 	}
 	lines.push("", "_Automated review. The commit status on this SHA is the merge gate._");

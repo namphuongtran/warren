@@ -16,6 +16,7 @@ import {
 	REVIEW_FEEDBACK_CATEGORY,
 	REVIEW_NEEDS_HUMAN_REASON,
 	REVIEW_RUN_ACTION_TYPE,
+	REVIEW_SEAT_FAILED_REASON,
 	type ReviewContext,
 	ReviewCoordinator,
 } from "./coordinator.ts";
@@ -353,6 +354,13 @@ describe("ReviewCoordinator", () => {
 			prNumber: 7,
 			headSha: SHA_A,
 		});
+		const seat = store.reviews.insertSeat({
+			roundId: round.id,
+			seat: 0,
+			agent: "reviewer",
+			provider: "openai",
+			model: "gpt-5-codex",
+		});
 		const action = store.actions.beginAction({
 			actionKey: `review:${campaignId}:${round.id}`,
 			campaignId,
@@ -360,7 +368,7 @@ describe("ReviewCoordinator", () => {
 			requestDigest: "e".repeat(64),
 		});
 		store.actions.markExecuting(action.id);
-		store.reviews.recordActionId(round.id, action.id);
+		store.reviews.recordSeatActionId(seat.id, action.id);
 
 		const c = coordinator();
 		const recovered = await c.step(ctx({ headSha: SHA_A }));
@@ -425,5 +433,132 @@ describe("ReviewCoordinator", () => {
 		expect(outcome.status).toBe("pr_closed");
 		expect(fake.createdRunCount()).toBe(0);
 		expect(publisher.statuses).toHaveLength(0);
+	});
+});
+
+describe("ReviewCoordinator with a reviewer panel (Phase 2)", () => {
+	const SECOND = { agent: "reviewer", provider: "anthropic", model: "claude-opus" };
+	const THIRD = { agent: "reviewer", provider: "google", model: "gemini-pro" };
+
+	function panel(extra: Record<string, unknown>): ReviewCoordinator {
+		return coordinator(policyWith({ ...REVIEW, version: 2, ...extra }));
+	}
+
+	test("dispatches every seat pinned to the head SHA under one pending status", async () => {
+		const outcome = await panel({ additionalReviewers: [SECOND] }).step(ctx());
+		expect(outcome.status).toBe("dispatched");
+		expect(outcome.runIds).toHaveLength(2);
+		const runs = outcome.runIds.map((id) => fake.getRunRow(id));
+		expect(runs.map((run) => run?.provider)).toEqual(["openai", "anthropic"]);
+		expect(runs.map((run) => run?.model)).toEqual(["gpt-5-codex", "claude-opus"]);
+		expect(runs.every((run) => run?.baseCommit === SHA_A)).toBe(true);
+		expect(publisher.statesOn(SHA_A)).toEqual(["pending"]);
+	});
+
+	test("refuses to dispatch without headroom for every seat", async () => {
+		// Two seats at $2 each need 400c.
+		const outcome = await panel({ additionalReviewers: [SECOND] }).step(
+			ctx({ budgetHeadroomUsdCents: 300 }),
+		);
+		expect(outcome.status).toBe("no_budget_headroom");
+		expect(fake.createdRunCount()).toBe(0);
+	});
+
+	test("waits for every seat before publishing a verdict", async () => {
+		const c = panel({ additionalReviewers: [SECOND] });
+		const first = await c.step(ctx());
+		finishRun(first.runIds[0] ?? "", verdictText(APPROVE));
+
+		expect((await c.step(ctx())).status).toBe("in_progress");
+		expect(publisher.statesOn(SHA_A)).toEqual(["pending"]);
+		expect(publisher.reviews).toHaveLength(0);
+	});
+
+	test("approves on quorum and lists each reviewer in one comment", async () => {
+		const c = panel({ additionalReviewers: [SECOND, THIRD], quorum: 2 });
+		const first = await c.step(ctx());
+		const [a, b, d] = first.runIds;
+		finishRun(a ?? "", verdictText(APPROVE));
+		finishRun(b ?? "", verdictText(CHANGES));
+		finishRun(d ?? "", verdictText(APPROVE));
+
+		const settled = await c.step(ctx());
+		expect(settled.status).toBe("approved");
+		expect(publisher.statesOn(SHA_A)).toEqual(["pending", "success"]);
+		expect(publisher.statuses.at(-1)?.body.description).toBe("Approved by 2 of 3 reviewers");
+		expect(publisher.reviews).toHaveLength(1);
+		const body = publisher.reviews[0]?.body.body ?? "";
+		expect(body).toContain("anthropic/claude-opus");
+		expect(body).toContain("google/gemini-pro");
+		expect(body).toContain("Off by one");
+		// An outvoted dissent never reaches the fixer.
+		expect(store.events.listFeedback(campaignId)).toHaveLength(0);
+	});
+
+	test("requests changes when one seat of a unanimous panel objects", async () => {
+		const c = panel({ additionalReviewers: [SECOND] });
+		const first = await c.step(ctx());
+		finishRun(first.runIds[0] ?? "", verdictText(APPROVE));
+		finishRun(first.runIds[1] ?? "", verdictText(CHANGES));
+
+		const settled = await c.step(ctx());
+		expect(settled.status).toBe("changes_requested");
+		expect(publisher.statesOn(SHA_A)).toEqual(["pending", "failure"]);
+		const feedback = store.events.listFeedback(campaignId);
+		expect(feedback.map((row) => JSON.parse(row.fieldsJson).title)).toEqual([
+			"Off by one",
+			"Missing test",
+		]);
+	});
+
+	test("fails closed when a failed seat leaves the quorum unmet", async () => {
+		const c = panel({ additionalReviewers: [SECOND] });
+		const first = await c.step(ctx());
+		finishRun(first.runIds[0] ?? "", verdictText(APPROVE));
+		fake.setRunState(first.runIds[1] ?? "", { state: "failed", failureReason: "agent_error" });
+
+		const settled = await c.step(ctx());
+		expect(settled.status).toBe("review_failed");
+		expect(settled.detail).toBe("quorum_unmet");
+		expect(publisher.statesOn(SHA_A)).toEqual(["pending", "error"]);
+		expect(store.events.listOpenAttention(campaignId).map((row) => row.reason)).toEqual([
+			REVIEW_FAILED_REASON,
+		]);
+	});
+
+	test("fails only the seat whose dispatch was refused", async () => {
+		const c = panel({ additionalReviewers: [SECOND], quorum: 1 });
+		fake.respondOnceWith(
+			new Response(JSON.stringify({ error: { code: "bad_request", message: "no such agent" } }), {
+				status: 400,
+				headers: { "content-type": "application/json" },
+			}),
+		);
+		const first = await c.step(ctx());
+		expect(first.status).toBe("dispatched");
+		expect(first.runIds).toHaveLength(1);
+		finishRun(first.runIds[0] ?? "", verdictText(APPROVE));
+
+		expect((await c.step(ctx())).status).toBe("approved");
+		expect(publisher.statesOn(SHA_A)).toEqual(["pending", "success"]);
+		// The quorum passed without the refused seat; a human still hears about it.
+		const attention = store.events.listOpenAttention(campaignId);
+		expect(attention.map((row) => row.reason)).toEqual([REVIEW_SEAT_FAILED_REASON]);
+		expect(JSON.parse(attention[0]?.detailJson ?? "{}").seatFailures).toEqual([
+			{ seat: 0, reason: "dispatch_rejected" },
+		]);
+	});
+
+	test("voids every seat when the head moves before the panel finishes", async () => {
+		const c = panel({ additionalReviewers: [SECOND] });
+		const onA = await c.step(ctx({ headSha: SHA_A }));
+		const onB = await c.step(ctx({ headSha: SHA_B }));
+		expect(onB.superseded).toBe(1);
+		for (const id of onA.runIds) finishRun(id, verdictText(APPROVE));
+		for (const id of onB.runIds) finishRun(id, verdictText(APPROVE));
+
+		expect((await c.step(ctx({ headSha: SHA_B }))).status).toBe("approved");
+		expect(publisher.statesOn(SHA_A)).toEqual(["pending"]);
+		expect(publisher.statesOn(SHA_B)).toEqual(["pending", "success"]);
 	});
 });

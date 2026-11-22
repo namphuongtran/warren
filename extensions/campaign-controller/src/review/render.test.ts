@@ -1,18 +1,31 @@
 import { describe, expect, test } from "bun:test";
-import type { ReviewPolicy } from "../repository-policy.ts";
-import { neutralizeMentions, renderReviewComment, renderReviewPrompt } from "./render.ts";
-import { parseReviewVerdict, REVIEW_VERDICT_CLOSE, REVIEW_VERDICT_OPEN } from "./verdict.ts";
+import {
+	neutralizeMentions,
+	type ReviewCommentSeat,
+	renderReviewComment,
+	renderReviewPrompt,
+} from "./render.ts";
+import {
+	parseReviewVerdict,
+	REVIEW_VERDICT_CLOSE,
+	REVIEW_VERDICT_OPEN,
+	type ReviewVerdict,
+} from "./verdict.ts";
 
 const SHA = "a".repeat(40);
-const REVIEW: ReviewPolicy = {
-	version: 1,
-	agent: "reviewer",
-	provider: "openai",
-	model: "gpt-5.3-codex",
-	statusContext: "warren/review",
-	maxRounds: 2,
-	maxCostUsd: 2,
-};
+const PRIMARY = { agent: "reviewer", provider: "openai", model: "gpt-5.3-codex" };
+
+/** A lone seat that returned `verdict`. */
+function soleSeat(verdict: ReviewVerdict): ReviewCommentSeat[] {
+	return [
+		{
+			identity: PRIMARY,
+			state: verdict.verdict === "approve" ? "approved" : "changes_requested",
+			verdict,
+			failureReason: null,
+		},
+	];
+}
 
 describe("renderReviewPrompt", () => {
 	test("pins the reviewed commit and restates the verdict grammar the parser reads", () => {
@@ -55,7 +68,8 @@ describe("renderReviewComment", () => {
 			verdict: parsed.verdict,
 			headSha: SHA,
 			round: 1,
-			review: REVIEW,
+			seats: soleSeat(parsed.verdict),
+			maxRounds: 2,
 			needsHuman: false,
 		});
 		expect(body).toContain("### Warren review: changes requested");
@@ -76,12 +90,54 @@ describe("renderReviewComment", () => {
 			verdict: parsed.verdict,
 			headSha: SHA,
 			round: 2,
-			review: REVIEW,
+			seats: soleSeat(parsed.verdict),
+			maxRounds: 2,
 			needsHuman: true,
 		});
 		expect(body).toContain("1. **Bad ## Fake heading** (`src/x.ts [click](http://evil)`)");
 		expect(body).toContain(
 			"The fix loop stopped after 2 round(s). A human needs to take this over.",
 		);
+	});
+
+	test("renders a panel as one section per reviewer under the decided verdict", () => {
+		const approve: ReviewVerdict = { verdict: "approve", summary: "Fine by me.", findings: [] };
+		const dissent: ReviewVerdict = {
+			verdict: "request_changes",
+			summary: "One concern.",
+			findings: [{ title: "Race", body: "Lock the map.", path: "src/m.ts", line: 9 }],
+		};
+		const body = renderReviewComment({
+			verdict: {
+				verdict: "approve",
+				summary: "2 of 3 reviewers approved (quorum 2).",
+				findings: [],
+			},
+			headSha: SHA,
+			round: 1,
+			seats: [
+				{ identity: PRIMARY, state: "approved", verdict: approve, failureReason: null },
+				{
+					identity: { agent: "reviewer", provider: "anthropic", model: null },
+					state: "changes_requested",
+					verdict: dissent,
+					failureReason: null,
+				},
+				{
+					identity: { agent: "codex", provider: null, model: null },
+					state: "failed",
+					verdict: null,
+					failureReason: "run_failed",
+				},
+			],
+			maxRounds: 2,
+			needsHuman: false,
+		});
+		expect(body).toContain("### Warren review: approved");
+		expect(body).toContain("2 of 3 reviewers approved (quorum 2).");
+		expect(body).toContain("#### Reviewer 1: `reviewer` on `openai/gpt-5.3-codex` (approved)");
+		expect(body).toContain("#### Reviewer 2: `reviewer` on `anthropic` (changes requested)");
+		expect(body).toContain("1. **Race** (`src/m.ts:9`)");
+		expect(body).toContain("#### Reviewer 3: `codex` (no verdict: run_failed)");
 	});
 });

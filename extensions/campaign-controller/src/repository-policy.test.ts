@@ -3,7 +3,9 @@ import { ValidationError } from "./errors.ts";
 import { MUTATION_FLAGS, NO_MUTATIONS } from "./mutations.ts";
 import {
 	composeDispatchPrompt,
+	type ReviewPolicy,
 	renderAgentGuidance,
+	reviewPanel,
 	validateRepositoryPolicy,
 } from "./repository-policy.ts";
 
@@ -322,6 +324,75 @@ describe("validateRepositoryPolicy review block (namphuongtran/warren#18)", () =
 		expectInvalid(
 			withReview({ version: 1, agent: "reviewer", maxRounds: 0, maxCostUsd: 1 }),
 			"repository policy.review",
+		);
+	});
+
+	test("keeps the digest of a single-reviewer block that predates the panel", () => {
+		// Captured before the reviewer panel existed: an operator approval of
+		// this exact block must survive the upgrade.
+		const { digest } = validate(
+			withReview({
+				version: 1,
+				agent: "reviewer",
+				provider: "openai",
+				model: "gpt-5-codex",
+				maxRounds: 2,
+				maxCostUsd: 1.5,
+			}),
+		);
+		expect(digest).toBe("4955dd11d199a8516f382e9ae21187ec406797bc40324355a7aacbd50dbbd579");
+	});
+
+	test("normalizes a reviewer panel and defaults the quorum to unanimous", () => {
+		const { policy } = validate(
+			withReview({
+				version: 2,
+				agent: "reviewer",
+				provider: "openai",
+				model: "gpt-5-codex",
+				additionalReviewers: [{ agent: "reviewer", provider: "anthropic" }],
+				maxRounds: 2,
+				maxCostUsd: 1,
+			}),
+		);
+		expect(policy.review?.additionalReviewers).toEqual([
+			{ agent: "reviewer", provider: "anthropic", model: null },
+		]);
+		expect(policy.review?.quorum).toBeUndefined();
+		expect(reviewPanel(policy.review as ReviewPolicy)).toEqual({
+			seats: [
+				{ agent: "reviewer", provider: "openai", model: "gpt-5-codex" },
+				{ agent: "reviewer", provider: "anthropic", model: null },
+			],
+			quorum: 2,
+		});
+	});
+
+	test("binds an explicit quorum into the panel and the digest", () => {
+		const block = {
+			version: 2,
+			agent: "reviewer",
+			additionalReviewers: [{ agent: "reviewer" }, { agent: "reviewer", model: "m" }],
+			maxRounds: 2,
+			maxCostUsd: 1,
+		};
+		const unanimous = validate(withReview(block));
+		const majority = validate(withReview({ ...block, quorum: 2 }));
+		expect(reviewPanel(majority.policy.review as ReviewPolicy).quorum).toBe(2);
+		expect(majority.digest).not.toBe(unanimous.digest);
+	});
+
+	test("rejects a quorum the panel cannot reach and an oversized panel", () => {
+		const block = { version: 2, agent: "reviewer", maxRounds: 2, maxCostUsd: 1 };
+		expectInvalid(withReview({ ...block, quorum: 2 }), "quorum");
+		expectInvalid(withReview({ ...block, quorum: 0 }), "quorum");
+		expectInvalid(
+			withReview({ ...block, additionalReviewers: Array(5).fill({ agent: "reviewer" }) }),
+			"additionalReviewers",
+		);
+		expectInvalid(
+			withReview({ ...block, additionalReviewers: [{ agent: "reviewer", token: "x" }] }),
+			"unknown field(s)",
 		);
 	});
 

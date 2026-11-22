@@ -23,6 +23,19 @@ Releases **0.9.10 and earlier** live in
   dispatched before the upgrade but reaped after it reads `unconfigured`,
   because no gate was frozen onto it.
 
+- **Campaign-controller reviewer panel (namphuongtran/warren#18, Phase 2).**
+  The repository policy's `review` block accepts `additionalReviewers`
+  (up to four more seats, each with its own agent, provider, and model)
+  and `quorum`. Every seat reviews the same head SHA independently. The
+  `warren/review` status passes when approvals reach the quorum (default:
+  unanimous), turns `failure` with every dissenting seat's findings sent to
+  the fixer otherwise (interleaved seat by seat, so no one review crowds
+  out the rest), and fails closed when failed seats leave the quorum unmet.
+  A quorum that passes despite a failed seat opens `review_seat_failed`. Campaign import warns when no seat names a provider other than
+  the builder's. Controller store migration 007 adds `review_seats` and
+  backfills each existing round as its seat 0. A block without the new keys
+  keeps its policy digest.
+
 ### Changed
 
 - **Campaign-controller review fix loop (namphuongtran/warren#18).** The

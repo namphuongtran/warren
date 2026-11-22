@@ -221,4 +221,36 @@ CREATE UNIQUE INDEX idx_review_rounds_live_head ON review_rounds(work_item_id, h
 	WHERE state != 'superseded';
 `,
 	},
+	{
+		// Reviewer panel (namphuongtran/warren#18 Phase 2): one row per seat of a
+		// round. Every pre-panel round becomes seat 0 of itself, so a round
+		// that was live across the upgrade keeps reconciling. The round's own
+		// action_id/run_id columns are left in place and no longer read.
+		id: 7,
+		name: "007_review_seats",
+		sql: `
+CREATE TABLE review_seats (
+	id TEXT PRIMARY KEY,
+	round_id TEXT NOT NULL REFERENCES review_rounds(id),
+	seat INTEGER NOT NULL,
+	agent TEXT,
+	provider TEXT,
+	model TEXT,
+	action_id TEXT REFERENCES actions(id),
+	run_id TEXT,
+	state TEXT NOT NULL,
+	verdict_json TEXT,
+	failure_reason TEXT,
+	created_at_ms INTEGER NOT NULL,
+	updated_at_ms INTEGER NOT NULL
+);
+CREATE UNIQUE INDEX idx_review_seats_round_seat ON review_seats(round_id, seat);
+INSERT INTO review_seats (id, round_id, seat, agent, provider, model, action_id, run_id, state,
+	verdict_json, failure_reason, created_at_ms, updated_at_ms)
+SELECT id || ':0', id, 0, NULL, NULL, NULL, action_id, run_id,
+	CASE state WHEN 'needs_human' THEN 'changes_requested' ELSE state END,
+	verdict_json, failure_reason, created_at_ms, updated_at_ms
+FROM review_rounds;
+`,
+	},
 ];

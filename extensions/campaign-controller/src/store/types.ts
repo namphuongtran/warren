@@ -261,7 +261,7 @@ export type ReviewRoundState =
 	| "failed"
 	| "superseded";
 
-/** One reviewer run bound to one PR head SHA (namphuongtran/warren#18). */
+/** The review of one PR head SHA by the whole reviewer panel (namphuongtran/warren#18). */
 export interface ReviewRoundRow {
 	readonly id: string;
 	readonly campaignId: string;
@@ -270,9 +270,34 @@ export interface ReviewRoundRow {
 	readonly headSha: string;
 	/** 1-based count of reviews on this work item, superseded ones included. */
 	readonly round: number;
+	readonly state: ReviewRoundState;
+	/** The decided verdict (the quorum aggregate for a panel); null while live or failed. */
+	readonly verdictJson: string | null;
+	readonly failureReason: string | null;
+	readonly createdAtMs: number;
+	readonly updatedAtMs: number;
+}
+
+export type ReviewSeatState =
+	| "dispatched"
+	| "approved"
+	| "changes_requested"
+	| "failed"
+	| "superseded";
+
+/** One reviewer run of a round: a panel seat (namphuongtran/warren#18 Phase 2). */
+export interface ReviewSeatRow {
+	readonly id: string;
+	readonly roundId: string;
+	/** 0-based panel position; seat 0 is the policy's primary reviewer. */
+	readonly seat: number;
+	/** What was dispatched; null only for a seat backfilled from a pre-panel round. */
+	readonly agent: string | null;
+	readonly provider: string | null;
+	readonly model: string | null;
 	readonly actionId: string | null;
 	readonly runId: string | null;
-	readonly state: ReviewRoundState;
+	readonly state: ReviewSeatState;
 	readonly verdictJson: string | null;
 	readonly failureReason: string | null;
 	readonly createdAtMs: number;

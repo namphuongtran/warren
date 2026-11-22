@@ -259,6 +259,36 @@ the policy digest, so approval binds it):
 itself is forge branch protection requiring the status context; see
 [RUNBOOK.md](RUNBOOK.md) §10.
 
+Phase 2 turns the one reviewer into a panel. `additionalReviewers` adds up
+to four more seats beside the block's own reviewer, each reviewing the same
+SHA independently, and `quorum` sets how many must approve:
+
+```json
+"review": {
+  "version": 2,
+  "agent": "reviewer",
+  "provider": "openai",
+  "model": "gpt-5.3-codex",
+  "additionalReviewers": [
+    { "agent": "reviewer", "provider": "anthropic", "model": "claude-opus-4-1" },
+    { "agent": "reviewer", "provider": "google", "model": "gemini-2.5-pro" }
+  ],
+  "quorum": 2,
+  "maxRounds": 2,
+  "maxCostUsd": 2
+}
+```
+
+Both keys are optional. Without `quorum` every seat must approve. Once
+every seat has finished ([`src/review/quorum.ts`](src/review/quorum.ts)),
+the panel passes when approvals reach the quorum. Otherwise any change
+request sends every dissenting seat's findings to the fixer. Otherwise
+(approvals plus failed seats only) the review fails closed. `maxCostUsd`
+caps each seat's run, so a review needs `maxCostUsd × seats` of campaign
+headroom. A block without the two keys keeps its digest, so an approval of
+a single-reviewer policy survives the upgrade. Import warns, without
+refusing, when no seat names a provider other than the campaign builder's.
+
 ## Layout
 
 ```
@@ -277,7 +307,7 @@ src/
   pr-intent/ dry-run cross-fork PR-intent rendering + journaling
   github/    structurally read-only GitHub client, PR-intent renderer,
              dedupe/redaction helpers, and the fake GitHub server
-  review/    cross-model review policy: verdict parser, renderers, coordinator
+  review/    cross-model review policy: verdict parser, quorum rule, renderers, coordinator
   tick/      the composed tick (lease → admit → dispatch/reconcile → PR intent
              → read-only GitHub reconcile → opt-in review → settle/report)
   cli/       the operator CLI: run/main, config, output envelopes, exit codes
