@@ -161,6 +161,10 @@ export const DOMAIN_STEMS = [
 	// OPS_WINDOW_MS) joins the guarded stems so a local copy in a handler or
 	// the UI fails the gate instead of drifting.
 	"ops",
+	// namphuongtran/warren#30: the provider usage-window vocabulary
+	// (ProviderQuotaView, PROVIDER_QUOTA_SOURCES, ...) served by
+	// GET /provider-quota and the 429 provider_quota_exhausted refusal.
+	"quota",
 ] as const;
 
 /**

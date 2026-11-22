@@ -235,7 +235,7 @@ export async function reapRun(input: ReapRunInput): Promise<ReapRunResult> {
 		: null;
 	const blamesProvider = failedFromProviderError && infraLoss === null;
 	if (quota !== null) {
-		await recordQuotaExhausted(emit, quota, run);
+		await recordQuotaExhausted(emit, quota, run, { ...input, now: now() });
 	} else if (infraLoss !== null) {
 		await emit(REAP_INFRA_LOSS_KIND, infraLossEventPayload(infraLoss, providerErrorMessage));
 	} else if (blamesProvider && providerError !== null) {

@@ -34,6 +34,7 @@ import {
 import { isPerDeltaNoiseEvent } from "./delta-noise.ts";
 import { bridgeDurationWatch, resolveDurationWatch } from "./duration-watch.ts";
 import { recordObservedModel } from "./observed-model.ts";
+import { recordProviderQuota } from "./provider-quota.ts";
 import { providerStreamSource } from "./provider-source.ts";
 import { seedResumeUsage } from "./resume-usage.ts";
 import { defaultRunStateProbe, runStatePoller } from "./run-state-poller.ts";
@@ -307,10 +308,8 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 			// append time (best-effort; the boot backfill re-extracts later).
 			await recordToolCallRollup(repos, runId, row, toolRuntime, input.logger);
 			broker.publish(runId, row);
-			// warren-28ca: `event_emitted` is the lifecycle mirror of the broker
-			// publish — one persisted run-event row fanned to boot-wired consumers.
-			// The bridge is the sole writer to `events`, so this is the single
-			// production call-site (design doc §5).
+			// warren-28ca: `event_emitted` mirrors the broker publish to boot-wired consumers.
+			// The bridge is the sole writer to `events`: the single call-site (design doc §5).
 			lifecycleBus()?.emitEventEmitted({
 				runId,
 				seq: row.sandboxEventSeq,
@@ -320,8 +319,9 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 
 			accumulatePiUsage(piUsage, event);
 			extractClaudeUsage(claudeUsage, event);
-			// namphuongtran/warren#7: the harness's init envelope names the model it really ran.
+			// namphuongtran/warren#7 / #30: the model the harness ran, and the provider's usage window.
 			await recordObservedModel(repos, runId, event, input.logger);
+			await recordProviderQuota(input, row);
 
 			// warren-a63d: enforce the spend cap as cumulative cost crosses it. On
 			// exceed the helper persists usage + emits `budget.exceeded` + cancels

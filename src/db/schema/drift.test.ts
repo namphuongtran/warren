@@ -21,6 +21,7 @@ import {
 	planRunChildren as pgPlanRunChildren,
 	planRuns as pgPlanRuns,
 	projects as pgProjects,
+	providerQuota as pgProviderQuota,
 	runInbox as pgRunInbox,
 	runs as pgRuns,
 	toolCalls as pgToolCalls,
@@ -33,6 +34,7 @@ import {
 	planRunChildren as sqlitePlanRunChildren,
 	planRuns as sqlitePlanRuns,
 	projects as sqliteProjects,
+	providerQuota as sqliteProviderQuota,
 	runInbox as sqliteRunInbox,
 	runs as sqliteRuns,
 	toolCalls as sqliteToolCalls,
@@ -52,6 +54,7 @@ const SQLITE_TABLES: Record<string, SQLiteTable> = {
 	// alongside the new dispatch_context table so both stay locked.
 	toolCalls: sqliteToolCalls,
 	dispatchContext: sqliteDispatchContext,
+	providerQuota: sqliteProviderQuota,
 };
 
 const PG_TABLES: Record<string, PgTable> = {
@@ -65,6 +68,7 @@ const PG_TABLES: Record<string, PgTable> = {
 	runInbox: pgRunInbox,
 	toolCalls: pgToolCalls,
 	dispatchContext: pgDispatchContext,
+	providerQuota: pgProviderQuota,
 };
 
 type AnyTable = keyof typeof SQLITE_TABLES;
@@ -206,6 +210,7 @@ const TABLE_KEYS: AnyTable[] = [
 	"runInbox",
 	"toolCalls",
 	"dispatchContext",
+	"providerQuota",
 ];
 
 describe("schema dialect parity (sqlite ↔ postgres)", () => {

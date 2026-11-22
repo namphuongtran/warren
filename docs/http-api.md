@@ -7,7 +7,7 @@ This page enumerates every HTTP route registered by warren's `Bun.serve` router.
 
 To refresh: `bun run gen:docs`. To check (CI mode): `bun run gen:docs:check`.
 
-Total routes: **55**.
+Total routes: **56**.
 
 ## /agents
 
@@ -116,6 +116,12 @@ Total routes: **55**.
 | `POST` | `/projects/:id/init` | `initProjectHandler` | warren-166d: server-side `.warren/` writes into the host clone, so a remote CLI can scaffold or migrate a project it cannot see on disk. `admin` matches refresh — an operator-gated mutation. |
 | `POST` | `/projects/:id/config-migrate` | `configMigrateProjectHandler` |  |
 | `DELETE` | `/projects/:id` | `deleteProjectHandler` |  |
+
+## /provider-quota
+
+| Method | Pattern | Handler | Notes |
+| --- | --- | --- | --- |
+| `GET` | `/provider-quota` | `listQuotaHandler` |  |
 
 ## /readyz
 

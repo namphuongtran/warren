@@ -42,6 +42,9 @@ export const TABLE_NAMES = {
 	// warren-36e7 / pl-a37b Track A: one insert-only fact row per dispatched
 	// run. PK is run_id; cascade on runs delete matches tool_calls.
 	dispatchContext: "dispatch_context",
+	// namphuongtran/warren#30: runtime state, one row per (provider, credential
+	// fingerprint) — the newest usage-window report. Never holds the secret.
+	providerQuota: "provider_quota",
 } as const;
 
 /**

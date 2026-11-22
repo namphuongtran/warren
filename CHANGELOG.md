@@ -80,6 +80,23 @@ Releases **0.9.10 and earlier** live in
   backfills each existing round as its seat 0. A block without the new keys
   keeps its policy digest.
 
+- **Dispatch waits out a spent provider usage window (namphuongtran/warren#30,
+  Phase 1).** Warren now keeps the newest usage-window report per provider
+  credential: every claude-code `rate_limit_event` (read by the new adapter
+  hook `observeQuota`) and every `quota_exhausted` reap. While a credential's
+  window is `rejected` and its `resetsAt` is ahead, `spawnRun` refuses the
+  dispatch before it creates a run row, with 429 `provider_quota_exhausted`
+  and a `Retry-After` that ends at the reset. This covers every caller and
+  every runtime (local, docker, k8s). Dispatch opens again at the reset with
+  no restart. `POST /runs` accepts `force: true` to dispatch anyway.
+  `GET /provider-quota` (operator read) lists each credential's state. The
+  credential is keyed by a one-way fingerprint; the token never reaches the
+  database, the events or the API. Adds the `provider_quota` table (SQLite
+  0060, Postgres 0055, RLS on). A plan-run whose next child is refused this
+  way waits and tries again each tick until the window reopens. Other
+  callers (triggers, retries) get the refusal as an error; holding their
+  runs until the reset is Phase 2.
+
 ### Changed
 
 - **Campaign-controller review fix loop (namphuongtran/warren#18).** The

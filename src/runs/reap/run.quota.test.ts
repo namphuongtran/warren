@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { EventEnvelopeInput } from "../../core/event-envelope.ts";
 import type { RunFailureReason, RunTerminalState } from "../../db/schema.ts";
+import { listProviderQuota } from "../quota/state.ts";
 import { reapRun } from "./index.ts";
 import { claudeEvents, withoutRejection, withResult } from "./quota-test-helpers.ts";
 import {
@@ -94,6 +95,25 @@ describe("reapRun quota exhaustion", () => {
 		});
 		const run = await ctx.repos.runs.require(ctx.runId);
 		expect(run.failureReason).toBe("quota_exhausted");
+	});
+
+	test("closes the credential's quota window until the reset (namphuongtran/warren#30)", async () => {
+		await record(claudeEvents("claude-code-quota-turn-one.jsonl"));
+
+		await reap("failed");
+
+		const quotas = await listProviderQuota(ctx.repos, new Date((1795338600 - 60) * 1000));
+		expect(quotas).toEqual([
+			expect.objectContaining({
+				provider: "anthropic",
+				status: "rejected",
+				rateLimitType: "five_hour",
+				resetsAt: 1795338600,
+				source: "reap",
+				sourceRunId: ctx.runId,
+				exhausted: true,
+			}),
+		]);
 	});
 
 	test("reaps a mid-run rejection as quota_exhausted and still pushes its commit", async () => {

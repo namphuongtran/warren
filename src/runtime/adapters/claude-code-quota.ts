@@ -24,7 +24,7 @@ import {
 	extractAgentEventEnvelope,
 	isAgentAuthoredEvent,
 } from "../../core/event-envelope.ts";
-import type { QuotaExhaustedSignal } from "./types.ts";
+import type { QuotaExhaustedSignal, QuotaObservation } from "./types.ts";
 
 const USAGE_LIMIT_STATUS = 429;
 const USAGE_LIMIT_ERROR = "usage_limit_reached";
@@ -37,13 +37,18 @@ function asObject(value: unknown): JsonObject | null {
 		: null;
 }
 
-/** `rate_limit_info` of a trusted, rejected `rate_limit_event`, else `null`. */
-function rejectedRateLimitInfo(event: EventEnvelopeInput): JsonObject | null {
+/** `rate_limit_info` of a trusted `rate_limit_event`, else `null`. */
+function rateLimitInfo(event: EventEnvelopeInput): JsonObject | null {
 	if (isAgentAuthoredEvent(event)) return null;
 	if (event.kind !== "telemetry" || event.stream !== "system") return null;
 	const payload = asObject(event.payload);
 	if (payload?.type !== "rate_limit_event") return null;
-	const info = asObject(payload.rate_limit_info);
+	return asObject(payload.rate_limit_info);
+}
+
+/** `rate_limit_info` of a trusted, rejected `rate_limit_event`, else `null`. */
+function rejectedRateLimitInfo(event: EventEnvelopeInput): JsonObject | null {
+	const info = rateLimitInfo(event);
 	return info?.status === "rejected" ? info : null;
 }
 
@@ -84,5 +89,25 @@ export function detectClaudeQuotaExhausted(
 		apiError: stringOrNull(result.api_error),
 		rateLimitType: stringOrNull(rejected?.rateLimitType),
 		resetsAt: numberOrNull(rejected?.resetsAt),
+	};
+}
+
+/**
+ * Read one `rate_limit_event` into a quota observation (namphuongtran/warren#30).
+ * The top-level `status`, `rateLimitType` and `resetsAt` name the binding
+ * window; its `utilization` sits under `unifiedWindows[rateLimitType]`.
+ */
+export function observeClaudeQuota(event: EventEnvelopeInput): QuotaObservation | null {
+	const info = rateLimitInfo(event);
+	const status = stringOrNull(info?.status);
+	if (info === null || status === null) return null;
+	const rateLimitType = stringOrNull(info.rateLimitType);
+	const window =
+		rateLimitType === null ? null : asObject(asObject(info.unifiedWindows)?.[rateLimitType]);
+	return {
+		status,
+		utilization: numberOrNull(window?.utilization),
+		rateLimitType,
+		resetsAt: numberOrNull(info.resetsAt),
 	};
 }

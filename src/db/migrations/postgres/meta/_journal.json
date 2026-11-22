@@ -386,6 +386,13 @@
 			"when": 1795339219687,
 			"tag": "0054_fair_stark_industries",
 			"breakpoints": true
+		},
+		{
+			"idx": 55,
+			"version": "7",
+			"when": 1795341142257,
+			"tag": "0055_jittery_power_pack",
+			"breakpoints": true
 		}
 	]
 }

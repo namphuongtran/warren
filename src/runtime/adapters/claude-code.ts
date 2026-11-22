@@ -27,7 +27,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { detectClaudeQuotaExhausted } from "./claude-code-quota.ts";
+import { detectClaudeQuotaExhausted, observeClaudeQuota } from "./claude-code-quota.ts";
 import { mulchClaudeHooks, readMulchArm } from "./mulch-arm.ts";
 import { parseJsonlClaude } from "./parsers/jsonl-claude.ts";
 import type {
@@ -138,6 +138,8 @@ export const claudeCodeAdapter: AgentRuntimeAdapter = {
 	// A spent subscription usage window ends the run on an error `result`
 	// (namphuongtran/warren#74). Not a `stopReason` shape, so it has its own hook.
 	detectQuotaExhausted: detectClaudeQuotaExhausted,
+	// Every `rate_limit_event` feeds the per-credential quota state (namphuongtran/warren#30).
+	observeQuota: observeClaudeQuota,
 	// The Anthropic file-writing tools (namphuongtran/warren#36).
 	fileEditToolNames: ["Write", "Edit", "MultiEdit", "NotebookEdit"],
 

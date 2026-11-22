@@ -36,10 +36,17 @@ export class PlanHasNoOpenChildrenError extends WarrenError {
 
 /**
  * Thrown by the tick's spawn wrapper when automatic run admission is closed
- * (capacity full, outside the run window, or another dispatch holds the lock).
- * Not a failure: the coordinator leaves the child where it is and returns a
- * noop, so the next tick tries the spawn again.
+ * (capacity full, outside the run window, or another dispatch holds the lock),
+ * or when the provider credential's usage window is spent
+ * (`provider_quota_exhausted`, namphuongtran/warren#30). Not a failure: the
+ * coordinator leaves the child where it is and returns a noop with `code` as
+ * the reason, so the next tick tries the spawn again.
  */
 export class PlanRunSpawnDeferredError extends Error {
-	readonly code = "automatic_admission_denied";
+	readonly code: string;
+
+	constructor(message: string, code = "automatic_admission_denied") {
+		super(message);
+		this.code = code;
+	}
 }

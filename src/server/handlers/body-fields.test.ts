@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { ValidationError } from "../../core/errors.ts";
-import { optionalEnum, optionalObject, optionalPositiveNumber } from "./body-fields.ts";
+import {
+	optionalBoolean,
+	optionalEnum,
+	optionalObject,
+	optionalPositiveNumber,
+} from "./body-fields.ts";
 
 describe("optionalPositiveNumber", () => {
 	test("returns undefined for an absent or null field", () => {
@@ -51,5 +56,23 @@ describe("optionalObject", () => {
 	test("rejects arrays and scalars", () => {
 		expect(() => optionalObject({ metadata: [1] }, "metadata")).toThrow(ValidationError);
 		expect(() => optionalObject({ metadata: "x" }, "metadata")).toThrow(ValidationError);
+	});
+});
+
+describe("optionalBoolean", () => {
+	test("returns undefined for an absent or null field", () => {
+		expect(optionalBoolean({}, "force")).toBeUndefined();
+		expect(optionalBoolean({ force: null }, "force")).toBeUndefined();
+	});
+
+	test("returns a JSON boolean verbatim", () => {
+		expect(optionalBoolean({ force: true }, "force")).toBe(true);
+		expect(optionalBoolean({ force: false }, "force")).toBe(false);
+	});
+
+	test("rejects strings and numbers instead of coercing them", () => {
+		for (const bad of ["true", "yes", 1, 0]) {
+			expect(() => optionalBoolean({ force: bad }, "force")).toThrow(ValidationError);
+		}
 	});
 });

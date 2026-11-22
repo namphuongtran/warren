@@ -71,6 +71,14 @@ export function optionalPositiveNumber(
 	return value;
 }
 
+/** An optional body field that must be a JSON boolean (`POST /runs` `force`, namphuongtran/warren#30). */
+export function optionalBoolean(body: Record<string, unknown>, key: string): boolean | undefined {
+	const value = body[key];
+	if (value === undefined || value === null) return undefined;
+	if (typeof value !== "boolean") throw new ValidationError(`field '${key}' must be a boolean`);
+	return value;
+}
+
 /**
  * An optional body field that must be a JSON object. Rejects arrays, strings,
  * and numbers instead of casting them to a record and letting a non-object

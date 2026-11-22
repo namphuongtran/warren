@@ -206,6 +206,26 @@ export interface AgentRuntimeAdapter {
 	 * when the harness has no evidence of what such an ending looks like.
 	 */
 	detectQuotaExhausted?(events: readonly EventEnvelopeInput[]): QuotaExhaustedSignal | null;
+
+	/**
+	 * Live check (namphuongtran/warren#30): does this one event report the
+	 * provider's usage-window state? The bridge feeds every persisted event
+	 * through it to keep the per-credential quota state current. Returns
+	 * `null` for any event that is not such a report.
+	 */
+	observeQuota?(event: EventEnvelopeInput): QuotaObservation | null;
+}
+
+/** One usage-window report, read off a harness event by {@link AgentRuntimeAdapter.observeQuota}. */
+export interface QuotaObservation {
+	/** The provider's verdict for the window: `allowed`, `allowed_warning` or `rejected`. */
+	readonly status: string;
+	/** How much of the binding window is spent, 0..1, when the event names it. */
+	readonly utilization: number | null;
+	/** Which window binds (e.g. `five_hour`), when named. */
+	readonly rateLimitType: string | null;
+	/** When that window reopens, in unix seconds, when named. */
+	readonly resetsAt: number | null;
 }
 
 /** What {@link AgentRuntimeAdapter.detectQuotaExhausted} read off the terminal envelope. */

@@ -39,6 +39,8 @@ tags:
     description: '`/preview` routes.'
   - name: projects
     description: '`/projects` routes.'
+  - name: provider-quota
+    description: '`/provider-quota` routes.'
   - name: runs
     description: '`/runs` routes.'
   - name: setup
@@ -861,6 +863,21 @@ paths:
           required: true
           schema:
             type: string
+  /provider-quota:
+    get:
+      operationId: listQuotaHandler
+      tags:
+        - provider-quota
+      summary: GET /provider-quota
+      responses:
+        '200':
+          description: Successful response.
+        default:
+          description: Error response (see `src/core/errors.ts`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
   /readyz:
     get:
       operationId: readyzHandler
