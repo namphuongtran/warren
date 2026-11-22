@@ -82,6 +82,9 @@ export const piAdapter: AgentRuntimeAdapter = {
 	// Pi's native lowercase tools, plus the Anthropic names its rows can arrive
 	// normalized into (namphuongtran/warren#36; see src/core/file-shape.ts).
 	fileEditToolNames: ["write", "edit", "Write", "Edit", "MultiEdit"],
+	// Empty by evidence: pi's RPC stream carries no "still running" envelope
+	// warren has observed (namphuongtran/warren#83).
+	keepAliveEnvelopeTypes: [],
 
 	buildSpawnCommand(ctx: AdapterSpawnContext): SpawnCommand {
 		return {

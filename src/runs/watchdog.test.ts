@@ -157,6 +157,17 @@ describe("loadWatchdogConfigFromEnv", () => {
 		);
 	});
 
+	test("reads the tool-stall warning threshold, 15 min by default (namphuongtran/warren#83)", () => {
+		expect(loadWatchdogConfigFromEnv({}).toolStallWarnMs).toBe(15 * 60_000);
+		expect(loadWatchdogConfigFromEnv({ WARREN_TOOL_STALL_WARN_MS: "600000" }).toolStallWarnMs).toBe(
+			600_000,
+		);
+		expect(loadWatchdogConfigFromEnv({ WARREN_TOOL_STALL_WARN_MS: "0" }).toolStallWarnMs).toBe(0);
+		expect(() => loadWatchdogConfigFromEnv({ WARREN_TOOL_STALL_WARN_MS: "soon" })).toThrow(
+			/WARREN_TOOL_STALL_WARN_MS must be a non-negative integer/,
+		);
+	});
+
 	test("rejects a non-positive tick", () => {
 		expect(() => loadWatchdogConfigFromEnv({ WARREN_WATCHDOG_TICK_MS: "0" })).toThrow(
 			/positive integer/,
@@ -353,7 +364,7 @@ describe("bootWatchdog", () => {
 			disabled: true,
 		});
 		const result = await handle.runOnce();
-		expect(result).toEqual({ timedOut: [], reconciled: [], errors: [] });
+		expect(result).toEqual({ timedOut: [], reconciled: [], stalled: [], errors: [] });
 		expect(handle.tickCount()).toBe(1);
 		await handle.stop();
 	});

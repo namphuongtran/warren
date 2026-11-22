@@ -142,6 +142,10 @@ export const claudeCodeAdapter: AgentRuntimeAdapter = {
 	observeQuota: observeClaudeQuota,
 	// The Anthropic file-writing tools (namphuongtran/warren#36).
 	fileEditToolNames: ["Write", "Edit", "MultiEdit", "NotebookEdit"],
+	// The CLI emits `tool_progress` every 30 s while a tool runs, and nothing
+	// else. The parser stores it as a `text` event carrying the raw envelope
+	// (namphuongtran/warren#83).
+	keepAliveEnvelopeTypes: ["tool_progress"],
 
 	buildSpawnCommand(ctx: AdapterSpawnContext): SpawnCommand {
 		return {

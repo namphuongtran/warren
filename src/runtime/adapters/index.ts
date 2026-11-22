@@ -105,6 +105,15 @@ export function providerErrorEnvelopeTypes(): readonly string[] {
 }
 
 /**
+ * Every keep-alive envelope type, across all runtimes (namphuongtran/warren#83).
+ * The watchdog reads a run's event log without resolving its runtime per
+ * tick, so it skips the union, like {@link providerErrorEnvelopeTypes}.
+ */
+export function keepAliveEnvelopeTypes(): readonly string[] {
+	return union((adapter) => adapter.keepAliveEnvelopeTypes ?? []);
+}
+
+/**
  * Ask every adapter whether the provider ended this run on a spent usage
  * window (namphuongtran/warren#74). Reap reads the persisted event log without
  * the run's runtime id in hand (the row's `runtime_id` is often null), so this

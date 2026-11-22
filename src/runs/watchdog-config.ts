@@ -12,6 +12,7 @@ import {
 	DEFAULT_WATCHDOG_TICK_MS,
 } from "./watchdog.ts";
 import { DEFAULT_WATCHDOG_TERMINAL_RECONCILE_GRACE_MS } from "./watchdog-reconcile.ts";
+import { DEFAULT_TOOL_STALL_WARN_MS } from "./watchdog-tool-stall.ts";
 
 export interface WatchdogConfig {
 	/**
@@ -32,6 +33,13 @@ export interface WatchdogConfig {
 	 * fast path.
 	 */
 	readonly cancelReconcileGraceMs: number;
+	/**
+	 * How long one tool call may stay open before the watchdog writes a
+	 * `watchdog.tool_stalled` warning (namphuongtran/warren#83). Defaults to
+	 * `DEFAULT_TOOL_STALL_WARN_MS`; `0` disables the warning. A project's
+	 * `toolStallWarnMinutes` overrides it per run.
+	 */
+	readonly toolStallWarnMs: number;
 }
 
 interface WatchdogEnvLike {
@@ -40,6 +48,7 @@ interface WatchdogEnvLike {
 	readonly WARREN_WATCHDOG_DISABLED?: string;
 	readonly WARREN_RUN_TERMINAL_RECONCILE_GRACE_MS?: string;
 	readonly WARREN_RUN_CANCEL_RECONCILE_GRACE_MS?: string;
+	readonly WARREN_TOOL_STALL_WARN_MS?: string;
 }
 
 /**
@@ -71,6 +80,11 @@ export function loadWatchdogConfigFromEnv(env: WatchdogEnvLike): WatchdogConfig 
 		"WARREN_RUN_CANCEL_RECONCILE_GRACE_MS",
 		DEFAULT_WATCHDOG_CANCEL_RECONCILE_GRACE_MS,
 	);
+	const toolStallWarnMs = parseNonNegativeInt(
+		env.WARREN_TOOL_STALL_WARN_MS,
+		"WARREN_TOOL_STALL_WARN_MS",
+		DEFAULT_TOOL_STALL_WARN_MS,
+	);
 	const optedOut = parseDisabledFlag(env.WARREN_WATCHDOG_DISABLED);
 	return {
 		enabled: !optedOut && heartbeatTimeoutMs > 0,
@@ -78,6 +92,7 @@ export function loadWatchdogConfigFromEnv(env: WatchdogEnvLike): WatchdogConfig 
 		tickMs,
 		terminalReconcileGraceMs,
 		cancelReconcileGraceMs,
+		toolStallWarnMs,
 	};
 }
 

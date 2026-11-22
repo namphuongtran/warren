@@ -54,7 +54,8 @@ export const PUBLIC_WARREN_CONFIG_DEFAULTS_FIELDS = [
  * - `defaultPrompt`, `repoContext` — dispatch prompt text.
  * - `qualityGate` — an executable command string.
  * - `migrations` — carries a regeneration command string (warren-4371).
- * - `maxCostUsd`, `maxDurationMinutes` — admission-cap disclosures.
+ * - `maxCostUsd`, `maxDurationMinutes`, `toolStallWarnMinutes` — admission-cap
+ *   and watchdog-threshold disclosures.
  * - `agentImage`, `preview`, `agent`, `interactiveAgents`, `resources`,
  *   `admission`, `ciFixer`, `healer`, `tracker`, `pr`, `handoff` — nested
  *   operator configuration blocks (image names, ports, pod specs, prompt
@@ -70,6 +71,7 @@ export const REDACTED_WARREN_CONFIG_FIELDS = [
 	"migrations",
 	"maxCostUsd",
 	"maxDurationMinutes",
+	"toolStallWarnMinutes",
 	"agentImage",
 	"preview",
 	"agent",
