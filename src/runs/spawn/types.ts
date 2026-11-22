@@ -247,6 +247,12 @@ export interface SpawnRunInput {
 	 */
 	readonly serverEnv?: Readonly<Record<string, string | undefined>>;
 	/**
+	 * Operator override (namphuongtran/warren#30): dispatch even while the
+	 * run's provider credential has a spent usage window. Without it the
+	 * dispatch is refused with 429 `provider_quota_exhausted`.
+	 */
+	readonly force?: boolean;
+	/**
 	 * Seeds CLI shell-out deps for the post-dispatch extension write
 	 * (pl-bb70 step 4, warren-46cd). When both `seedId` and this are
 	 * provided, spawnRun fires a single `sd update --extensions` after

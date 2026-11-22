@@ -172,3 +172,44 @@ export function resolveRunCostBasis(
 	const hasApiKey = apiKey !== undefined && apiKey !== "";
 	return hasOauth && !hasApiKey ? "subscription_estimate" : "api";
 }
+
+/** A provider name and the credential it resolved to (namphuongtran/warren#30). */
+export interface ProviderCredential {
+	readonly provider: string;
+	readonly secret: string | null;
+}
+
+const ANTHROPIC_CREDENTIAL_PRECEDENCE = [
+	"ANTHROPIC_AUTH_TOKEN",
+	"ANTHROPIC_API_KEY",
+	"CLAUDE_CODE_OAUTH_TOKEN",
+] as const;
+
+/**
+ * The credential a run authenticates with, as the quota state keys it
+ * (namphuongtran/warren#30). `provider` is the canonical registry name, or the
+ * trimmed lowercased name of a provider outside the registry. An undeclared
+ * provider is anthropic, as in {@link resolveRunCostBasis}. `secret` is
+ * `null` when `env` holds no credential for the provider (a K8s control plane
+ * whose pods read the key from a Secret); every caller in one process then
+ * agrees on that absence, so the state still keys consistently.
+ *
+ * Anthropic follows Claude Code's precedence: a bearer `ANTHROPIC_AUTH_TOKEN`
+ * wins over an API key, which wins over the subscription OAuth token.
+ * Other providers take the first registered key that is set.
+ */
+export function resolveProviderCredential(
+	provider: string | null | undefined,
+	env: Readonly<Record<string, string | undefined>>,
+): ProviderCredential {
+	const name = (provider ?? "anthropic").trim().toLowerCase() || "anthropic";
+	const canonical = normalizeProviderName(name);
+	const keys: readonly string[] =
+		canonical === "anthropic"
+			? ANTHROPIC_CREDENTIAL_PRECEDENCE
+			: canonical === undefined
+				? []
+				: PROVIDER_ENV_REGISTRY[canonical].envKeys;
+	const key = keys.find((k) => (env[k] ?? "") !== "");
+	return { provider: canonical ?? name, secret: key === undefined ? null : (env[key] ?? null) };
+}

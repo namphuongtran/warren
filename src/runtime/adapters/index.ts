@@ -27,7 +27,7 @@ import { KNOWN_RUNTIME_IDS, type RuntimeId } from "../../core/wire.ts";
 import { claudeCodeAdapter } from "./claude-code.ts";
 import { codexAdapter } from "./codex.ts";
 import { piAdapter } from "./pi.ts";
-import type { AgentRuntimeAdapter, QuotaExhaustedSignal } from "./types.ts";
+import type { AgentRuntimeAdapter, QuotaExhaustedSignal, QuotaObservation } from "./types.ts";
 
 // Phase-2 harness surface (warren-7933) — additive re-exports so the k8s
 // in-pod rewiring (warren-0efe) can consume the lifted types from the
@@ -45,6 +45,7 @@ export type {
 	IgnoredModelSelection,
 	PiFrontmatterOptions,
 	QuotaExhaustedSignal,
+	QuotaObservation,
 	SpawnCommand,
 	SteeringMessage,
 } from "./types.ts";
@@ -113,9 +114,23 @@ export function providerErrorEnvelopeTypes(): readonly string[] {
 export function detectQuotaExhausted(
 	events: readonly EventEnvelopeInput[],
 ): QuotaExhaustedSignal | null {
+	return firstAnswer((adapter) => adapter.detectQuotaExhausted?.(events));
+}
+
+/**
+ * Ask every adapter whether `event` reports the provider's usage-window state
+ * (namphuongtran/warren#30). A union read, like {@link detectQuotaExhausted}:
+ * the bridge does not resolve the run's runtime per event.
+ */
+export function observeQuota(event: EventEnvelopeInput): QuotaObservation | null {
+	return firstAnswer((adapter) => adapter.observeQuota?.(event));
+}
+
+/** The first adapter's non-null answer, in {@link KNOWN_RUNTIME_IDS} order. */
+function firstAnswer<T>(ask: (adapter: AgentRuntimeAdapter) => T | null | undefined): T | null {
 	for (const adapter of allAdapters()) {
-		const signal = adapter.detectQuotaExhausted?.(events) ?? null;
-		if (signal !== null) return signal;
+		const answer = ask(adapter) ?? null;
+		if (answer !== null) return answer;
 	}
 	return null;
 }

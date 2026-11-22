@@ -23,9 +23,11 @@
  */
 
 import { formatError } from "../core/errors.ts";
+import { PROVIDER_QUOTA_EXHAUSTED } from "../core/wire.ts";
 import type { Repos } from "../db/repos/index.ts";
 import type { PlanRunRow } from "../db/schema.ts";
 import type { PrMergeChecker } from "../runs/pr-merge.ts";
+import { ProviderQuotaExhaustedError } from "../runs/quota/state.ts";
 import { withAutomaticRunAdmission } from "../triggers/automatic-capacity.ts";
 import {
 	type AdvanceResult,
@@ -126,17 +128,26 @@ export async function runPlanRunTick(deps: PlanRunTickDeps): Promise<PlanRunTick
  * bookkeeping (merge polling, timeouts, terminal transitions) must keep
  * running while capacity is full; a denied spawn throws
  * {@link PlanRunSpawnDeferredError}, which the coordinator turns into a noop.
+ * A spawn refused on a spent provider usage window defers the same way, so the
+ * plan waits for the reset instead of failing (namphuongtran/warren#30).
  */
 function admittedSpawn(deps: PlanRunTickDeps, now: Date): CoordinatorSpawnFn {
 	return async (spawnInput) => {
 		const admission = await withAutomaticRunAdmission(
 			deps.repos.runs,
-			() => deps.spawn(spawnInput),
+			() => deps.spawn(spawnInput).catch(deferOnSpentQuota),
 			now,
 		);
 		if (!admission.admitted) throw new PlanRunSpawnDeferredError("automatic admission denied");
 		return admission.value;
 	};
+}
+
+function deferOnSpentQuota(err: unknown): never {
+	if (err instanceof ProviderQuotaExhaustedError) {
+		throw new PlanRunSpawnDeferredError(err.message, PROVIDER_QUOTA_EXHAUSTED);
+	}
+	throw err;
 }
 
 /**

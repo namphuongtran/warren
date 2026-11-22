@@ -3,6 +3,7 @@ import { openDatabase, type WarrenDb } from "../db/client.ts";
 import { createRepos, type Repos } from "../db/repos/index.ts";
 import { agents } from "../db/schema.ts";
 import type { PrMergeChecker } from "../runs/pr-merge.ts";
+import { ProviderQuotaExhaustedError } from "../runs/quota/state.ts";
 import type { CoordinatorGetIssueFn, CoordinatorSpawnFn } from "./coordinator.ts";
 import { bootPlanRunCoordinator, runPlanRunTick } from "./tick.ts";
 
@@ -113,6 +114,38 @@ describe("runPlanRunTick", () => {
 		expect(reloadedB.state).toBe("running");
 		expect(dispatched).toHaveLength(1);
 		expect(result.errors).toEqual([]);
+	});
+
+	test("holds a plan whose child spawn hits a spent provider window (namphuongtran/warren#30)", async () => {
+		const { planRun } = await h.repos.planRuns.create({
+			planId: "pl-q",
+			projectId: h.projectId,
+			agentName: "claude-code",
+			children: [{ seq: 1, seedId: "warren-q" }],
+			now: NOW,
+		});
+		const spawn: CoordinatorSpawnFn = async () => {
+			throw new ProviderQuotaExhaustedError("window spent", {
+				reason: "provider_quota_exhausted",
+				retryAfterSeconds: 600,
+			});
+		};
+
+		const result = await runPlanRunTick({
+			repos: h.repos,
+			getIssue: openSeed,
+			checkPrMerged: noopPoll,
+			spawn,
+			now: () => NOW,
+		});
+
+		expect(result.advances).toEqual([
+			expect.objectContaining({ result: { kind: "noop", reason: "provider_quota_exhausted" } }),
+		]);
+		const reloaded = await h.repos.planRuns.require(planRun.id);
+		expect(reloaded.state).not.toBe("failed");
+		const [child] = await h.repos.planRuns.listChildren(planRun.id);
+		expect(child?.state).toBe("pending");
 	});
 
 	test("catches internal coordinator errors per-PlanRun via the tick try/catch", async () => {

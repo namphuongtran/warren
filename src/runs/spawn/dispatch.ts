@@ -39,6 +39,7 @@ import {
 import { recordModelSelectionWarnings } from "./model-selection.ts";
 import { gateAgentPrompts, withMulchArm } from "./prompt-capabilities.ts";
 import { assertNoKnownProviderModelMismatch, resolveDispatchProvider } from "./provider-model.ts";
+import { assertDispatchQuotaOpen } from "./quota-guard.ts";
 import {
 	bindRunLogger,
 	compensateCreatedRuntime,
@@ -176,12 +177,12 @@ async function dispatchRun(input: SpawnRunInput): Promise<SpawnRunResult> {
 		projectAfterRefresh,
 		input.issueTracker,
 	);
-	// warren-bad5: validate only after the override > project default >
-	// agent frontmatter chain has been fully resolved.
+	// warren-bad5 / #30: once the override chain resolves, validate it and refuse a spent quota.
 	const { provider: declaredProvider, model: declaredModel } = readProviderFrontmatter(
 		agent.frontmatter,
 	);
 	assertNoKnownProviderModelMismatch(declaredProvider, declaredModel);
+	await assertDispatchQuotaOpen(input, declaredProvider);
 
 	// Build the seed payload BEFORE creating the warren row so a malformed
 	// expertise_seed / pi_skills / pi_prompts section surfaces as a clean
@@ -456,9 +457,6 @@ function composeRunEnv(
 	injectGitIdentityEnv(env, serverEnv ?? process.env);
 	return env;
 }
-
-// warren-4e36 / warren-e7b7: the git-identity env helpers moved to
-// `./git-identity.ts` (size budget, warren-4553).
 
 /**
  * Prefix the user's run prompt with the agent's `system` section so the

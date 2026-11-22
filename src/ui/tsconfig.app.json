@@ -41,6 +41,7 @@
 		"src",
 		"../core/wire.ts",
 		"../core/wire-ops.ts",
+		"../core/wire-provider-quota.ts",
 		"../core/wire-quality-gate.ts",
 		"../core/wire-handoff.ts",
 		"../core/wire-approach.ts",

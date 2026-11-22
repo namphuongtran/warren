@@ -12,8 +12,11 @@
  * reason (`timed_out`, `duration_exceeded`) still names the run.
  */
 
+import { PROVIDER_QUOTA_REJECTED } from "../../core/wire.ts";
 import type { Repos } from "../../db/repos/index.ts";
 import { detectQuotaExhausted, type QuotaExhaustedSignal } from "../../runtime/adapters/index.ts";
+import { recordQuotaObservation } from "../quota/state.ts";
+import type { BridgeLogger } from "../stream/types.ts";
 
 /** The system event reap emits when the provider refused the run on quota. */
 export const REAP_QUOTA_EXHAUSTED_KIND = "reap.quota_exhausted";
@@ -35,13 +38,21 @@ export async function detectRunQuotaExhausted(
 }
 
 /**
- * Emit `reap.quota_exhausted`. The provider and model come from the run row;
- * nothing here reads or carries the credential.
+ * Emit `reap.quota_exhausted` and close the credential's quota window until
+ * the reset (namphuongtran/warren#30), so the next dispatch on the same
+ * credential is refused instead of burning an attempt. The provider and model
+ * come from the run row; the event never carries the credential, and the
+ * quota state holds only its one-way fingerprint.
  */
 export async function recordQuotaExhausted(
 	emit: (kind: string, payload: unknown) => Promise<unknown>,
 	signal: QuotaExhaustedSignal,
-	run: { readonly provider: string | null; readonly model: string | null },
+	run: {
+		readonly id: string;
+		readonly provider: string | null;
+		readonly model: string | null;
+	},
+	state: { readonly repos: Repos; readonly now: Date; readonly logger?: BridgeLogger },
 ): Promise<void> {
 	await emit(REAP_QUOTA_EXHAUSTED_KIND, {
 		provider: run.provider,
@@ -51,4 +62,27 @@ export async function recordQuotaExhausted(
 		rateLimitType: signal.rateLimitType,
 		resetsAt: signal.resetsAt,
 	});
+	// A refusal with no known reset cannot gate dispatch, so it must not
+	// replace a stored window that can (namphuongtran/warren#30).
+	if (signal.resetsAt === null) return;
+	try {
+		await recordQuotaObservation(state.repos, {
+			credential: { provider: run.provider, env: process.env },
+			observation: {
+				status: PROVIDER_QUOTA_REJECTED,
+				utilization: null,
+				rateLimitType: signal.rateLimitType,
+				resetsAt: signal.resetsAt,
+			},
+			source: "reap",
+			sourceRunId: run.id,
+			observedAt: state.now.toISOString(),
+		});
+	} catch (err) {
+		// Bookkeeping only: the run still reaps `quota_exhausted` without it.
+		state.logger?.warn?.(
+			{ runId: run.id, err: err instanceof Error ? err.message : String(err) },
+			"failed to record the spent usage window; dispatch keeps the older state",
+		);
+	}
 }

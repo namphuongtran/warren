@@ -13,7 +13,12 @@ import type { GitSpawnCredential } from "../../../workspace/git/credential-env.t
 import type { IdempotentDispatch } from "../../idempotency.ts";
 import { jsonResponse } from "../../response.ts";
 import type { RouteHandler, ServerDeps } from "../../types.ts";
-import { optionalEnum, optionalObject, optionalPositiveNumber } from "../body-fields.ts";
+import {
+	optionalBoolean,
+	optionalEnum,
+	optionalObject,
+	optionalPositiveNumber,
+} from "../body-fields.ts";
 import { defaultSpawn, optionalString, readJsonBody, requireString } from "../index.ts";
 
 /**
@@ -415,6 +420,8 @@ async function buildHttpSpawnOptions(
 		...(maxCostUsd !== undefined ? { maxCostUsdOverride: maxCostUsd } : {}),
 		...(maxDurationMinutes !== undefined ? { maxDurationMinutesOverride: maxDurationMinutes } : {}),
 		...(mulchArm !== undefined ? { mulchArm } : {}),
+		// namphuongtran/warren#30: operator override of the provider-quota guard.
+		force: optionalBoolean(body, "force"),
 		seedId,
 		...(targetBranch !== undefined ? { targetBranch } : {}),
 		...(effectiveExistingBranch !== undefined ? { existingBranch: effectiveExistingBranch } : {}),

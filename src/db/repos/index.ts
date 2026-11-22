@@ -10,6 +10,7 @@ import { DrizzleAdapter } from "./drizzle-adapter.ts";
 import { EventsRepo } from "./events.ts";
 import { PlanRunsRepo } from "./plan-runs.ts";
 import { ProjectsRepo } from "./projects.ts";
+import { ProviderQuotaRepo } from "./provider-quota.ts";
 import { RunInboxRepo } from "./run-inbox.ts";
 import { RunsRepo } from "./runs.ts";
 import { ToolCallsRepo } from "./tool-calls.ts";
@@ -25,6 +26,7 @@ export interface Repos {
 	runInbox: RunInboxRepo;
 	toolCalls: ToolCallsRepo;
 	dispatchContext: DispatchContextRepo;
+	providerQuota: ProviderQuotaRepo;
 }
 
 export function createRepos(db: AnyWarrenDb): Repos {
@@ -39,6 +41,7 @@ export function createRepos(db: AnyWarrenDb): Repos {
 		runInbox: new RunInboxRepo(adapter),
 		toolCalls: new ToolCallsRepo(adapter),
 		dispatchContext: new DispatchContextRepo(adapter),
+		providerQuota: new ProviderQuotaRepo(adapter),
 	};
 }
 
@@ -49,6 +52,7 @@ export {
 	EventsRepo,
 	PlanRunsRepo,
 	ProjectsRepo,
+	ProviderQuotaRepo,
 	RunInboxRepo,
 	RunsRepo,
 	ToolCallsRepo,

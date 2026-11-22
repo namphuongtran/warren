@@ -299,6 +299,12 @@ export interface CreateRunInput {
 	maxDurationMinutes?: number;
 	/** Mulch experiment arm: "on" installs mulch's Claude hooks, "off" injects no mulch. */
 	mulch?: "on" | "off";
+	/**
+	 * Dispatch even while the run's provider credential has a spent usage
+	 * window (namphuongtran/warren#30). Without it such a dispatch answers 429
+	 * `provider_quota_exhausted` with `Retry-After`.
+	 */
+	force?: boolean;
 }
 
 /**

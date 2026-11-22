@@ -49,6 +49,7 @@ import {
 	runProjectTriggerHandler,
 } from "./projects.ts";
 import { getProjectWarrenConfigHandler } from "./projects.warren-config.ts";
+import { listQuotaHandler } from "./provider-quota.ts";
 import {
 	cancelRunHandler,
 	createRunHandler,
@@ -168,6 +169,7 @@ const ROUTE_TABLE: readonly RouteEntry[] = [
 		build: () => judgeVerdictsProxyHandler(),
 	},
 	{ method: "GET", pattern: "/metrics", policy: "readOperator", build: metricsHandler },
+	{ method: "GET", pattern: "/provider-quota", policy: "readOperator", build: listQuotaHandler },
 	// pl-7e38 step 12 (warren-d850): one-poll Operations snapshot, readPublic with a reduced projection.
 	{ method: "GET", pattern: "/ops/overview", policy: "readPublic", build: opsOverviewHandler },
 	// pl-7e38 step 15 (warren-5eec): cross-run Event explorer query, same per-row `projectEvent` reduction.
@@ -401,10 +403,9 @@ export function buildApiRoutes(deps: ServerDeps): Route[] {
  * Top-level prefixes the API claims. Any pathname under one of these is
  * an API request: it requires auth (except `/healthz`, see
  * `isAuthExempt`) and the SPA fallback in `ui.ts` refuses to serve
- * `index.html` for it. Kept in sync with `ROUTE_TABLE` by hand — the
- * router patterns are richer than prefixes (`/agents/:name`,
- * `/runs/:id/events`) so we can't derive these without either parsing
- * the patterns or duplicating the policy.
+ * `index.html` for it. Kept in sync with `ROUTE_TABLE` by hand: the router
+ * patterns (`/agents/:name`, `/runs/:id/events`) are richer than prefixes,
+ * so deriving these would mean parsing them or duplicating the policy.
  */
 export const API_PREFIXES: readonly string[] = [
 	"/agents",
@@ -420,8 +421,8 @@ export const API_PREFIXES: readonly string[] = [
 	"/preview",
 	"/plan-runs",
 	"/whoami",
-	// warren-2eec: instance facts surface (`GET /instance`).
-	"/instance",
+	"/instance", // warren-2eec: instance facts surface (`GET /instance`).
+	"/provider-quota", // namphuongtran/warren#30: per-credential usage windows.
 	"/github-app",
 	"/setup", // warren-48f8: the setup-handoff redemption page (an API path, not SPA).
 	"/events",

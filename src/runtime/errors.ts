@@ -92,8 +92,12 @@ export class RuntimeConflictError extends WarrenError {
  * doesn't couple to the K8s admission module's `AdmissionRejectReason`.
  */
 export class RuntimeAdmissionError extends WarrenError {
-	readonly code = "runtime_admission_rejected";
-	/** Machine-readable cap that tripped (an `AdmissionRejectReason`). */
+	// `string`, not the literal, so a narrower refusal can name its own code (namphuongtran/warren#30).
+	readonly code: string = "runtime_admission_rejected";
+	/**
+	 * Machine-readable refusal: the K8s cap that tripped (an `AdmissionRejectReason`),
+	 * or `provider_quota_exhausted` for a spent usage window (namphuongtran/warren#30).
+	 */
 	readonly reason: string;
 	/** Seconds the caller should back off before retrying (the `Retry-After`). */
 	readonly retryAfterSeconds: number;
