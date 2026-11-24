@@ -14,9 +14,12 @@ export type ProviderQuotaSource = (typeof PROVIDER_QUOTA_SOURCES)[number];
 /**
  * The window status that refuses dispatch. The provider owns the full set
  * (claude reports `allowed`, `allowed_warning`, `rejected`), so `status`
- * stays an open string; this is the one value Warren acts on.
+ * stays an open string. Warren refuses dispatch on this value.
  */
 export const PROVIDER_QUOTA_REJECTED = "rejected";
+
+/** The window status the provider reports when the window is nearly spent. Shown, not acted on. */
+export const PROVIDER_QUOTA_WARNING = "allowed_warning";
 
 /** The machine-readable reason of a dispatch refused on a spent usage window. */
 export const PROVIDER_QUOTA_EXHAUSTED = "provider_quota_exhausted";
@@ -44,7 +47,15 @@ export interface ProviderQuotaView {
 	readonly observedAt: string;
 	/** True while `status` is `rejected` and `resetsAt` is still ahead: dispatch is refused. */
 	readonly exhausted: boolean;
-	/** Seconds until `resetsAt` while exhausted, else null. */
+	/**
+	 * The deployment's dispatch threshold (`WARREN_PROVIDER_QUOTA_MAX_UTILIZATION`),
+	 * or null when it is off. A project's `admission.maxProviderUtilization`
+	 * can override it for that project's dispatches.
+	 */
+	readonly maxUtilization: number | null;
+	/** True while the window is not spent but `utilization` is at or past `maxUtilization`. */
+	readonly thresholdReached: boolean;
+	/** Seconds until `resetsAt` while dispatch is refused (exhausted or threshold), else null. */
 	readonly retryAfterSeconds: number | null;
 }
 

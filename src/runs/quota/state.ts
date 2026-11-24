@@ -78,26 +78,45 @@ function secondsUntilWindowReset(row: ProviderQuotaRow, now: Date): number | nul
 	return seconds > 0 ? seconds : null;
 }
 
-/** Seconds until the window reopens while it is rejected, else `null`. */
-function secondsUntilReset(row: ProviderQuotaRow, now: Date): number | null {
-	return row.status === PROVIDER_QUOTA_REJECTED ? secondsUntilWindowReset(row, now) : null;
-}
-
 const percent = (share: number): string => `${Math.round(share * 100)}%`;
+
+interface QuotaRefusal {
+	readonly retryAfterSeconds: number;
+	/** `spent`: the provider rejected the window. `threshold`: utilization reached the threshold. */
+	readonly kind: "spent" | "threshold";
+	readonly why: string;
+}
 
 /** Why the stored window refuses a new dispatch now, or `null` when it does not. */
 function refusalReason(
 	row: ProviderQuotaRow,
 	now: Date,
 	maxUtilization: number | undefined,
-): { readonly retryAfterSeconds: number; readonly why: string } | null {
+): QuotaRefusal | null {
 	const retryAfterSeconds = secondsUntilWindowReset(row, now);
 	if (retryAfterSeconds === null) return null;
-	if (row.status === PROVIDER_QUOTA_REJECTED) return { retryAfterSeconds, why: "is spent" };
+	if (row.status === PROVIDER_QUOTA_REJECTED) {
+		return { retryAfterSeconds, kind: "spent", why: "is spent" };
+	}
 	if (maxUtilization === undefined || row.utilization === null) return null;
 	if (row.utilization < maxUtilization) return null;
 	const why = `is ${percent(row.utilization)} used, at or past the ${percent(maxUtilization)} dispatch threshold`;
-	return { retryAfterSeconds, why };
+	return { retryAfterSeconds, kind: "threshold", why };
+}
+
+/** Deployment default for the dispatch utilization threshold: a share, 0 < x <= 1. */
+export const PROVIDER_QUOTA_MAX_UTILIZATION_ENV = "WARREN_PROVIDER_QUOTA_MAX_UTILIZATION";
+
+/** The threshold in force: the project's, else a valid deployment share, else off. */
+export function resolveMaxUtilization(
+	projectValue: number | undefined,
+	env: Readonly<Record<string, string | undefined>>,
+): number | undefined {
+	if (projectValue !== undefined) return projectValue;
+	const raw = env[PROVIDER_QUOTA_MAX_UTILIZATION_ENV]?.trim();
+	if (raw === undefined || raw === "") return undefined;
+	const share = Number(raw);
+	return Number.isFinite(share) && share > 0 && share <= 1 ? share : undefined;
 }
 
 export interface AssertProviderQuotaOpenInput {
@@ -136,14 +155,18 @@ export async function assertProviderQuotaOpen(
 	);
 }
 
-/** Every credential's newest report, with whether dispatch is refused now. */
+/**
+ * Every credential's newest report, with whether dispatch is refused now
+ * under `maxUtilization` (the deployment threshold; a project may override it).
+ */
 export async function listProviderQuota(
 	repos: QuotaRepos,
 	now: Date,
+	maxUtilization?: number,
 ): Promise<ProviderQuotaView[]> {
 	const rows = await repos.providerQuota.list();
 	return rows.map((row) => {
-		const retryAfterSeconds = secondsUntilReset(row, now);
+		const refusal = refusalReason(row, now, maxUtilization);
 		return {
 			provider: row.provider,
 			credentialFingerprint: row.credentialFingerprint,
@@ -154,8 +177,10 @@ export async function listProviderQuota(
 			source: row.source,
 			sourceRunId: row.sourceRunId,
 			observedAt: row.observedAt,
-			exhausted: retryAfterSeconds !== null,
-			retryAfterSeconds,
+			exhausted: refusal?.kind === "spent",
+			maxUtilization: maxUtilization ?? null,
+			thresholdReached: refusal?.kind === "threshold",
+			retryAfterSeconds: refusal?.retryAfterSeconds ?? null,
 		};
 	});
 }

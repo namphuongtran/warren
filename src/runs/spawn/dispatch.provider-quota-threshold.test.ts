@@ -10,9 +10,13 @@ import type { WarrenDb } from "../../db/client.ts";
 import type { Repos } from "../../db/repos/index.ts";
 import { FakeProvider } from "../../runtime/fake/fake-provider.ts";
 import { createWarrenConfigCache } from "../../warren-config/cache.ts";
-import { ProviderQuotaExhaustedError, recordQuotaObservation } from "../quota/state.ts";
+import {
+	PROVIDER_QUOTA_MAX_UTILIZATION_ENV,
+	ProviderQuotaExhaustedError,
+	recordQuotaObservation,
+	resolveMaxUtilization,
+} from "../quota/state.ts";
 import { spawnRun } from "./index.ts";
-import { PROVIDER_QUOTA_MAX_UTILIZATION_ENV, resolveMaxUtilization } from "./quota-guard.ts";
 import { setupRepos } from "./test-helpers.ts";
 
 const RESETS_AT = 1795338600;

@@ -222,7 +222,7 @@ export interface RunRow {
 	runtimeBackend?: string | null;
 	/** The tool call a running run is stuck on (namphuongtran/warren#83); operator-only. */
 	toolStall?: RunToolStallView | null;
-	quotaHold?: QuotaHoldView | null; // held on a spent provider quota (warren#30); operator list overlay
+	quotaHold?: QuotaHoldView | null; // namphuongtran/warren#30 quota hold; operator list overlay
 	/** Per-run USD spend cap (warren-f8a2 list / warren-b19e detail GET): operator-only
 	 * overlay from the dispatch-context row; absent for spectators, null when no row. */
 	maxCostUsd?: number | null;

@@ -43,12 +43,15 @@ function isDeferred(row: RunRow): boolean {
 	return row.state === "queued" && row.quotaHold !== null && row.quotaHold !== undefined;
 }
 
-/** "quota reset in 25m" for a deferred run, "quota reset due" once its release time passed. */
+/**
+ * "quota hold, starts in 25m" for a deferred run: the time until Warren
+ * launches it (a minute or two after the window resets), then "starting".
+ */
 export function quotaWaitOf(row: RunRow, now: number): string | null {
 	if (!isDeferred(row)) return null;
 	const left = Date.parse(row.quotaHold?.releaseAt ?? "") - now;
 	if (Number.isNaN(left)) return null;
-	return left > 0 ? `quota reset in ${formatWaitMs(left)}` : "quota reset due";
+	return left > 0 ? `quota hold, starts in ${formatWaitMs(left)}` : "quota hold, starting";
 }
 
 function isStalled(row: RunRow): boolean {
@@ -104,14 +107,14 @@ function shortFailureReason(reason: string): string {
  * reason on the wire (`failureReason` is null on cancelled), so they stay
  * at two segments.
  */
-export function sublineOf(row: RunRow, projectName: string, now?: number): string {
+export function sublineOf(row: RunRow, projectName: string, now: number): string {
 	const extras: string[] = [row.agentName, projectName];
 	const extra = contextualExtraOf(row, now);
 	if (extra !== null) extras.push(extra);
 	return extras.join(" · ");
 }
 
-function contextualExtraOf(row: RunRow, now: number | undefined): string | null {
+function contextualExtraOf(row: RunRow, now: number): string | null {
 	if (row.state === "failed" && row.failureReason !== null) {
 		return shortFailureReason(row.failureReason);
 	}
@@ -128,12 +131,11 @@ function contextualExtraOf(row: RunRow, now: number | undefined): string | null 
 }
 
 /**
- * A live run's extra: the quota wait of a deferred run (when the caller
- * passes the clock), the tool a stalled run is stuck in, else the cap
- * percent near budget.
+ * A live run's extra: the quota wait of a deferred run, the tool a stalled
+ * run is stuck in, else the cap percent near budget.
  */
-function liveExtraOf(row: RunRow, now: number | undefined): string | null {
-	const wait = now === undefined ? null : quotaWaitOf(row, now);
+function liveExtraOf(row: RunRow, now: number): string | null {
+	const wait = quotaWaitOf(row, now);
 	if (wait !== null) return wait;
 	const stuck = stuckInOf(row);
 	if (stuck !== null) return stuck;

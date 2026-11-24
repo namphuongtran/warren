@@ -34,6 +34,8 @@ import {
 	type HeldDispatchRequest,
 	HeldRunNotPendingError,
 	isHeldRunPending,
+	newestHoldEventByRun,
+	QUOTA_HOLD_KINDS,
 	readHeldDecision,
 	recordQuotaHold,
 } from "./hold.ts";
@@ -53,8 +55,6 @@ export interface QuotaHoldReleaser {
 	/** Launch every held run whose release time has passed. */
 	tick(): Promise<void>;
 }
-
-const HOLD_KINDS: readonly string[] = Object.values(QUOTA_HOLD_EVENTS);
 
 export function createQuotaHoldReleaser(input: QuotaHoldReleaserInput): QuotaHoldReleaser {
 	const now = input.now ?? (() => new Date());
@@ -110,8 +110,7 @@ export function createQuotaHoldReleaser(input: QuotaHoldReleaserInput): QuotaHol
 		await emit(run.id, QUOTA_HOLD_EVENTS.releaseFailed, { error });
 	};
 
-	const advance = async (run: RunRow, holdEvents: readonly EventRow[]): Promise<void> => {
-		const last = holdEvents.at(-1);
+	const advance = async (run: RunRow, last: EventRow | undefined): Promise<void> => {
 		if (last === undefined) return;
 		if (last.kind === QUOTA_HOLD_EVENTS.releasing) {
 			return failHeld(run, "the control plane stopped while it was launching this held run");
@@ -130,16 +129,15 @@ export function createQuotaHoldReleaser(input: QuotaHoldReleaserInput): QuotaHol
 				.filter(isHeldRunPending)
 				.sort((a, b) => (a.createdAt ?? 0) - (b.createdAt ?? 0));
 			if (candidates.length === 0) return;
-			const holdEvents = await input.repos.events.listEventsByKindsForRuns(
-				candidates.map((r) => r.id),
-				HOLD_KINDS,
+			const newest = newestHoldEventByRun(
+				await input.repos.events.listEventsByKindsForRuns(
+					candidates.map((r) => r.id),
+					QUOTA_HOLD_KINDS,
+				),
 			);
 			for (const run of candidates) {
-				const own = holdEvents
-					.filter((e) => e.runId === run.id)
-					.sort((a, b) => a.sandboxEventSeq - b.sandboxEventSeq);
 				try {
-					await advance(run, own);
+					await advance(run, newest.get(run.id));
 				} catch (err) {
 					const error = err instanceof Error ? err.message : String(err);
 					input.logger?.error({ runId: run.id, error }, "quota-hold.tick_failed");

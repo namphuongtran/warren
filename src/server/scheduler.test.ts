@@ -415,7 +415,9 @@ describe("bootScheduler", () => {
 			projectSpawn: (async () => ({ stdout: "", stderr: "", exitCode: 0 })) as SpawnFn,
 			config: { ...SCHEDULER_CONFIG, disabled: true },
 			now: () => NOW,
-			spawnOrHoldRunFn: dispatched(spawnRunFn),
+			// A CI fixer is never held (namphuongtran/warren#30): it dispatches through spawnRun.
+			spawnRunFn,
+			spawnOrHoldRunFn: () => Promise.reject(new Error("a CI fixer must not be held")),
 			cloneExists: () => true,
 		});
 

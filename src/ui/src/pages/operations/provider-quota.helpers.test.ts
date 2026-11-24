@@ -21,6 +21,8 @@ function quota(overrides: Partial<ProviderQuotaView>): ProviderQuotaView {
 		sourceRunId: "run_jy2cxd7cmg9f",
 		observedAt: "2026-11-22T08:50:31.000Z",
 		exhausted: true,
+		maxUtilization: null,
+		thresholdReached: false,
 		retryAfterSeconds: 1500,
 		...overrides,
 	};
@@ -34,8 +36,30 @@ describe("providerQuotaNotices", () => {
 		expect(notice?.title).toBe("Provider usage limit reached");
 		expect(notice?.detail).toBe(
 			"The anthropic five-hour window reopens at [2026-11-22T09:10:00.000Z] (in 25m). " +
-				"Scheduled runs wait and start after the reset, and stopped runs resume. " +
-				"A manual dispatch is refused unless you hold it or force it.",
+				"Stopped runs resume after the reset. " +
+				"Scheduled runs wait and start after the reset. " +
+				"A dispatch from the UI is refused until then; the warren CLI can hold one with --hold-on-quota.",
+		);
+	});
+
+	test("warns when the deployment threshold pauses new runs before the window is spent", () => {
+		const paused = quota({
+			status: "allowed_warning",
+			utilization: 0.92,
+			exhausted: false,
+			maxUtilization: 0.9,
+			thresholdReached: true,
+		});
+
+		const [notice] = providerQuotaNotices([paused], RESET_MS - 25 * MINUTE, clock);
+
+		expect(notice?.variant).toBe("warning");
+		expect(notice?.title).toBe("New runs paused at the usage threshold");
+		expect(notice?.detail).toBe(
+			"The anthropic five-hour window is 92% used, at or past the 90% threshold for new runs. " +
+				"It resets at [2026-11-22T09:10:00.000Z] (in 25m). " +
+				"Scheduled runs wait and start after the reset. " +
+				"A dispatch from the UI is refused until then; the warren CLI can hold one with --hold-on-quota.",
 		);
 	});
 

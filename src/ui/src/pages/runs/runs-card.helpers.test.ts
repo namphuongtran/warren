@@ -61,6 +61,9 @@ function run(overrides: Partial<RunRow>): RunRow {
 	};
 }
 
+/** The clock for subline tests that do not depend on it. */
+const NOW = Date.parse("2026-11-22T10:00:00.000Z");
+
 /** A stall overlay on a running run (namphuongtran/warren#83). */
 const STALL = {
 	toolUseId: "toolu_1",
@@ -109,7 +112,7 @@ describe("displayStateOf", () => {
 
 describe("sublineOf", () => {
 	test("trims to agent · project with no extra for a plain running row", () => {
-		expect(sublineOf(run({}), "os-eco/warren")).toBe("claude-code · os-eco/warren");
+		expect(sublineOf(run({}), "os-eco/warren", NOW)).toBe("claude-code · os-eco/warren");
 	});
 
 	test("keeps the old chain/branch segments out of the mobile subline", () => {
@@ -119,12 +122,16 @@ describe("sublineOf", () => {
 			baseCommit: "abc1234ef",
 			baseSha: null,
 		});
-		expect(sublineOf(row, "os-eco/warren")).toBe("claude-code · os-eco/warren");
+		expect(sublineOf(row, "os-eco/warren", NOW)).toBe("claude-code · os-eco/warren");
 	});
 
 	test("failed rows carry one short stop-reason extra", () => {
 		expect(
-			sublineOf(run({ state: "failed", failureReason: "push_rejected_policy" }), "os-eco/warren"),
+			sublineOf(
+				run({ state: "failed", failureReason: "push_rejected_policy" }),
+				"os-eco/warren",
+				NOW,
+			),
 		).toBe("claude-code · os-eco/warren · push blocked");
 	});
 
@@ -133,23 +140,26 @@ describe("sublineOf", () => {
 			sublineOf(
 				run({ state: "succeeded", prUrl: "https://github.com/x/y/pull/984" }),
 				"os-eco/warren",
+				NOW,
 			),
 		).toBe("claude-code · os-eco/warren · PR #984");
-		expect(sublineOf(run({ state: "succeeded", commitsAhead: 2 }), "os-eco/warren")).toBe(
+		expect(sublineOf(run({ state: "succeeded", commitsAhead: 2 }), "os-eco/warren", NOW)).toBe(
 			"claude-code · os-eco/warren · 2 commits",
 		);
 	});
 
 	test("running rows near cap carry the cap percent, not branch noise", () => {
 		const row = run({ costUsd: 4.72, maxCostUsd: 5, targetBranch: "main" });
-		expect(sublineOf(row, "os-eco/mulch")).toBe("claude-code · os-eco/mulch · cap 94%");
+		expect(sublineOf(row, "os-eco/mulch", NOW)).toBe("claude-code · os-eco/mulch · cap 94%");
 	});
 
 	test("names the tool a stalled row is stuck in, ahead of the cap percent", () => {
 		const row = run({ costUsd: 4.72, maxCostUsd: 5, toolStall: STALL });
-		expect(sublineOf(row, "os-eco/mulch")).toBe("claude-code · os-eco/mulch · stuck in Bash");
+		expect(sublineOf(row, "os-eco/mulch", NOW)).toBe("claude-code · os-eco/mulch · stuck in Bash");
 		const unnamed = run({ toolStall: { ...STALL, toolName: null } });
-		expect(sublineOf(unnamed, "os-eco/mulch")).toBe("claude-code · os-eco/mulch · stuck in a tool");
+		expect(sublineOf(unnamed, "os-eco/mulch", NOW)).toBe(
+			"claude-code · os-eco/mulch · stuck in a tool",
+		);
 	});
 });
 
@@ -186,17 +196,17 @@ describe("deferred runs (namphuongtran/warren#30)", () => {
 		expect(displayStateOf(run({ state: "cancelled", quotaHold: HOLD }))).toBe("cancelled");
 	});
 
-	test("counts down to the release, then reads due", () => {
-		expect(quotaWaitOf(held, RELEASE_MS - 25 * MINUTE)).toBe("quota reset in 25m");
-		expect(quotaWaitOf(held, RELEASE_MS - 90 * MINUTE)).toBe("quota reset in 1h 30m");
-		expect(quotaWaitOf(held, RELEASE_MS - 10_000)).toBe("quota reset in 1m");
-		expect(quotaWaitOf(held, RELEASE_MS + MINUTE)).toBe("quota reset due");
+	test("counts down to the start, then reads starting", () => {
+		expect(quotaWaitOf(held, RELEASE_MS - 25 * MINUTE)).toBe("quota hold, starts in 25m");
+		expect(quotaWaitOf(held, RELEASE_MS - 90 * MINUTE)).toBe("quota hold, starts in 1h 30m");
+		expect(quotaWaitOf(held, RELEASE_MS - 10_000)).toBe("quota hold, starts in 1m");
+		expect(quotaWaitOf(held, RELEASE_MS + MINUTE)).toBe("quota hold, starting");
 		expect(quotaWaitOf(run({ state: "queued" }), RELEASE_MS)).toBeNull();
 	});
 
 	test("puts the wait on the subline", () => {
 		expect(sublineOf(held, "os-eco/warren", RELEASE_MS - 25 * MINUTE)).toBe(
-			"claude-code · os-eco/warren · quota reset in 25m",
+			"claude-code · os-eco/warren · quota hold, starts in 25m",
 		);
 	});
 });

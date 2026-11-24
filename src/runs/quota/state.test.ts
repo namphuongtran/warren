@@ -239,3 +239,34 @@ describe("provider quota utilization threshold", () => {
 		await assertProviderQuotaOpen(repos, { ...input, force: true });
 	});
 });
+
+describe("listProviderQuota with a dispatch threshold", () => {
+	test("reports a window past the threshold as refusing dispatch until the reset", async () => {
+		const repos = await openRepos();
+		await recordQuotaObservation(repos, {
+			credential: anthropic,
+			observation: {
+				status: "allowed_warning",
+				utilization: 0.92,
+				rateLimitType: "five_hour",
+				resetsAt: RESETS_AT,
+			},
+			source: "rate_limit_event",
+			sourceRunId: null,
+			observedAt: "2026-11-22T08:42:00.000Z",
+		});
+		const now = new Date("2026-11-22T08:45:00.000Z");
+
+		const [past] = await listProviderQuota(repos, now, 0.9);
+		expect(past).toMatchObject({
+			exhausted: false,
+			thresholdReached: true,
+			maxUtilization: 0.9,
+			retryAfterSeconds: 1500,
+		});
+		const [under] = await listProviderQuota(repos, now, 0.95);
+		expect(under).toMatchObject({ thresholdReached: false, retryAfterSeconds: null });
+		const [off] = await listProviderQuota(repos, now);
+		expect(off).toMatchObject({ thresholdReached: false, maxUtilization: null });
+	});
+});
