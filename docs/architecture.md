@@ -43,7 +43,7 @@ The pushed workspace branch is the kernel's guaranteed output. Pull requests, tr
 - Steering encoding
 - Harness-owned workspace paths
 
-A harness is compatible when it has a Warren adapter and its executable exists in the selected runtime image or host toolchain. The current distribution includes Pi and Claude Code adapters.
+A harness is compatible when it has a Warren adapter and its executable exists in the selected runtime image or host toolchain. The current distribution includes Pi, Claude Code, and Codex adapters.
 
 ## Runtime providers
 
@@ -77,15 +77,6 @@ The lifecycle bus defines the event vocabulary, but warren does not yet ship a g
 
 ## Source map
 
-- `src/runs/` — dispatch, event bridge, analytics, finalization, and reap
-- `src/runtime/` — runtime provider contract and implementations
-- `src/runtime/adapters/` — harness-specific behavior
-- `src/forge/` — forge contract and GitHub transports
-- `src/tracker/` — issue tracker contract and implementations
-- `src/projects/` — managed clones and project registration
-- `src/server/` — HTTP routes, auth, boot wiring, and static UI
-- `src/client/` — typed HTTP client
-- `src/ui/` — React application
-- `src/db/` — SQLite and Postgres adapters
+[ARCHITECTURE.md](../ARCHITECTURE.md) at the repo root is the code map: the layer of each `src/` module, the allowed import directions, the path of one run through the modules, and the open structural issues.
 
 Detailed decisions live under [`docs/design/`](design/README.md). Operator procedures live in [Quickstart](quickstart.md), [Docker self-hosting](self-host/docker.md), and the [Kubernetes runbook](RUNBOOK-K8S.md).

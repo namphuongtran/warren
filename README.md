@@ -175,7 +175,7 @@ See [Extensions](docs/design/extensions.md) for their contracts and current pack
 - [Docker self-hosting](docs/self-host/docker.md)
 - [Kubernetes operations](docs/RUNBOOK-K8S.md)
 - [Operations and observability](docs/operations.md)
-- [Architecture](docs/architecture.md)
+- [Architecture](docs/architecture.md) and the [code map](ARCHITECTURE.md)
 - [Project configuration](docs/design/warren-config.md)
 - [Preview environments](docs/previews.md)
 - [PR templates](docs/pr-templates.md)

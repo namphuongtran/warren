@@ -968,6 +968,7 @@ welcome.
 
 ## Further reading
 
+- [ARCHITECTURE.md](ARCHITECTURE.md): the code map, with module layers, import directions, and open structural issues
 - [ROADMAP.md](ROADMAP.md) — sequencing and release plan
 - [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) — project policy
 - [docs/CONSTITUTION.md](docs/CONSTITUTION.md) — the articles agents answer to
