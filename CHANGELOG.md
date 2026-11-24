@@ -21,6 +21,14 @@ Releases **0.9.10 and earlier** live in
   default off) force-fails a run whose tool call stays open past it, through
   the watchdog's reap path, so partial work is still pushed.
 
+- **Scheduler fires are held on a spent provider quota
+  (namphuongtran/warren#30).** A cron, scheduled-seed or CI-fixer dispatch
+  that the quota guard refuses is now held until the reset, like a
+  `POST /runs` with `onQuotaExhausted: "hold"`. Before, a cron trigger burned
+  five refused ticks and then gave up its slot, and a scheduled seed was
+  refused once per tick until the window reopened. The fire records the held
+  run's id, and the tick logs `scheduler.dispatch_held`.
+
 - **Held dispatches on a spent provider quota (namphuongtran/warren#30).**
   `POST /runs` takes `onQuotaExhausted: "hold"` (`warren run
   --hold-on-quota`, SDK `CreateRunInput.onQuotaExhausted`). While the

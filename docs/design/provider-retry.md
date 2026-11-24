@@ -197,7 +197,11 @@ pushed commits is retried as a `continue` clone of its branch.
 
 A new dispatch into a spent window answers 429 by default. A `POST /runs`
 with `onQuotaExhausted: "hold"` (`warren run --hold-on-quota`) is held
-instead. `spawnOrHoldRun` creates the run row `queued` with no workload and
+instead. The scheduler always holds: a cron, scheduled-seed or CI-fixer
+fire goes through `spawnOrHoldRun`, so a refused fire still consumes its
+slot (or clears the seed's `scheduledFor`) with the held run's id, and the
+tick logs `scheduler.dispatch_held`. A held automatic run is `queued`, so it
+counts against the automatic-run cap until it is released. `spawnOrHoldRun` creates the run row `queued` with no workload and
 answers 202 with `quotaHold` (`reason`, `resetsAt`, `releaseAt`) and
 `sandbox: null`. The client keeps the run id and can tail it as usual. A
 `dispatch.quota_held` event on the run carries the dispatch request without
