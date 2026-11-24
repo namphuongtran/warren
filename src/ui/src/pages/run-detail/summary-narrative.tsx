@@ -1,5 +1,7 @@
 import type { RunHandoff, RunRow } from "@/api/types.ts";
+import { OperatorOnly } from "@/components/operator-only.tsx";
 import { cn } from "@/lib/utils.ts";
+import { BlockedQuestions } from "./summary-blocked-questions.tsx";
 import {
 	AgentText,
 	pendingCopy,
@@ -123,14 +125,23 @@ function ReviewVerdict({ handoff }: { handoff: RunHandoff }) {
 	);
 }
 
-function HandoffBody({ handoff }: { handoff: RunHandoff }) {
+function HandoffBody({ run, handoff }: { run: RunRow; handoff: RunHandoff }) {
 	const blocked = handoff.status === "blocked";
+	const questions = (
+		<SummaryBlock label={blocked ? "Blocked on" : "Open questions"}>
+			<TextList items={handoff.openQuestions} empty="The agent left no open questions." />
+		</SummaryBlock>
+	);
 	return (
 		<>
 			<AgentText>{handoff.summary}</AgentText>
-			<SummaryBlock label={blocked ? "Blocked on" : "Open questions"}>
-				<TextList items={handoff.openQuestions} empty="The agent left no open questions." />
-			</SummaryBlock>
+			{blocked && handoff.openQuestions.length > 0 ? (
+				<OperatorOnly fallback={questions}>
+					<BlockedQuestions run={run} handoff={handoff} />
+				</OperatorOnly>
+			) : (
+				questions
+			)}
 			<SummaryBlock label="How it was verified">
 				<VerificationList handoff={handoff} />
 			</SummaryBlock>
@@ -153,7 +164,7 @@ export function OutcomeSection({ run, isTerminal }: { run: RunRow; isTerminal: b
 			{record === null ? (
 				<SummaryEmpty>{pendingCopy(isTerminal, "handoff report")}</SummaryEmpty>
 			) : record.state === "recorded" ? (
-				<HandoffBody handoff={record.handoff} />
+				<HandoffBody run={run} handoff={record.handoff} />
 			) : record.state === "missing" ? (
 				<SummaryEmpty>The agent ended without writing a handoff report.</SummaryEmpty>
 			) : (

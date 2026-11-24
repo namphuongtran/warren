@@ -73,6 +73,23 @@ const ASSERTIONS: Record<string, (page: Page) => Promise<void>> = {
 		await expect(section(page, "Outcome")).toContainText("progress slot");
 		await expect(section(page, "Quality")).toContainText("Failed");
 		await expect(section(page, "Quality")).toContainText("The judge has not scored this run");
+
+		// The answer controls: each open question labels its own answer field,
+		// and answering opens Dispatch as a continuation with the answers.
+		const outcome = section(page, "Outcome");
+		const go = outcome.getByRole("button", { name: "Continue with answers" });
+		await expect(go).toBeDisabled();
+		await outcome.getByLabel(/progress slot/).fill("Grow a footer slot on the card.");
+		await go.click();
+		await expect(page).toHaveURL(/\/dispatch$/);
+		await expect(page.getByText(/CONTINUATION FROM/)).toBeVisible();
+		const prompt = page.getByPlaceholder("What should the agent do?");
+		await expect(prompt).toHaveValue(
+			/## The previous run's handoff summary\n\nThe card primitive has no slot/,
+		);
+		await expect(prompt).toHaveValue(/## Answers to your open questions/);
+		await expect(prompt).toHaveValue(/Answer: Grow a footer slot on the card\./);
+		await expect(prompt).toHaveValue(/Answer: none given/);
 	},
 	"run-summary-bare": async (page) => {
 		await expect(section(page, "Approach")).toContainText("The agent wrote no approach note");
