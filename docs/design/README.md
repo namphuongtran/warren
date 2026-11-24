@@ -32,8 +32,8 @@ This table is the complete inventory. `Approved` means a design is coherent enou
 | [MCP server](./mcp-server.md) | `proposal` | `draft` | `unscheduled` | 2026-08-26 |
 | [Agent Substrate integration assessment](./substrate-integration.md) | `proposal` | `draft` | `unscheduled` | 2026-11-20 |
 | [Team identity, grants, and brokered credentials](./team-identity.md) | `direction` | `proposed` | `unscheduled` | 2026-09-24 |
-| [External-repository mirror pilot](./external-repository-mirror-pilot.md) | `pilot` | `approved` | `now` | 2026-08-20 |
-| [Campaign controller](./campaign-controller.md) | `direction` | `approved` | `next` | 2026-08-20 |
+| [External-repository mirror pilot](./external-repository-mirror-pilot.md) | `pilot` | `approved` | `deferred` | 2026-08-20 |
+| [Campaign controller](./campaign-controller.md) | `direction` | `approved` | `deferred` | 2026-08-20 |
 | [Resumable agent environments](./resumable-agent-environments.md) | `proposal` | `proposed` | `unscheduled` | 2026-08-20 |
 | [Agent analytics](./agent-analytics.md) | `direction` | `approved` | `mixed` | 2026-08-11 |
 | [TypeSafe judge backend and routing exploration](./typesafe-judge.md) | `proposal` | `proposed` | `unscheduled` | 2026-09-17 |
@@ -70,7 +70,7 @@ The current unscheduled records are the draft [corpus flywheel](./corpus-flywhee
 
 [`ROADMAP.md`](../../ROADMAP.md) is the only source of build order. When a design is promoted, change its delivery to `now` or `next`, add `**Roadmap order:** N` for a `next` record, and reflect that lane here. Do not infer commitment from approval or from a detailed design.
 
-The [external-repository mirror pilot](./external-repository-mirror-pilot.md) is the `now` campaign. [Warren-armed auto-merge](./forge-auto-merge.md) shipped with plan `pl-92a3`: warren arms the forge's own auto-merge behind the per-project `pr.autoMerge` opt-in. [Campaign controller](./campaign-controller.md) Phase 1 is roadmap order 1 in `next`; later controller phases remain evidence-gated. Integration breadth uses the already-shipped [`IssueTracker`](./issue-tracker.md) and [`Forge`](./forge-contract.md) contracts when a real deployment pays for it, but it is not currently scheduled.
+This fork deferred the [external-repository mirror pilot](./external-repository-mirror-pilot.md) and the later [campaign controller](./campaign-controller.md) phases (namphuongtran/warren#105). [Warren-armed auto-merge](./forge-auto-merge.md) shipped with plan `pl-92a3`: warren arms the forge's own auto-merge behind the per-project `pr.autoMerge` opt-in. Integration breadth uses the already-shipped [`IssueTracker`](./issue-tracker.md) and [`Forge`](./forge-contract.md) contracts when a real deployment pays for it, but it is not currently scheduled.
 
 ## Shipped records
 

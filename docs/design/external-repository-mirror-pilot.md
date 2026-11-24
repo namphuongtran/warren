@@ -2,8 +2,11 @@
 
 **Kind:** pilot
 **Design state:** approved
-**Delivery:** now
+**Delivery:** deferred
 **Arrived:** 2026-08-20
+
+The fork namphuongtran/warren does not run this pilot. It waits in ROADMAP
+**Deferred until paid** (namphuongtran/warren#105).
 
 Owner approval was recorded on 2026-08-20 and roadmap promotion on 2026-08-20.
 This record fixes the pilot target set, operating model, experiment sequence,

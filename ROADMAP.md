@@ -1,6 +1,6 @@
 # Warren Roadmap
 
-This file carries direction, sequencing, and seam status. Seeds holds the work queue, so run `sd ready` for what to pick up next.
+This file carries direction, sequencing, and seam status. GitHub Issues on [namphuongtran/warren](https://github.com/namphuongtran/warren/issues) hold the work queue.
 
 The topic records under [docs/design/](docs/design/) are the design record. [CHANGELOG.md](CHANGELOG.md) is the ship log. [docs/PHILOSOPHY.md](docs/PHILOSOPHY.md) owns the operating policy. This file owns the order of work.
 
@@ -10,6 +10,16 @@ Two rules keep this file short.
 2. No design sketches. A schema or a config shape belongs in a seed at implementation time, or in a `docs/design/` record after a design lock.
 
 Status vocabulary: `now`, `next`, `deferred`, `shipped`, `not-in-core`.
+
+## This fork
+
+Upstream ([jayminwest/warren](https://github.com/jayminwest/warren)) stopped maintenance
+in 2026-11. This fork runs Warren on the Docker runtime for its owner's projects. The
+[Scope section of ARCHITECTURE.md](ARCHITECTURE.md#scope) records which subsystems the
+fork keeps and which it freezes ([#105](https://github.com/namphuongtran/warren/issues/105)).
+
+The direction section below is upstream's last direction. The fork does not run the
+mirror pilot or the later campaign-controller phases. Both sit in **Deferred until paid**.
 
 ## The direction
 
@@ -51,34 +61,29 @@ advance only when pilot evidence supplies their payer.
 
 ## Now — in flight
 
-1. **External-repository mirror pilot.** Prove that Warren can turn an unfamiliar,
-   scientifically relevant repository into a trustworthy repeatable workload. Start with
-   Snakemake. Then transfer the written method to Biopython or AnnData.
-
-   Use detached public mirrors, sanitized historical execution origins, a fixed dispatch
-   arm, hidden executable grading, and a structured friction record. The full plan and
-   experiment records live in
-   [`warren-experiments`](https://github.com/jayminwest/warren-experiments).
-
-   Warren keeps only this commitment and any generalized changes that observed friction
-   pays for. Design record: `docs/design/external-repository-mirror-pilot.md`.
+1. **Architecture cleanup** ([#107](https://github.com/namphuongtran/warren/issues/107)). Make the code obey its layers. Remove the import
+   cycles, split `src/runs/` into subdomains, keep `RunSpec` provider-neutral, and make
+   comments state intent. Reference: [ARCHITECTURE.md](ARCHITECTURE.md).
+2. **CI on the fork** ([#109](https://github.com/namphuongtran/warren/issues/109)). Run `ci.yml` on every PR, and delete the workflows that
+   need upstream secrets or infrastructure.
 
 ## Next — planned, in order
 
-1. **Campaign controller, later phases.** The upstream contribution loop v1
-   (pl-096b) shipped in v0.19.1, so the controller now answers review-bot
-   findings, checks, and merge outcomes on its own PRs with policy-gated
-   follow-up runs, body refreshes, and comment replies.
-
-   The remaining phases in the design record (audit-to-campaign proposal,
-   replay controller, replay-lab automation, broader autonomy) advance only
-   when the mirror pilot supplies the evidence each one names. Design record:
-   `docs/design/campaign-controller.md`.
+1. **Per-project trackers and a GitHub Issues tracker** ([#76](https://github.com/namphuongtran/warren/issues/76), [#77](https://github.com/namphuongtran/warren/issues/77)). Wire the
+   parsed `tracker:` config block, then ship `extensions/tracker-github/`, so plan-runs
+   work on repositories without `.seeds/`.
 
 ## Deferred until paid
 
 Honest replacements for old sequencing steps with no payer. Each entry names its price of admission.
 
+- **External-repository mirror pilot.** Upstream's experiment against Snakemake and
+  similar repositories. Its records live in a private upstream repository. Price of
+  admission: an owner who runs the experiment and keeps its records. Design record:
+  `docs/design/external-repository-mirror-pilot.md`.
+- **Campaign controller, later phases.** `extensions/campaign-controller/` stays frozen
+  at its v0.19.1 state ([#105](https://github.com/namphuongtran/warren/issues/105)). Price of admission: a fork user who runs long campaigns
+  against foreign repositories. Design record: `docs/design/campaign-controller.md`.
 - **Integration breadth: Linear and Forgejo/Gitea.** The contracts are ready,
   but no waiting deployment currently pays for another implementation. Jira shipped as
   the first external tracker behind `warren-tracker/v1` (v0.19.0,

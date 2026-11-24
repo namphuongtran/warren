@@ -2,9 +2,11 @@
 
 **Kind:** direction
 **Design state:** approved
-**Delivery:** next
-**Roadmap order:** 1
+**Delivery:** deferred
 **Arrived:** 2026-08-20
+
+The fork namphuongtran/warren froze `extensions/campaign-controller/` on 2026-11-24
+(namphuongtran/warren#105). The later phases below wait in ROADMAP **Deferred until paid**.
 
 This direction record defines the durable controller extension that moves
 long-running Warren campaigns off an operator's laptop and into the deployment.
