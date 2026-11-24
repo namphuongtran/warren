@@ -6,6 +6,9 @@
 
 import type { OpsWindow, RunState } from "../../../core/wire.ts";
 
+/** `GET /provider-quota` (namphuongtran/warren#30), for the Operations page notices. */
+export type { ListProviderQuotaResponse, ProviderQuotaView } from "../../../core/wire.ts";
+
 /**
  * Wire envelope of `GET /ops/overview` (pl-7e38 step 12 / warren-d850).
  * The operator body carries every section; a `WARREN_AUTH=public`

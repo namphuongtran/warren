@@ -4,6 +4,7 @@ import {
 	capPctOf,
 	costNoteToneOf,
 	displayStateOf,
+	quotaWaitOf,
 	stateCellOf,
 	sublineOf,
 } from "./runs-card.helpers.ts";
@@ -163,5 +164,39 @@ describe("capPctOf / costNoteToneOf", () => {
 		expect(costNoteToneOf(run({ costUsd: 4.0, maxCostUsd: 5 }))).toBe("default");
 		expect(costNoteToneOf(run({ costUsd: 4.5, maxCostUsd: 5 }))).toBe("warning");
 		expect(costNoteToneOf(run({ costUsd: 4.5 }))).toBe("default");
+	});
+});
+
+/** A run held on a spent provider quota (namphuongtran/warren#30), released at 09:11:30Z. */
+const HOLD = {
+	reason: "provider_quota_exhausted" as const,
+	resetsAt: 1795338600,
+	releaseAt: "2026-11-22T09:11:30.000Z",
+};
+const RELEASE_MS = Date.parse(HOLD.releaseAt);
+const MINUTE = 60_000;
+
+describe("deferred runs (namphuongtran/warren#30)", () => {
+	const held = run({ state: "queued", quotaHold: HOLD });
+
+	test("shows a held queued run as deferred, on the warning tone", () => {
+		expect(displayStateOf(held)).toBe("deferred");
+		expect(stateCellOf(held)).toEqual({ tone: "warning", label: "deferred" });
+		expect(displayStateOf(run({ state: "queued", quotaHold: null }))).toBe("queued");
+		expect(displayStateOf(run({ state: "cancelled", quotaHold: HOLD }))).toBe("cancelled");
+	});
+
+	test("counts down to the release, then reads due", () => {
+		expect(quotaWaitOf(held, RELEASE_MS - 25 * MINUTE)).toBe("quota reset in 25m");
+		expect(quotaWaitOf(held, RELEASE_MS - 90 * MINUTE)).toBe("quota reset in 1h 30m");
+		expect(quotaWaitOf(held, RELEASE_MS - 10_000)).toBe("quota reset in 1m");
+		expect(quotaWaitOf(held, RELEASE_MS + MINUTE)).toBe("quota reset due");
+		expect(quotaWaitOf(run({ state: "queued" }), RELEASE_MS)).toBeNull();
+	});
+
+	test("puts the wait on the subline", () => {
+		expect(sublineOf(held, "os-eco/warren", RELEASE_MS - 25 * MINUTE)).toBe(
+			"claude-code · os-eco/warren · quota reset in 25m",
+		);
 	});
 });

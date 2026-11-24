@@ -28,7 +28,7 @@ function RunCard({ row, projectName, now }: { row: RunRow; projectName: string; 
 			stateLabel={state.label}
 			title={row.id}
 			titleTo={`/runs/${encodeURIComponent(row.id)}`}
-			subline={sublineOf(row, projectName)}
+			subline={sublineOf(row, projectName, now)}
 			figures={
 				<>
 					<CardFigure value={formatDuration(row, now)} />

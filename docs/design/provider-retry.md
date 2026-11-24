@@ -221,6 +221,13 @@ held run cancels like any queued run, and the releaser never launches a run
 that is no longer `queued` with no workload. Any other launch failure fails
 the row `never_started`.
 
+`GET /runs` reads the same events into the operator-only `quotaHold` overlay
+(`src/runs/quota/hold-view.ts`): a run is held while it is `queued` with no
+workload and its newest hold event is `dispatch.quota_held`. The runs table
+and cards show it as `deferred`, with the wait until its release. The
+Operations page reads `GET /provider-quota` and shows an alert for each
+credential whose window is spent or that the provider flags as nearly spent.
+
 | Kind | Stream | Payload |
 |---|---|---|
 | `dispatch.quota_held` | the held run | `reason`, `resetsAt`, `releaseAt`, `request` |

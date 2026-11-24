@@ -5,7 +5,7 @@
 
 import { readNdjsonStream } from "../../../client/ndjson.ts";
 import type { InstanceFactsResponse } from "./instance-types.ts";
-import type { OpsOverviewResponse } from "./ops-types.ts";
+import type { ListProviderQuotaResponse, OpsOverviewResponse } from "./ops-types.ts";
 import type {
 	RunAnalyticsFilter,
 	RunAnalyticsResponse,
@@ -583,6 +583,9 @@ export const opsApi = {
 		request<OpsOverviewResponse>(`/ops/overview${opsOverviewQuery(window)}`, {
 			...(signal ? { signal } : {}),
 		}),
+	/** Each provider credential's newest usage window (namphuongtran/warren#30). Operator-only. */
+	providerQuota: (signal?: AbortSignal) =>
+		request<ListProviderQuotaResponse>("/provider-quota", { ...(signal ? { signal } : {}) }),
 };
 
 /* Meta                                                                     */

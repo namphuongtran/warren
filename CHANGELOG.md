@@ -21,6 +21,14 @@ Releases **0.9.10 and earlier** live in
   default off) force-fails a run whose tool call stays open past it, through
   the watchdog's reap path, so partial work is still pushed.
 
+- **Provider quota in the UI (namphuongtran/warren#30).** The Operations page
+  shows an alert for each provider credential whose usage window is spent
+  (when it reopens, and what Warren does with new runs until then) or that
+  the provider flags as nearly spent (how much is used). `GET /runs` carries
+  the operator-only `quotaHold` overlay (`reason`, `resetsAt`, `releaseAt`)
+  on each run held for a quota window, and the runs table and cards show
+  such a run as `deferred` with "quota reset in 25m".
+
 - **Scheduler fires are held on a spent provider quota
   (namphuongtran/warren#30).** A cron, scheduled-seed or CI-fixer dispatch
   that the quota guard refuses is now held until the reset, like a
