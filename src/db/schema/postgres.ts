@@ -54,6 +54,7 @@ import {
 	RUN_STATES,
 	type RunApproachRecord,
 	type RunHandoffRecord,
+	type RunPrChecks,
 	TABLE_NAMES,
 } from "./columns.ts";
 
@@ -167,6 +168,7 @@ export const runs = pgTable(
 		// the full shape + intent.
 		prState: text("pr_state", { enum: PULL_REQUEST_LIFECYCLES }),
 		prMergedAt: text("pr_merged_at"),
+		prChecks: jsonb("pr_checks_json").$type<RunPrChecks>(), // namphuongtran/warren#41
 		// Mirror of sqlite commits_ahead/files_changed/insertions/deletions
 		// (warren-ab2b / pl-103e). Reap-time measured outcome facts; see
 		// sqlite.ts for the full shape + NULL-semantics intent.

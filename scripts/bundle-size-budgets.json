@@ -20,17 +20,17 @@
 	"$comment_run_summary_2026_11_22": "BOUNDED AUTO-RAISE (namphuongtran/warren#38): the run detail Summary tab adds the approach, outcome, quality, changes, and delivery sections plus the tab view model. +13560 B raw js, +3757 B gzip js, +485 B raw css from a laptop --update, inside every AUTO_RAISE_CAP. CI gzips hotter than the laptop, so the bundle-size-autoheal workflow may re-baseline the gzip figures from the CI measure.",
 	"totals": {
 		"raw": {
-			"js": 713844,
+			"js": 716163,
 			"css": 55875
 		},
 		"gzip": {
-			"js": 206720,
+			"js": 207278,
 			"css": 10888
 		}
 	},
 	"largest": {
 		"gzip": {
-			"js": 206720,
+			"js": 207278,
 			"css": 10888
 		}
 	}

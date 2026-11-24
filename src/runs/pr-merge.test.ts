@@ -87,6 +87,8 @@ describe("createPrMergeChecker", () => {
 		expect(result).toEqual({
 			kind: "merged",
 			mergedAt: new Date(1_747_000_000_000).toISOString(),
+			// The PR head the read returned, for the check summary (namphuongtran/warren#41).
+			headCommit: expect.stringMatching(/^fake-head-/),
 		});
 	});
 

@@ -27,12 +27,8 @@ function captureContext(): { context: CliContext; out: string[]; err: string[] }
 }
 
 function parseLines(chunks: string[]): Array<Record<string, unknown>> {
-	return chunks
-		.join("")
-		.trimEnd()
-		.split("\n")
-		.filter(Boolean)
-		.map((l) => JSON.parse(l) as Record<string, unknown>);
+	const lines = chunks.join("").trimEnd().split("\n").filter(Boolean);
+	return lines.map((l) => JSON.parse(l) as Record<string, unknown>);
 }
 
 function runRow(over: Partial<RunRow> = {}): RunRow {
@@ -57,6 +53,7 @@ function runRow(over: Partial<RunRow> = {}): RunRow {
 		insertions: null,
 		deletions: null,
 		qualityGateOutcome: null,
+		prChecks: null,
 		handoff: null,
 		approach: null,
 		startedAt: "2026-08-04T00:00:00.000Z",

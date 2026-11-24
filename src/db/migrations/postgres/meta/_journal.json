@@ -393,6 +393,13 @@
 			"when": 1795341142257,
 			"tag": "0055_jittery_power_pack",
 			"breakpoints": true
+		},
+		{
+			"idx": 56,
+			"version": "7",
+			"when": 1795528541006,
+			"tag": "0056_familiar_korvac",
+			"breakpoints": true
 		}
 	]
 }

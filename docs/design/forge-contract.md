@@ -464,7 +464,7 @@ provider returns when the domain calls past a false flag.
 
 | Capability | GitHubApp | GitHubPat | AdoForge | GitLabForge | FakeForge | Domain behavior when absent |
 | --- | --- | --- | --- | --- | --- | --- |
-| `checkRuns` | yes | **no** | yes | yes | yes | CI-fixer poller stays idle and logs one notice per project. No run dispatches. |
+| `checkRuns` | yes | **no** | yes | yes | yes | CI-fixer poller stays idle and logs one notice per project. No run dispatches. The merge watcher stores the run's `prChecks` as `none` (namphuongtran/warren#41). |
 | `jobLogs` | yes | yes | yes | yes | synthetic | CI-fixer prompt omits the log tail and says so. |
 | `pullRequestBodyEdit` | yes | yes | yes | yes | yes | Preview annotation sub-step reports `skipped`, and the reap continues. |
 | `branchDelete` | yes | yes | yes | yes | yes | Acceptance cleanup logs and moves on. Never fails a scenario. |

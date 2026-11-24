@@ -270,6 +270,15 @@ A successful run has:
 - A PR, if `WARREN_AUTO_OPEN_PR` is on and the branch has new commits.
 - Auto-merge armed, if `pr.autoMerge` is on.
 
+While the PR is open, Warren polls it. Each poll stores the PR state and a check summary for
+its head commit as `prChecks` on `GET /runs/:id` and the runs list: `state` (`passing`,
+`failing`, `pending`, or `none`), the names of the checks that failed, the commit, and when it
+was read. If the checks are still running when the PR merges or closes, Warren keeps reading
+them until they finish, for up to the same 7-day watch budget. `none` means the commit has no
+checks, or the forge cannot report them (a fine-grained GitHub PAT cannot reach the Checks
+API). Only check runs count: commit statuses are not read. The run's Summary tab and the runs
+list show the result.
+
 Common `failureReason` values:
 
 | failureReason | Meaning | Fix |

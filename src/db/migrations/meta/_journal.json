@@ -428,6 +428,13 @@
 			"when": 1795341141835,
 			"tag": "0060_acoustic_toad",
 			"breakpoints": true
+		},
+		{
+			"idx": 61,
+			"version": "6",
+			"when": 1795528533709,
+			"tag": "0061_chief_bruce_banner",
+			"breakpoints": true
 		}
 	]
 }

@@ -83,6 +83,9 @@ export const PUBLIC_RUN_FIELDS = [
 	// "unknown" (historical rows, or no PR), never "not merged".
 	"prState",
 	"prMergedAt",
+	// namphuongtran/warren#41: the PR head's check summary is shown on that same
+	// public PR page, so the projected copy adds nothing new either.
+	"prChecks",
 	// warren-ab2b: reap-time measured outcome facts (commits ahead of base +
 	// parsed diff totals). Load-shape metrics of the same class as the token
 	// counts; NULL means unknown (pre-column rows, unmeasured finalize).

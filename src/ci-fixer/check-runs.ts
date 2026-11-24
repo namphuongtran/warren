@@ -39,6 +39,16 @@ const FAILURE_CONCLUSIONS: ReadonlySet<string> = new Set([
 	"startup_failure",
 ]);
 
+/**
+ * A completed check run whose conclusion counts as a failure. Also read by
+ * the run's stored PR check summary (namphuongtran/warren#41).
+ */
+export function isFailedCheckRun(run: CheckRun): boolean {
+	return (
+		run.status === "completed" && run.conclusion !== null && FAILURE_CONCLUSIONS.has(run.conclusion)
+	);
+}
+
 export type CheckRunsVerdict = "pending" | "passing" | "failing" | "no_checks";
 
 export interface ClassifyCheckRunsResult {
@@ -62,9 +72,7 @@ export function classifyCheckRuns(checkRuns: readonly CheckRun[]): ClassifyCheck
 	if (anyPending) {
 		return { verdict: "pending", failures: [] };
 	}
-	const failures = checkRuns.filter(
-		(c) => c.conclusion !== null && FAILURE_CONCLUSIONS.has(c.conclusion),
-	);
+	const failures = checkRuns.filter(isFailedCheckRun);
 	if (failures.length > 0) {
 		return { verdict: "failing", failures };
 	}

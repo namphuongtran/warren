@@ -53,6 +53,7 @@
 			"model": null,
 			"prState": null,
 			"prMergedAt": null,
+			"prChecks": null,
 			"commitsAhead": null,
 			"filesChanged": null,
 			"insertions": null,

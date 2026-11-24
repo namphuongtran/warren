@@ -47,6 +47,7 @@ import {
 	RUN_STATES,
 	type RunApproachRecord,
 	type RunHandoffRecord,
+	type RunPrChecks,
 	TABLE_NAMES,
 } from "./columns.ts";
 
@@ -238,15 +239,13 @@ export const runs = sqliteTable(
 		// analytics labels them "unknown" rather than folding them into a bucket.
 		provider: text("provider"),
 		model: text("model"),
-		// Merge-watcher PR facts (warren-3bc6 / pl-103e step 6). The post_reap
-		// lifecycle subscriber polls the run's PR through the boot-resolved
-		// forge until terminal and writes the provider-neutral lifecycle here;
-		// pr_merged_at is the forge-reported merge instant (ISO8601 TEXT, the
-		// started_at/ended_at convention). Both nullable: rows whose run never
-		// opened a PR (pr_url null) or that predate the watcher stay NULL —
-		// read NULL as "unknown", never as "not merged".
+		// Merge-watcher PR facts (warren-3bc6): the post_reap subscriber polls the
+		// PR until terminal and writes the lifecycle, the forge-reported merge
+		// instant (ISO8601 TEXT), and the head commit's check summary
+		// (namphuongtran/warren#41). NULL (no PR, pre-watcher row) = "unknown".
 		prState: text("pr_state", { enum: PULL_REQUEST_LIFECYCLES }),
 		prMergedAt: text("pr_merged_at"),
+		prChecks: text("pr_checks_json", { mode: "json" }).$type<RunPrChecks>(),
 		// Reap-time outcome facts (warren-ab2b / pl-103e): what the reap
 		// pipeline MEASURED at finalize — commits the pushed branch was ahead
 		// of the base, plus the parsed `git diff --numstat` totals. Recorded,

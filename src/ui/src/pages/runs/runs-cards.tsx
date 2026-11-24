@@ -6,6 +6,7 @@ import {
 	InventoryRowCard,
 } from "@/components/ui/inventory-card.tsx";
 import {
+	checksCellOf,
 	costNoteToneOf,
 	gateCellOf,
 	stateCellOf,
@@ -25,12 +26,14 @@ import { formatDuration, projectLabel, runCostLabel } from "@/pages/runs/runs-fo
  * in runs-card.helpers.ts (pure, tested there).
  *
  * A reaped run with a recorded gate outcome adds one more figure line,
- * "gate failed" (namphuongtran/warren#36); a run with no gate keeps two.
+ * "gate failed" (namphuongtran/warren#36); a run with no gate keeps two. A
+ * run whose PR checks were read adds "checks failing" (namphuongtran/warren#41).
  */
 
 function RunCard({ row, projectName, now }: { row: RunRow; projectName: string; now: number }) {
 	const state = stateCellOf(row);
 	const gate = gateCellOf(row);
+	const checks = checksCellOf(row);
 	return (
 		<InventoryRowCard
 			tone={state.tone}
@@ -44,6 +47,9 @@ function RunCard({ row, projectName, now }: { row: RunRow; projectName: string; 
 					<CardFigureNote value={runCostLabel(row)} tone={costNoteToneOf(row)} />
 					{gate.hasOutcome ? (
 						<CardFigureNote value={`gate ${gate.label}`} tone={gate.tone} title={gate.title} />
+					) : null}
+					{checks !== null ? (
+						<CardFigureNote value={checks.label} tone={checks.tone} title={checks.title} />
 					) : null}
 				</>
 			}

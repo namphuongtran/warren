@@ -25,6 +25,7 @@ import type {
 	RunFailureReason,
 	RunHandoffRecord,
 	RunMode,
+	RunPrChecks,
 	RunQualityGateOutcome,
 	RunState,
 	RunToolStallView,
@@ -54,6 +55,7 @@ export {
 	RUN_HANDOFF_REVIEW_VERDICTS,
 	RUN_HANDOFF_STATES,
 	RUN_HANDOFF_STATUSES,
+	RUN_PR_CHECK_STATES,
 	RUN_QUALITY_GATE_OUTCOMES,
 	RUN_TERMINAL_STATES,
 	type RunApproachRecord,
@@ -69,6 +71,8 @@ export {
 	type RunHandoffState,
 	type RunHandoffStatus,
 	type RunMode,
+	type RunPrCheckState,
+	type RunPrChecks,
 	type RunQualityGateOutcome,
 	type RunState,
 	type RunTerminalState,
@@ -173,14 +177,10 @@ export interface RunRow {
 	prompt: string;
 	trigger: string;
 	prUrl: string | null;
-	/**
-	 * Merge-watcher PR facts (warren-3bc6 / pl-103e step 6). `prState` is
-	 * the forge-reported PR lifecycle; `prMergedAt` its merge instant. Null
-	 * on runs that never opened a PR or predate the watcher — read null as
-	 * "unknown", never as "not merged".
-	 */
+	/** Merge-watcher PR facts (warren-3bc6); null = unknown (no PR, old rows), never "not merged". */
 	prState: PullRequestLifecycle | null;
 	prMergedAt: string | null;
+	prChecks: RunPrChecks | null; // PR head check summary (namphuongtran/warren#41); null = not read
 	targetBranch: string | null;
 	/**
 	 * The composed workspace branch the run's push lands on (warren-5255):

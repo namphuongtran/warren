@@ -12,6 +12,18 @@ Releases **0.9.10 and earlier** live in
 
 ### Added
 
+- **PR check summary per run (namphuongtran/warren#41).** Each time the merge
+  watcher polls a run's PR, it reads the checks for the PR's head commit
+  through the forge seam and stores `prChecks` on the run: `passing`,
+  `failing`, `pending`, or `none`, the failed check names, the commit, and the
+  read time. It is served on `GET /runs/:id` and the runs list. A forge that
+  cannot report checks reads as `none`, not as an error. The run Summary's
+  Delivery section shows the checks and names the failures. The runs list
+  shows "checks failing" beside the PR, so a PR merged red is visible there.
+  Checks still running when the PR merges are read until they finish. The
+  check read adds one `listChecks` call per poll and reuses the head commit
+  from the PR read. Commit statuses are not read.
+
 - **Stalled tool calls on the runs list and run page, and an opt-in kill
   (namphuongtran/warren#83).** While a running run's warned tool call stays
   open, `GET /runs` and `GET /runs/:id` carry the operator-only `toolStall`
