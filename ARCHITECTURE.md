@@ -111,6 +111,29 @@ runtime ids).
 | Extensions and core never import each other. | `extensions-are-standalone`, `core-does-not-import-extensions` |
 | Runtime ids appear only under `src/runtime/adapters/`. | `scripts/check-runtime-ids.ts` |
 
+## Scope
+
+Upstream stopped maintenance in 2026-11. This fork keeps every subsystem at one of two
+levels, decided in [#105](https://github.com/namphuongtran/warren/issues/105):
+
+- **Keep**: maintained, refactored by the cleanup, and open for new work.
+- **Freeze**: stays in the tree with green tests, but gets no new features. Only
+  mechanical changes that another issue needs (moves, renames, comment rewrites) touch it.
+
+| Subsystem | Status | Why |
+|---|---|---|
+| Local engine and sandbox (`src/runtime/local/`, `src/sandbox/`) | Keep | `DockerProvider` builds on the local engine. |
+| Docker runtime (`src/runtime/docker/`) | Keep | The fork runs on it. |
+| K8s runtime (`src/runtime/k8s/`, `deploy/k8s/`) | Freeze | The multi-tenant deployment path. The fork does not run it. |
+| Postgres backend | Freeze | It pairs with K8s for more than one server replica. |
+| Preview environments (`src/preview/`) | Freeze | No current user. |
+| Run analytics, triggers, CI fixer | Keep | The UI and the CI fixer use them. |
+| Seeds and mulch integration | Keep | Seeds is the only tracker with plans, and plan-runs need plans. The fork itself tracks work in GitHub Issues. |
+| `extensions/campaign-controller/`, `judge/`, `audit-log/`, `tracker-jira/`, `tracker-ado/` | Freeze | Out of process, with no current user. |
+| `extensions/tracker-conformance/` | Keep | A GitHub Issues tracker ([#77](https://github.com/namphuongtran/warren/issues/77)) builds on it. |
+| Local gates (`bun run check:all`) | Keep | Twelve gates in about 70 seconds. |
+| GitHub Actions | Keep the workflows that need no secrets | [#109](https://github.com/namphuongtran/warren/issues/109) deletes the workflows that need upstream secrets or infrastructure. |
+
 ## The module graph today
 
 Measured at `c771796e` over non-test files, counting runtime imports only. The compiler
@@ -237,7 +260,7 @@ Allowed directions inside `src/runs/`:
 | Comments carry tracker ids instead of intent. | [#101](https://github.com/namphuongtran/warren/issues/101) rule and ratchet, [#103](https://github.com/namphuongtran/warren/issues/103) contract files |
 | Code still names the retired burrow daemon. | [#102](https://github.com/namphuongtran/warren/issues/102) |
 | `RunSpec` carries provider-specific fields, and ignored knobs drop silently. | [#104](https://github.com/namphuongtran/warren/issues/104) |
-| The fork has not decided which subsystems it keeps. | [#105](https://github.com/namphuongtran/warren/issues/105) |
+| GitHub Actions never ran on the fork. | [#109](https://github.com/namphuongtran/warren/issues/109) |
 | `AGENTS.md` mixes the agent contract with reference material. | [#106](https://github.com/namphuongtran/warren/issues/106) |
 
 When an issue lands, update this page: move the change from "today" to "target", and
