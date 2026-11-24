@@ -3,8 +3,10 @@ import type { InventoryCardTone } from "@/components/ui/inventory-card.tsx";
 // Relative, not `@/` — this module is imported by runs-card.helpers.test.ts,
 // which runs under the repo-root `bun test`, where the `@/` alias does not
 // resolve (see labels.test.ts for the same constraint).
+import { isTerminalRunState } from "../../api/types.ts";
 import { formatWaitMs } from "../../lib/format-wait.ts";
 import { humanizeWireValue } from "../../lib/labels.ts";
+import { qualityGateView, type SummaryTone } from "../run-detail/summary-model.ts";
 
 /**
  * Pure cell/subline logic for the Runs mobile row card (warren-f8a2):
@@ -22,6 +24,15 @@ import { humanizeWireValue } from "../../lib/labels.ts";
 export const CAP_SUBLINE_RATIO = 0.8;
 /** Warning-tint threshold for the cost note (mock runs.jsx:147). */
 export const CAP_WARNING_RATIO = 0.9;
+
+export interface RunGateCell {
+	readonly tone: InventoryCardTone;
+	readonly label: string;
+	/** The Summary tab's one-line explanation of the outcome. */
+	readonly title: string;
+	/** False for the quiet dash: the project sets no gate, or no outcome is read yet. */
+	readonly hasOutcome: boolean;
+}
 
 export interface RunStateCell {
 	readonly tone: InventoryCardTone;
@@ -159,4 +170,30 @@ export function costNoteToneOf(row: RunRow): "default" | "warning" {
 	}
 	if (row.costUsd === null) return "default";
 	return row.costUsd / row.maxCostUsd >= CAP_WARNING_RATIO ? "warning" : "default";
+}
+
+const GATE_TONES: Record<SummaryTone, InventoryCardTone> = {
+	success: "success",
+	warning: "warning",
+	danger: "danger",
+	neutral: "muted",
+};
+
+/**
+ * The runs-list gate cell (namphuongtran/warren#36): the reap-derived outcome
+ * as a short toned word. A project without a gate, and a run whose outcome
+ * is not read yet, show a quiet dash. The tooltip reuses the Summary copy.
+ */
+export function gateCellOf(row: RunRow): RunGateCell {
+	const outcome = row.qualityGateOutcome;
+	const view = qualityGateView(outcome, isTerminalRunState(row.state));
+	if (outcome === null || outcome === "unconfigured") {
+		return { tone: "muted", label: "—", title: view.detail, hasOutcome: false };
+	}
+	return {
+		tone: GATE_TONES[view.tone],
+		label: view.label.toLowerCase(),
+		title: view.detail,
+		hasOutcome: true,
+	};
 }

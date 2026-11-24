@@ -4,6 +4,7 @@ import {
 	capPctOf,
 	costNoteToneOf,
 	displayStateOf,
+	gateCellOf,
 	quotaWaitOf,
 	stateCellOf,
 	sublineOf,
@@ -207,6 +208,49 @@ describe("deferred runs (namphuongtran/warren#30)", () => {
 	test("puts the wait on the subline", () => {
 		expect(sublineOf(held, "os-eco/warren", RELEASE_MS - 25 * MINUTE)).toBe(
 			"claude-code · os-eco/warren · quota hold, starts in 25m",
+		);
+	});
+});
+
+describe("gateCellOf (namphuongtran/warren#36)", () => {
+	test.each([
+		["passed", "success", "passed"],
+		["failed", "danger", "failed"],
+		["stale", "warning", "stale"],
+		["not_run", "warning", "not run"],
+		["unknown", "warning", "unknown"],
+	] as const)("shows a %s gate as a %s word", (outcome, tone, label) => {
+		const cell = gateCellOf(run({ state: "succeeded", qualityGateOutcome: outcome }));
+		expect(cell).toMatchObject({ tone, label, hasOutcome: true });
+	});
+
+	test("explains the outcome in the tooltip", () => {
+		expect(gateCellOf(run({ state: "succeeded", qualityGateOutcome: "stale" })).title).toBe(
+			"The gate passed, then the agent edited files without running it again.",
+		);
+	});
+
+	test("shows a quiet dash when the project sets no gate", () => {
+		expect(gateCellOf(run({ state: "succeeded", qualityGateOutcome: "unconfigured" }))).toEqual({
+			tone: "muted",
+			label: "—",
+			title: "The project sets no quality gate.",
+			hasOutcome: false,
+		});
+	});
+
+	test("shows a quiet dash until a live run is reaped", () => {
+		expect(gateCellOf(run({ state: "running" }))).toEqual({
+			tone: "muted",
+			label: "—",
+			title: "Warren reads the gate outcome when the run finishes.",
+			hasOutcome: false,
+		});
+	});
+
+	test("says a finished run without a stored outcome was not recorded", () => {
+		expect(gateCellOf(run({ state: "failed" })).title).toBe(
+			"No gate outcome was stored for this run.",
 		);
 	});
 });

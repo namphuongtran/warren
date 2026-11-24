@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { RunRow } from "@/api/types.ts";
+import { INVENTORY_TONE_CLASS } from "@/components/ui/inventory-card.tsx";
 import { cn, relativeTime } from "../../lib/utils.ts";
-import { displayStateOf, quotaWaitOf, stuckInOf } from "./runs-card.helpers.ts";
+import { displayStateOf, gateCellOf, quotaWaitOf, stuckInOf } from "./runs-card.helpers.ts";
 import {
 	branchLabelOf,
 	formatDuration,
@@ -22,6 +23,9 @@ import {
  */
 
 type DisplayState = ReturnType<typeof displayStateOf>;
+
+/** The STATE and GATE columns' toned mono word. */
+const STATUS_WORD = "font-mono text-[10px] leading-3";
 
 /** State → token color. Running is information-blue; queued, stalled and deferred warning. */
 function stateColor(state: DisplayState): string {
@@ -179,6 +183,24 @@ function DeliveryCell({ row }: { row: RunRow }) {
 	return <span className="font-mono text-(--color-text-3) text-[10px] leading-3">—</span>;
 }
 
+/**
+ * GATE column (namphuongtran/warren#36): the quality-gate outcome reap read
+ * from the agent's tool calls, as a toned word; the hover says what it means.
+ * No gate set, or no outcome yet, reads as a quiet dash.
+ */
+function GateCell({ row }: { row: RunRow }) {
+	const gate = gateCellOf(row);
+	const tone = INVENTORY_TONE_CLASS[gate.tone];
+	return (
+		<span className="flex items-center gap-1.5 whitespace-nowrap" title={gate.title}>
+			{gate.hasOutcome ? (
+				<span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", tone.dot)} aria-hidden />
+			) : null}
+			<span className={cn(STATUS_WORD, tone.text)}>{gate.label}</span>
+		</span>
+	);
+}
+
 function RunsTableRow({
 	row,
 	projectName,
@@ -205,7 +227,7 @@ function RunsTableRow({
 						className={cn("h-1.5 w-1.5 shrink-0 rounded-full", stateDotColor(state))}
 						aria-hidden
 					/>
-					<span className={cn("font-mono text-[10px] leading-3", stateColor(state))}>{state}</span>
+					<span className={cn(STATUS_WORD, stateColor(state))}>{state}</span>
 				</span>
 			</td>
 			<td className="w-[128px] px-2.5 py-1.5 align-middle">
@@ -255,6 +277,9 @@ function RunsTableRow({
 			<td className="w-[54px] px-2.5 py-1.5 text-right align-middle font-mono text-(--color-text-2) text-[10px] leading-3">
 				{runCostLabel(row)}
 			</td>
+			<td className="w-20 px-2.5 py-1.5 align-middle">
+				<GateCell row={row} />
+			</td>
 			<td className="px-2.5 py-1.5 align-middle">
 				<DeliveryCell row={row} />
 			</td>
@@ -299,7 +324,7 @@ export function RunsTable({
 }) {
 	return (
 		<div className="overflow-x-auto">
-			<table className="w-full min-w-[880px] border-collapse">
+			<table className="w-full min-w-[960px] border-collapse">
 				<thead>
 					<tr className="h-[31px] bg-(--color-thead)">
 						<Th width="78px">State</Th>
@@ -315,6 +340,7 @@ export function RunsTable({
 						<Th width="54px" className="text-right">
 							Cost
 						</Th>
+						<Th width="80px">Gate</Th>
 						<Th>Delivery</Th>
 					</tr>
 				</thead>

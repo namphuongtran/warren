@@ -5,7 +5,12 @@ import {
 	InventoryCardList,
 	InventoryRowCard,
 } from "@/components/ui/inventory-card.tsx";
-import { costNoteToneOf, stateCellOf, sublineOf } from "@/pages/runs/runs-card.helpers.ts";
+import {
+	costNoteToneOf,
+	gateCellOf,
+	stateCellOf,
+	sublineOf,
+} from "@/pages/runs/runs-card.helpers.ts";
 import { formatDuration, projectLabel, runCostLabel } from "@/pages/runs/runs-format.ts";
 
 /**
@@ -18,10 +23,14 @@ import { formatDuration, projectLabel, runCostLabel } from "@/pages/runs/runs-fo
  * row, one-contextual-extra subline, cancelled on the neutral tone, and a
  * warning-tinted cost note near the cap. The cell/subline decisions live
  * in runs-card.helpers.ts (pure, tested there).
+ *
+ * A reaped run with a recorded gate outcome adds one more figure line,
+ * "gate failed" (namphuongtran/warren#36); a run with no gate keeps two.
  */
 
 function RunCard({ row, projectName, now }: { row: RunRow; projectName: string; now: number }) {
 	const state = stateCellOf(row);
+	const gate = gateCellOf(row);
 	return (
 		<InventoryRowCard
 			tone={state.tone}
@@ -33,6 +42,9 @@ function RunCard({ row, projectName, now }: { row: RunRow; projectName: string; 
 				<>
 					<CardFigure value={formatDuration(row, now)} />
 					<CardFigureNote value={runCostLabel(row)} tone={costNoteToneOf(row)} />
+					{gate.hasOutcome ? (
+						<CardFigureNote value={`gate ${gate.label}`} tone={gate.tone} title={gate.title} />
+					) : null}
 				</>
 			}
 		/>

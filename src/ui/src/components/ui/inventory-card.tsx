@@ -13,7 +13,8 @@ import { cn } from "@/lib/utils.ts";
 
 export type InventoryCardTone = "info" | "warning" | "success" | "danger" | "neutral" | "muted";
 
-const TONE_CLASS: Record<InventoryCardTone, { dot: string; text: string }> = {
+/** The dot and text token classes for each card tone. */
+export const INVENTORY_TONE_CLASS: Record<InventoryCardTone, { dot: string; text: string }> = {
 	info: { dot: "bg-(--color-info)", text: "text-(--color-info)" },
 	warning: { dot: "bg-(--color-warning)", text: "text-(--color-warning)" },
 	success: { dot: "bg-(--color-success)", text: "text-(--color-success)" },
@@ -67,7 +68,7 @@ export function InventoryRowCard({
 	/** Actions / badges rendered on the meta line's trailing edge. */
 	children?: ReactNode;
 }) {
-	const toneClass = TONE_CLASS[tone];
+	const toneClass = INVENTORY_TONE_CLASS[tone];
 	const titleNode =
 		titleTo !== undefined ? (
 			<Link
@@ -143,21 +144,25 @@ export function CardFigure({ value, className }: { value: ReactNode; className?:
 }
 
 /** Small mono figure note (cost line under elapsed, etc.). Pass
- * `tone="warning"` for the near-cap cost tint (mock runs/operations). */
+ * `tone="warning"` for the near-cap cost tint (mock runs/operations), or
+ * another card tone for a status word such as the run's gate outcome. */
 export function CardFigureNote({
 	value,
 	tone = "default",
+	title,
 	className,
 }: {
 	value: ReactNode;
-	tone?: "default" | "warning";
+	tone?: "default" | InventoryCardTone;
+	title?: string;
 	className?: string;
 }) {
 	return (
 		<span
+			title={title}
 			className={cn(
 				"font-mono text-[9px] leading-[11px]",
-				tone === "warning" ? "text-(--color-warning)" : "text-(--color-text-3)",
+				tone === "default" ? "text-(--color-text-3)" : INVENTORY_TONE_CLASS[tone].text,
 				className,
 			)}
 		>

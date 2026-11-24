@@ -35,6 +35,7 @@ import {
 import {
 	type PinnedJudgeVerdict,
 	pinnedJudgeVerdicts,
+	seedListGateOutcomes,
 	seedRunSummaries,
 } from "./fixture-summary.ts";
 
@@ -420,6 +421,7 @@ export async function seedFixtureDb(input: SeedFixtureInput): Promise<SeedResult
 		);
 		const planRun = await seedPlanRun(repos, seedsProject.id);
 		const history = await seedHistory(repos, [seedsProject.id, plainProject.id]);
+		await seedListGateOutcomes(repos, history.ids);
 
 		const ids: FixtureIds = {
 			projects: {
