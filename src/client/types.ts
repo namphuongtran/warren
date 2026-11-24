@@ -214,15 +214,15 @@ export interface RunRow {
 	salvageRef: string | null;
 	salvagePath: string | null;
 	costUsd: number | null;
-	/** How `costUsd` was priced (warren-f3c3): `subscription_estimate` when
-	 * the run authenticated via CLAUDE_CODE_OAUTH_TOKEN — an API-priced
-	 * estimate, not a bill. `api` otherwise (and for legacy rows). */
+	/** How `costUsd` was priced (warren-f3c3): `subscription_estimate` for a CLAUDE_CODE_OAUTH_TOKEN
+	 * run (API-priced, an estimate, not a bill), else `api` (also legacy rows). */
 	costBasis: RunCostBasis;
 	/** Runtime backend kind frozen at dispatch (warren-a0f4): `local` | `docker` | `k8s`.
 	 * Operator-only runs-list overlay; absent for spectators and detail GETs, null with no row. */
 	runtimeBackend?: string | null;
 	/** The tool call a running run is stuck on (namphuongtran/warren#83); operator-only. */
 	toolStall?: RunToolStallView | null;
+	quotaHold?: QuotaHoldView | null; // namphuongtran/warren#30 quota hold; operator list overlay
 	/** Per-run USD spend cap (warren-f8a2 list / warren-b19e detail GET): operator-only
 	 * overlay from the dispatch-context row; absent for spectators, null when no row. */
 	maxCostUsd?: number | null;

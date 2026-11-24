@@ -7,6 +7,7 @@ import {
 	hydrateRunsUsage,
 	hydrateRunUsage,
 } from "../../../runs/index.ts";
+import { currentQuotaHolds } from "../../../runs/quota/hold-view.ts";
 import { currentToolStalls } from "../../../runs/tool-stall-view.ts";
 import { isPublicOnly, pickFields } from "../../projection.ts";
 import { jsonResponse } from "../../response.ts";
@@ -213,6 +214,8 @@ export function parseRunsPagination(ctx: { url: URL }): { limit: number; offset:
  * never reaches the public projection — same posture as the list's
  * `costTotalUsd`. `toolStall` (namphuongtran/warren#83) rides the same
  * operator-only overlay: the call a running run is stuck on, else null.
+ * `quotaHold` (namphuongtran/warren#30) does too: when a run held on a spent
+ * provider quota window starts, else null.
  */
 async function projectRunsWithCaps(
 	deps: ServerDeps,
@@ -222,6 +225,7 @@ async function projectRunsWithCaps(
 	if (isPublicOnly(actor)) return runs.map((run) => projectRun(run, actor));
 	const facts = await deps.repos.dispatchContext.getDispatchFactsByRunIds(runs.map((r) => r.id));
 	const stalls = await currentToolStalls(deps.repos, runs);
+	const holds = await currentQuotaHolds(deps.repos, runs);
 	return runs.map((run) => {
 		const fact = facts.get(run.id);
 		return {
@@ -229,6 +233,7 @@ async function projectRunsWithCaps(
 			maxCostUsd: fact?.maxCostUsd ?? null,
 			runtimeBackend: fact?.runtimeBackend ?? null,
 			toolStall: stalls.get(run.id) ?? null,
+			quotaHold: holds.get(run.id) ?? null,
 		};
 	});
 }

@@ -151,6 +151,11 @@ and `loadWarrenConfig()` surfaces it. Notable knobs:
   `project_concurrency_exceeded`. Cluster-wide env knobs pair with it.
   See [docs/design/k8s-migration.md](docs/design/k8s-migration.md) §3.3
   (warren-b6f2).
+- `admission.maxProviderUtilization` (namphuongtran/warren#30, default
+  off) refuses new dispatches on every runtime once the provider
+  credential's usage window is at least that share spent, until the
+  reset. `WARREN_PROVIDER_QUOTA_MAX_UTILIZATION` is the deployment
+  default. See [docs/design/provider-retry.md](docs/design/provider-retry.md).
 - `WARREN_K8S_MAX_PROJECT_CONCURRENCY` — the global default for the
   per-project cap. `WARREN_K8S_MAX_QUEUE_DEPTH` (default 50) caps total
   non-terminal pods. `WARREN_K8S_MAX_PENDING_PODS` (default 20) caps

@@ -8,7 +8,7 @@ import { agents } from "../db/schema.ts";
 import { FakeForge } from "../forge/fake/fake-forge.ts";
 import type { SpawnFn } from "../projects/clone.ts";
 import type { ProjectsConfig } from "../projects/config.ts";
-import type { SpawnRunInput, SpawnRunResult } from "../runs/index.ts";
+import type { SpawnOrHoldResult, SpawnRunInput, SpawnRunResult } from "../runs/index.ts";
 import type { RuntimeProvider } from "../runtime/contract.ts";
 import { SeedsTracker } from "../tracker/seeds-tracker.ts";
 import type { TriggerSchedulerConfig } from "../triggers/index.ts";
@@ -43,6 +43,14 @@ const SCHEDULER_CONFIG: TriggerSchedulerConfig = {
 };
 
 const NOW = new Date("2026-05-11T00:05:00.000Z");
+
+/** Adapt a spawnRun stub to the scheduler's hold-aware seam: it always dispatches. */
+const dispatched =
+	(fn: (input: SpawnRunInput) => Promise<SpawnRunResult>) =>
+	async (input: SpawnRunInput): Promise<SpawnOrHoldResult> => ({
+		kind: "dispatched",
+		result: await fn(input),
+	});
 
 // Identity-only stub — the tests assert the SAME instance reaches spawnRun
 // (warren-c531 follow-up: a dropped provider silently falls back to the
@@ -138,7 +146,7 @@ describe("bootScheduler", () => {
 			projectSpawn: (async () => ({ stdout: "", stderr: "", exitCode: 0 })) as SpawnFn,
 			config: { ...SCHEDULER_CONFIG, disabled: true },
 			now: () => NOW,
-			spawnRunFn,
+			spawnOrHoldRunFn: dispatched(spawnRunFn),
 			// Self-heal probe (warren-1ec7): treat the clone as present so the
 			// tick reaches dispatch without touching disk.
 			cloneExists: () => true,
@@ -233,7 +241,7 @@ describe("bootScheduler", () => {
 			// pair keeps the shell-out assertions meaningful.
 			issueTracker: new SeedsTracker({ sdBinary: "sd-test", spawn: projectSpawn }),
 			now: () => NOW,
-			spawnRunFn,
+			spawnOrHoldRunFn: dispatched(spawnRunFn),
 			cloneExists: () => true,
 		});
 
@@ -407,7 +415,9 @@ describe("bootScheduler", () => {
 			projectSpawn: (async () => ({ stdout: "", stderr: "", exitCode: 0 })) as SpawnFn,
 			config: { ...SCHEDULER_CONFIG, disabled: true },
 			now: () => NOW,
+			// A CI fixer is never held (namphuongtran/warren#30): it dispatches through spawnRun.
 			spawnRunFn,
+			spawnOrHoldRunFn: () => Promise.reject(new Error("a CI fixer must not be held")),
 			cloneExists: () => true,
 		});
 

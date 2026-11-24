@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { RunRow } from "@/api/types.ts";
 import { cn, relativeTime } from "../../lib/utils.ts";
-import { displayStateOf, stuckInOf } from "./runs-card.helpers.ts";
+import { displayStateOf, quotaWaitOf, stuckInOf } from "./runs-card.helpers.ts";
 import {
 	branchLabelOf,
 	formatDuration,
@@ -23,13 +23,14 @@ import {
 
 type DisplayState = ReturnType<typeof displayStateOf>;
 
-/** State → token color. Running is information-blue; queued and stalled warning. */
+/** State → token color. Running is information-blue; queued, stalled and deferred warning. */
 function stateColor(state: DisplayState): string {
 	switch (state) {
 		case "running":
 			return "text-(--color-info)";
 		case "queued":
 		case "stalled":
+		case "deferred":
 			return "text-(--color-warning)";
 		case "succeeded":
 			return "text-(--color-success)";
@@ -46,6 +47,7 @@ function stateDotColor(state: DisplayState): string {
 			return "bg-(--color-info)";
 		case "queued":
 		case "stalled":
+		case "deferred":
 			return "bg-(--color-warning)";
 		case "succeeded":
 			return "bg-(--color-success)";
@@ -191,14 +193,14 @@ function RunsTableRow({
 	const navigate = useNavigate();
 	const runPath = `/runs/${encodeURIComponent(row.id)}`;
 	const state = displayStateOf(row);
-	const stallTitle = stuckInOf(row) ?? undefined;
+	const stateTitle = quotaWaitOf(row, now) ?? stuckInOf(row) ?? undefined;
 	return (
 		<tr
 			className="cursor-pointer border-(--color-border) border-b last:border-b-0 hover:bg-(--color-surface-hover)"
 			onClick={() => navigate(runPath)}
 		>
 			<td className="w-[78px] px-2.5 py-1.5 align-middle">
-				<span className="flex items-center gap-[7px]" title={stallTitle}>
+				<span className="flex items-center gap-[7px]" title={stateTitle}>
 					<span
 						className={cn("h-1.5 w-1.5 shrink-0 rounded-full", stateDotColor(state))}
 						aria-hidden

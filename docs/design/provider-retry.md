@@ -197,7 +197,18 @@ pushed commits is retried as a `continue` clone of its branch.
 
 A new dispatch into a spent window answers 429 by default. A `POST /runs`
 with `onQuotaExhausted: "hold"` (`warren run --hold-on-quota`) is held
-instead. `spawnOrHoldRun` creates the run row `queued` with no workload and
+instead. The scheduler holds cron and scheduled-seed fires: they go through
+`spawnOrHoldRun`, so a refused fire still consumes its slot (or clears the
+seed's `scheduledFor`) with the held run's id, and the tick logs
+`scheduler.dispatch_held`. Cancelling the held run, or a release that fails,
+ends that fire: the scheduler does not fire it again. A held automatic run
+is `queued`, so it counts against the automatic-run cap until it is
+released. The CI fixer is not held. It goes through `spawnRun`, and a
+refusal is retried on a later tick against the PR's state then: a held
+fixer would replay a stale failure prompt, and it would not count as an
+attempt for the PR until reap.
+
+`spawnOrHoldRun` creates the run row `queued` with no workload and
 answers 202 with `quotaHold` (`reason`, `resetsAt`, `releaseAt`) and
 `sandbox: null`. The client keeps the run id and can tail it as usual. A
 `dispatch.quota_held` event on the run carries the dispatch request without
@@ -217,12 +228,43 @@ held run cancels like any queued run, and the releaser never launches a run
 that is no longer `queued` with no workload. Any other launch failure fails
 the row `never_started`.
 
+`GET /runs` reads the same events into the operator-only `quotaHold` overlay
+(`src/runs/quota/hold-view.ts`): a run is held while it is `queued` with no
+workload and its newest hold event is `dispatch.quota_held`. The runs table
+and cards show it as `deferred`, with the wait until its release. The
+Operations page reads `GET /provider-quota` and shows an alert for each
+credential whose window is spent, past the deployment's dispatch threshold,
+or flagged by the provider as nearly spent.
+
 | Kind | Stream | Payload |
 |---|---|---|
 | `dispatch.quota_held` | the held run | `reason`, `resetsAt`, `releaseAt`, `request` |
 | `dispatch.quota_release_started` | the held run | none |
 | `dispatch.quota_released` | the held run | `sandboxId` |
 | `dispatch.quota_release_failed` | the held run | `error` |
+
+### Utilization threshold (namphuongtran/warren#30)
+
+A rejected window refuses dispatch on every credential. The utilization
+threshold refuses earlier, and is off by default. The project's
+`admission.maxProviderUtilization` sets it, and
+`WARREN_PROVIDER_QUOTA_MAX_UTILIZATION` sets the deployment default. Each is a
+share of the window, above 0 and at most 1. The project value wins. An
+invalid env value leaves the threshold off. While the credential's newest
+report says the binding window is at or past the threshold and its
+`resetsAt` is still ahead, `spawnRun` refuses the dispatch the same way it
+refuses a spent window: `ProviderQuotaExhaustedError`, 429
+`provider_quota_exhausted`, and a `Retry-After` that ends at the reset. The
+hold, the plan-run deferral and the quota resume all treat the refusal the
+same way, and `force` overrides it. A report with no utilization never
+trips the threshold. Runs already in flight are not touched. The threshold
+only keeps new runs from taking the rest of the window.
+
+`GET /provider-quota` reports the deployment threshold as `maxUtilization`
+and sets `thresholdReached` while a credential is at or past it. Its
+`retryAfterSeconds` counts down for either refusal. A project's own
+`admission.maxProviderUtilization` applies to that project's dispatches only,
+so the endpoint cannot reflect it.
 
 ### A killed agent is not a provider error (warren-a757)
 

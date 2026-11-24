@@ -55,6 +55,7 @@ import type {
 	PlanRunState,
 	PreviewState,
 	PullRequestLifecycle,
+	QuotaHoldView,
 	RunApproachRecord,
 	RunCostBasis,
 	RunFailureReason,
@@ -134,11 +135,8 @@ export interface RunRow {
 	cloneKind: CloneKind | null;
 	/** Infra-lost auto-retry back-link (warren-4af7); null for first-attempt runs. */
 	retryOf: string | null;
-	/**
-	 * Run mode discriminator (pl-0344 step 1 / warren-67b6). Pinned at row
-	 * creation; warren-side only (burrow doesn't know about run mode).
-	 * `batch` is the only member today.
-	 */
+	/** Run mode discriminator (pl-0344 step 1 / warren-67b6), pinned at row creation and
+	 * warren-side only. `batch` is the only member today. */
 	mode: RunMode;
 	renderedAgentJson: unknown;
 	state: RunState;
@@ -190,6 +188,7 @@ export interface RunRow {
 	maxCostUsd?: number | null; // warren-f8a2: cap overlay (list + detail GET, warren-b19e); absent for spectators
 	runtimeBackend?: string | null; // warren-a0f4: local|docker|k8s frozen at dispatch; operator-only overlay beside maxCostUsd
 	toolStall?: RunToolStallView | null; // namphuongtran/warren#83: stalled tool call; operator-only
+	quotaHold?: QuotaHoldView | null; // namphuongtran/warren#30: held on a spent provider quota; list, operator-only
 	/** Input/output tokens consumed/produced (warren-a7dc); see `costUsd` for nullability. */
 	tokensInput: number | null;
 	tokensOutput: number | null;

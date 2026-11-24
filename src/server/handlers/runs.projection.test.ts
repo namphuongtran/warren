@@ -235,11 +235,14 @@ describe("GET /runs projections under WARREN_AUTH=public (warren-946f)", () => {
 		// The list overlays the dispatch-context spend cap and runtime backend
 		// on each row — fields the stored row itself does not carry. No context
 		// row exists for this run, so both read null, never absent. The same
-		// holds for the stalled tool call (namphuongtran/warren#83).
+		// holds for the stalled tool call (namphuongtran/warren#83) and the
+		// provider quota hold (namphuongtran/warren#30).
+		const overlays = ["maxCostUsd", "runtimeBackend", "toolStall", "quotaHold"];
 		expect(new Set(Object.keys(list[0] ?? {}))).toEqual(
-			new Set([...Object.keys(stored), "maxCostUsd", "runtimeBackend", "toolStall"]),
+			new Set([...Object.keys(stored), ...overlays]),
 		);
 		expect(list[0]?.toolStall).toBeNull();
+		expect(list[0]?.quotaHold).toBeNull();
 		expect(list[0]?.maxCostUsd).toBeNull();
 		expect(list[0]?.runtimeBackend).toBeNull();
 		expect(body.costTotalUsd).toBe(1.25);

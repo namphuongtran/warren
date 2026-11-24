@@ -13,6 +13,7 @@ import { ActiveWorkloads } from "./operations/active-workloads.tsx";
 import { CapacityStrip } from "./operations/capacity-strip.tsx";
 import { EventsPanel } from "./operations/events-panel.tsx";
 import { LifecycleTable } from "./operations/lifecycle-table.tsx";
+import { ProviderQuotaAlert } from "./operations/provider-quota-alert.tsx";
 import { ServicesPanel } from "./operations/services-panel.tsx";
 
 /**
@@ -114,6 +115,11 @@ export function OperationsPage() {
 			</header>
 
 			{overview.isError ? <Alert variant="danger">{formatError(overview.error)}</Alert> : null}
+
+			{/* namphuongtran/warren#30: spent or nearly spent provider usage windows. */}
+			<OperatorOnly capability="readOperator">
+				<ProviderQuotaAlert now={now} />
+			</OperatorOnly>
 
 			<CapacityStrip overview={overview.data} runs={runs.data?.runs} now={now} window={window} />
 

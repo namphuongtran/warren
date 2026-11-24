@@ -21,6 +21,39 @@ Releases **0.9.10 and earlier** live in
   default off) force-fails a run whose tool call stays open past it, through
   the watchdog's reap path, so partial work is still pushed.
 
+- **Provider quota in the UI (namphuongtran/warren#30).** The Operations page
+  shows an alert for each provider credential whose usage window is spent or
+  past the deployment's dispatch threshold (when it reopens, and what Warren
+  does with new runs until then), or that the provider flags as nearly spent
+  (how much is used). `GET /runs` carries the operator-only `quotaHold`
+  overlay (`reason`, `resetsAt`, `releaseAt`) on each run held for a quota
+  window, and the runs table and cards show such a run as `deferred` with
+  "quota hold, starts in 25m".
+
+- **Scheduler fires are held on a spent provider quota
+  (namphuongtran/warren#30).** A cron or scheduled-seed dispatch that the
+  quota guard refuses is now held until the reset, like a `POST /runs` with
+  `onQuotaExhausted: "hold"`. Before, a cron trigger burned five refused
+  ticks and then gave up its slot, and a scheduled seed was refused once per
+  tick until the window reopened. The fire records the held run's id, and
+  the tick logs `scheduler.dispatch_held`. Cancelling the held run ends that
+  fire. The CI fixer is not held: a refused fixer is retried on a later tick
+  against the PR's state then.
+
+- **Dispatch utilization threshold for the provider quota
+  (namphuongtran/warren#30).** A project can stop opening new runs before its
+  provider window is spent, so runs in flight keep the rest of it.
+  `admission.maxProviderUtilization` in `.warren/config.yaml` (a share such
+  as `0.9`), or the deployment default
+  `WARREN_PROVIDER_QUOTA_MAX_UTILIZATION`, refuses a dispatch while the
+  credential's newest report is at or past that share and the window has not
+  reset. The refusal is the same 429 `provider_quota_exhausted` with
+  `Retry-After` as a spent window, so holds, plan-runs and quota resumes wait
+  it out the same way. `GET /provider-quota` reports the deployment threshold
+  (`maxUtilization`) and whether a credential has reached it
+  (`thresholdReached`), and its `retryAfterSeconds` covers both refusals.
+  Off by default.
+
 - **Held dispatches on a spent provider quota (namphuongtran/warren#30).**
   `POST /runs` takes `onQuotaExhausted: "hold"` (`warren run
   --hold-on-quota`, SDK `CreateRunInput.onQuotaExhausted`). While the

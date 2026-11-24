@@ -23,7 +23,7 @@ import {
 	RUN_MODES,
 } from "../../core/wire.ts";
 import type { Repos } from "../../db/repos/index.ts";
-import type { RunRow } from "../../db/schema.ts";
+import type { EventRow, RunRow } from "../../db/schema.ts";
 import { MULCH_ARM_VALUES } from "../../runtime/adapters/mulch-arm.ts";
 import type { RunEventBroker } from "../events.ts";
 import { DISPATCH_ORIGINS, type SpawnRunInput } from "../spawn/types.ts";
@@ -154,6 +154,24 @@ export async function recordQuotaHold(
 		ts: input.now.toISOString(),
 	});
 	return hold;
+}
+
+/** Every hold event kind, for reading a page of runs' hold state in one query. */
+export const QUOTA_HOLD_KINDS: readonly string[] = Object.values(QUOTA_HOLD_EVENTS);
+
+/**
+ * The newest hold event per run, from hold events across any number of runs.
+ * The newest one says where each hold stands (see {@link QUOTA_HOLD_EVENTS}).
+ */
+export function newestHoldEventByRun(events: readonly EventRow[]): Map<string, EventRow> {
+	const newest = new Map<string, EventRow>();
+	for (const event of events) {
+		const seen = newest.get(event.runId);
+		if (seen === undefined || event.sandboxEventSeq > seen.sandboxEventSeq) {
+			newest.set(event.runId, event);
+		}
+	}
+	return newest;
 }
 
 /** A held run is still waiting: queued, with no workload attached. */

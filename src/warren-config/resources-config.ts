@@ -107,12 +107,23 @@ export type ResourcesConfig = z.infer<typeof ResourcesConfigSchema>;
 // exceed), stopping one busy project from starving others. Absent block ⇒ the
 // global default `WARREN_K8S_MAX_PROJECT_CONCURRENCY`, else unlimited. Ignored
 // by LocalProvider. Housed here (not `schema.ts`) for the file-size budget.
+//
+// namphuongtran/warren#30: `maxProviderUtilization` (a share, 0 < x <= 1,
+// default off) refuses this project's new dispatches once the provider
+// credential's reported usage window is at or past it, until the window
+// resets, so runs already in flight keep the rest. It applies on every
+// runtime and wins over `WARREN_PROVIDER_QUOTA_MAX_UTILIZATION`.
 export const AdmissionConfigSchema = z
 	.object({
 		maxConcurrentRuns: z
 			.number()
 			.int("admission.maxConcurrentRuns must be a positive integer")
 			.positive("admission.maxConcurrentRuns must be a positive integer")
+			.optional(),
+		maxProviderUtilization: z
+			.number()
+			.gt(0, "admission.maxProviderUtilization must be a share above 0, at most 1")
+			.lte(1, "admission.maxProviderUtilization must be a share above 0, at most 1")
 			.optional(),
 	})
 	.strict();

@@ -2,7 +2,7 @@
  * Scheduler boot — wires the R-06 tick loop into `bootServer`'s lifecycle.
  *
  * One in-process tick fires every `tickMs` (default 60s), walks every
- * project, dispatches cron entries + scheduled-for seeds via `spawnRun`,
+ * project, dispatches cron entries + scheduled-for seeds via `spawnOrHoldRun`,
  * and persists fire state in the `triggers` table. The tick is
  * single-flight (mx-eb4a3a): a tick already in flight when the next
  * interval fires is skipped, so a slow tick degrades effective cadence
@@ -11,14 +11,28 @@
  * Shape mirrors `bootBridges` in ./bridges.ts: a builder that takes the
  * bag of server deps and returns a `SchedulerHandle`. `bootServer`
  * invokes the returned `stop()` BEFORE bridges/burrow/db go away so an
- * in-flight tick (which may be calling `spawnRun` against burrow) drains
+ * in-flight tick (which may be dispatching a run) drains
  * before its deps disappear.
  *
- * The scheduler's per-fire dispatch wraps `spawnRun` exactly like
+ * The scheduler's per-fire dispatch wraps the spawn path exactly like
  * `POST /runs` does: same agent lookup, same burrow provisioning, same
  * workspace seed, same bridge hand-off so the scheduled run's events
  * flow into warren.events without the operator manually attaching a
  * bridge.
+ *
+ * namphuongtran/warren#30: cron and scheduled-seed fires dispatch through
+ * `spawnOrHoldRun`. A fire the provider-quota guard refuses is held, like a
+ * `POST /runs` with `onQuotaExhausted: "hold"`: the slot is consumed (or the
+ * seed's `scheduledFor` cleared) with the held run's id, no bridge starts,
+ * and the quota hold releaser launches the run after the reset. Without the
+ * hold a spent window cost a cron trigger its slot after five refused ticks,
+ * and a scheduled seed one refused dispatch per tick. Cancelling a held run,
+ * or a release that fails, ends that fire: it is not fired again.
+ *
+ * The CI fixer is not held. It dispatches through `spawnRun`, so a refusal
+ * is retried on a later tick against the PR's state then. A held fixer would
+ * replay a stale failure prompt, and it does not count as an attempt for the
+ * PR until reap, so more fixers could pile up behind it.
  */
 
 import type { Repos } from "../db/repos/index.ts";
@@ -26,7 +40,7 @@ import type { Forge } from "../forge/contract.ts";
 import { mintGitCredential } from "../forge/credentials.ts";
 import type { SpawnFn } from "../projects/clone.ts";
 import type { ProjectsConfig } from "../projects/config.ts";
-import { spawnRun } from "../runs/index.ts";
+import { type SpawnOrHoldResult, spawnOrHoldRun, spawnRun } from "../runs/index.ts";
 import type { RuntimeProvider } from "../runtime/contract.ts";
 import {
 	CronRetryTracker,
@@ -66,7 +80,7 @@ export interface BootSchedulerInput {
 	readonly now?: () => Date;
 	/**
 	 * Deployment-wide run-branch prefix fallback (warren-9993). Forwarded
-	 * onto every scheduled `spawnRun` so cron/scheduled-for dispatches honor
+	 * onto every scheduled dispatch so cron/scheduled-for dispatches honor
 	 * the same `WARREN_RUN_BRANCH_PREFIX` the HTTP `POST /runs` path uses.
 	 */
 	readonly runBranchPrefixDefault?: string;
@@ -83,10 +97,12 @@ export interface BootSchedulerInput {
 	readonly forge: Forge;
 	/**
 	 * Boot-resolved IssueTracker (warren-5819), threaded onto every
-	 * scheduled/ci-fixer `spawnRun` call. Tests may omit.
+	 * scheduled/ci-fixer dispatch. Tests may omit.
 	 */
 	readonly issueTracker?: import("../tracker/contract.ts").IssueTracker;
-	/** Override the spawnRun seam (tests). Defaults to the live `spawnRun`. */
+	/** Override the cron/scheduled dispatch seam (tests). Defaults to the live `spawnOrHoldRun`. */
+	readonly spawnOrHoldRunFn?: typeof spawnOrHoldRun;
+	/** Override the CI-fixer dispatch seam (tests). Defaults to the live `spawnRun`. */
 	readonly spawnRunFn?: typeof spawnRun;
 	/**
 	 * Filesystem probe for the self-heal clone check (warren-1ec7). Defaults
@@ -104,7 +120,22 @@ export interface BootSchedulerInput {
  * handle goes on `WarrenServerHandle.stop`'s teardown chain.
  */
 export function bootScheduler(input: BootSchedulerInput): SchedulerHandle {
-	const spawnRunFn = input.spawnRunFn ?? spawnRun;
+	const dispatch = input.spawnOrHoldRunFn ?? spawnOrHoldRun;
+	const dispatchFixer = input.spawnRunFn ?? spawnRun;
+
+	/** Bridge a dispatched run; a held one waits for the quota hold releaser. */
+	const handOff = (outcome: SpawnOrHoldResult): { runId: string } => {
+		if (outcome.kind === "held") {
+			input.logger?.info(
+				{ runId: outcome.run.id, trigger: outcome.run.trigger, ...outcome.hold },
+				"scheduler.dispatch_held",
+			);
+			return { runId: outcome.run.id };
+		}
+		const { result } = outcome;
+		input.bridges.start(result.run.id, result.sandboxRun.id, result.sandbox.id);
+		return { runId: result.run.id };
+	};
 
 	const seedsDeps = { sdBinary: input.config.sdBinary, spawn: input.projectSpawn };
 	// warren-5819: hoisted so the spawn closures below stay under the
@@ -155,7 +186,7 @@ export function bootScheduler(input: BootSchedulerInput): SchedulerHandle {
 		// warren-9ce3: origin from the resolved trigger kind; seedId forward
 		// closes the scheduled-seed loss (was only buried in metadata).
 		const dispatchOrigin = args.trigger === "scheduled" ? "scheduled" : "cron";
-		const result = await spawnRunFn({
+		const outcome = await dispatch({
 			repos: input.repos,
 			runtimeProvider: input.runtimeProvider,
 			agentName: args.agentName,
@@ -180,11 +211,10 @@ export function bootScheduler(input: BootSchedulerInput): SchedulerHandle {
 			...(input.now !== undefined ? { now: input.now } : {}),
 		});
 		// Same hand-off as POST /runs — bridge so events flow into warren.events.
-		input.bridges.start(result.run.id, result.sandboxRun.id, result.sandbox.id);
-		return { runId: result.run.id };
+		return handOff(outcome);
 	};
 
-	// warren-0b75: CI-fixer dispatch wraps `spawnRun` like the cron path,
+	// warren-0b75: CI-fixer dispatch wraps `spawnRun` (cron wraps `spawnOrHoldRun`),
 	// pinning trigger="ci-fixer" (the discriminator fixAttemptHistoryByPrUrl
 	// counts) and back-linking the fixer to the PR's opener via parentRunId so
 	// the fixer's workspace forks from the opener's pushed branch. warren-a993:
@@ -195,7 +225,7 @@ export function bootScheduler(input: BootSchedulerInput): SchedulerHandle {
 		args: TickCiFixerSpawnInput,
 	): Promise<{ runId: string }> => {
 		const gitSecret = await mintProjectGitSecret(args.projectId);
-		const result = await spawnRunFn({
+		const result = await dispatchFixer({
 			repos: input.repos,
 			runtimeProvider: input.runtimeProvider,
 			agentName: args.agentName,
@@ -218,8 +248,7 @@ export function bootScheduler(input: BootSchedulerInput): SchedulerHandle {
 				: {}),
 			...(input.now !== undefined ? { now: input.now } : {}),
 		});
-		input.bridges.start(result.run.id, result.sandboxRun.id, result.sandbox.id);
-		return { runId: result.run.id };
+		return handOff({ kind: "dispatched", result });
 	};
 
 	return startScheduler({

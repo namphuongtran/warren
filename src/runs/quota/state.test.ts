@@ -156,3 +156,117 @@ describe("provider quota state", () => {
 		expect(JSON.stringify(rows)).not.toContain(OAUTH.slice(-12));
 	});
 });
+
+describe("provider quota utilization threshold", () => {
+	const WARNED_AT = "2026-11-22T08:42:00.000Z";
+	const NEXT_DISPATCH = new Date("2026-11-22T08:45:00.000Z");
+
+	async function warned(utilization: number | null): Promise<Repos> {
+		const repos = await openRepos();
+		await recordQuotaObservation(repos, {
+			credential: anthropic,
+			observation: {
+				status: "allowed_warning",
+				utilization,
+				rateLimitType: "five_hour",
+				resetsAt: RESETS_AT,
+			},
+			source: "rate_limit_event",
+			sourceRunId: "run_jy2cxd7cmg9f",
+			observedAt: WARNED_AT,
+		});
+		return repos;
+	}
+
+	test("refuses a dispatch once utilization reaches the threshold, until the reset", async () => {
+		const repos = await warned(0.99);
+
+		const err = await refusal(
+			assertProviderQuotaOpen(repos, {
+				credential: anthropic,
+				now: NEXT_DISPATCH,
+				maxUtilization: 0.9,
+			}),
+		);
+		expect(err.reason).toBe("provider_quota_exhausted");
+		expect(err.resetsAt).toBe(RESETS_AT);
+		// 08:45:00Z → 09:10:00Z
+		expect(err.retryAfterSeconds).toBe(1500);
+		expect(err.message).toContain("99%");
+		expect(err.message).toContain("90%");
+	});
+
+	test("dispatches below the threshold, with no threshold, and after the reset", async () => {
+		const repos = await warned(0.87);
+		await assertProviderQuotaOpen(repos, {
+			credential: anthropic,
+			now: NEXT_DISPATCH,
+			maxUtilization: 0.9,
+		});
+		await recordQuotaObservation(repos, {
+			credential: anthropic,
+			observation: {
+				status: "allowed_warning",
+				utilization: 0.99,
+				rateLimitType: "five_hour",
+				resetsAt: RESETS_AT,
+			},
+			source: "rate_limit_event",
+			sourceRunId: "run_jy2cxd7cmg9f",
+			observedAt: "2026-11-22T08:43:00.000Z",
+		});
+		await assertProviderQuotaOpen(repos, { credential: anthropic, now: NEXT_DISPATCH });
+		await assertProviderQuotaOpen(repos, {
+			credential: anthropic,
+			now: AFTER_RESET,
+			maxUtilization: 0.9,
+		});
+	});
+
+	test("dispatches when the report carries no utilization, or on force", async () => {
+		const repos = await warned(null);
+		const input = { credential: anthropic, now: NEXT_DISPATCH, maxUtilization: 0.5 };
+		await assertProviderQuotaOpen(repos, input);
+
+		await recordQuotaObservation(repos, {
+			credential: anthropic,
+			observation: { status: "allowed", utilization: 1, rateLimitType: null, resetsAt: RESETS_AT },
+			source: "rate_limit_event",
+			sourceRunId: null,
+			observedAt: "2026-11-22T08:43:00.000Z",
+		});
+		await refusal(assertProviderQuotaOpen(repos, input));
+		await assertProviderQuotaOpen(repos, { ...input, force: true });
+	});
+});
+
+describe("listProviderQuota with a dispatch threshold", () => {
+	test("reports a window past the threshold as refusing dispatch until the reset", async () => {
+		const repos = await openRepos();
+		await recordQuotaObservation(repos, {
+			credential: anthropic,
+			observation: {
+				status: "allowed_warning",
+				utilization: 0.92,
+				rateLimitType: "five_hour",
+				resetsAt: RESETS_AT,
+			},
+			source: "rate_limit_event",
+			sourceRunId: null,
+			observedAt: "2026-11-22T08:42:00.000Z",
+		});
+		const now = new Date("2026-11-22T08:45:00.000Z");
+
+		const [past] = await listProviderQuota(repos, now, 0.9);
+		expect(past).toMatchObject({
+			exhausted: false,
+			thresholdReached: true,
+			maxUtilization: 0.9,
+			retryAfterSeconds: 1500,
+		});
+		const [under] = await listProviderQuota(repos, now, 0.95);
+		expect(under).toMatchObject({ thresholdReached: false, retryAfterSeconds: null });
+		const [off] = await listProviderQuota(repos, now);
+		expect(off).toMatchObject({ thresholdReached: false, maxUtilization: null });
+	});
+});
