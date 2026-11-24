@@ -5,6 +5,7 @@
 	"sentenceWordCap": 25,
 	"files": [
 		"README.md",
+		"ARCHITECTURE.md",
 		"ROADMAP.md",
 		"ACCEPTANCE.md",
 		"AGENTS.md",
