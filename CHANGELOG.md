@@ -29,6 +29,17 @@ Releases **0.9.10 and earlier** live in
   refused once per tick until the window reopened. The fire records the held
   run's id, and the tick logs `scheduler.dispatch_held`.
 
+- **Dispatch utilization threshold for the provider quota
+  (namphuongtran/warren#30).** A project can stop opening new runs before its
+  provider window is spent, so runs in flight keep the rest of it.
+  `admission.maxProviderUtilization` in `.warren/config.yaml` (a share such
+  as `0.9`), or the deployment default
+  `WARREN_PROVIDER_QUOTA_MAX_UTILIZATION`, refuses a dispatch while the
+  credential's newest report is at or past that share and the window has not
+  reset. The refusal is the same 429 `provider_quota_exhausted` with
+  `Retry-After` as a spent window, so holds, plan-runs and quota resumes wait
+  it out the same way. Off by default.
+
 - **Held dispatches on a spent provider quota (namphuongtran/warren#30).**
   `POST /runs` takes `onQuotaExhausted: "hold"` (`warren run
   --hold-on-quota`, SDK `CreateRunInput.onQuotaExhausted`). While the

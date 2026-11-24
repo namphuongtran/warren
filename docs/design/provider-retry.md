@@ -228,6 +228,23 @@ the row `never_started`.
 | `dispatch.quota_released` | the held run | `sandboxId` |
 | `dispatch.quota_release_failed` | the held run | `error` |
 
+### Utilization threshold (namphuongtran/warren#30)
+
+A rejected window refuses dispatch on every credential. The utilization
+threshold refuses earlier, and is off by default. The project's
+`admission.maxProviderUtilization` sets it, and
+`WARREN_PROVIDER_QUOTA_MAX_UTILIZATION` sets the deployment default. Each is a
+share of the window, above 0 and at most 1. The project value wins. An
+invalid env value leaves the threshold off. While the credential's newest
+report says the binding window is at or past the threshold and its
+`resetsAt` is still ahead, `spawnRun` refuses the dispatch the same way it
+refuses a spent window: `ProviderQuotaExhaustedError`, 429
+`provider_quota_exhausted`, and a `Retry-After` that ends at the reset. The
+hold, the plan-run deferral and the quota resume all treat the refusal the
+same way, and `force` overrides it. A report with no utilization never
+trips the threshold. Runs already in flight are not touched. The threshold
+only keeps new runs from taking the rest of the window.
+
 ### A killed agent is not a provider error (warren-a757)
 
 An agent that dies without its own terminal envelope gets a synthesized

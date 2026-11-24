@@ -10,6 +10,10 @@
  * `provider_quota_exhausted` and a `Retry-After` that ends at the reset.
  * Once `resetsAt` passes, dispatch opens again with no new report and no
  * restart. `force` lets an operator dispatch anyway.
+ *
+ * An optional utilization threshold (`maxUtilization`, default off) refuses
+ * new dispatches the same way once the reported share of the window reaches
+ * it, so runs already in flight keep the rest of the window.
  */
 
 import {
@@ -67,11 +71,33 @@ export async function recordQuotaObservation(
 	});
 }
 
-/** Seconds until the window reopens while it is rejected, else `null`. */
-function secondsUntilReset(row: ProviderQuotaRow, now: Date): number | null {
-	if (row.status !== PROVIDER_QUOTA_REJECTED || row.resetsAt === null) return null;
+/** Seconds until the window resets while the reset is still ahead, else `null`. */
+function secondsUntilWindowReset(row: ProviderQuotaRow, now: Date): number | null {
+	if (row.resetsAt === null) return null;
 	const seconds = Math.ceil(row.resetsAt - now.getTime() / 1000);
 	return seconds > 0 ? seconds : null;
+}
+
+/** Seconds until the window reopens while it is rejected, else `null`. */
+function secondsUntilReset(row: ProviderQuotaRow, now: Date): number | null {
+	return row.status === PROVIDER_QUOTA_REJECTED ? secondsUntilWindowReset(row, now) : null;
+}
+
+const percent = (share: number): string => `${Math.round(share * 100)}%`;
+
+/** Why the stored window refuses a new dispatch now, or `null` when it does not. */
+function refusalReason(
+	row: ProviderQuotaRow,
+	now: Date,
+	maxUtilization: number | undefined,
+): { readonly retryAfterSeconds: number; readonly why: string } | null {
+	const retryAfterSeconds = secondsUntilWindowReset(row, now);
+	if (retryAfterSeconds === null) return null;
+	if (row.status === PROVIDER_QUOTA_REJECTED) return { retryAfterSeconds, why: "is spent" };
+	if (maxUtilization === undefined || row.utilization === null) return null;
+	if (row.utilization < maxUtilization) return null;
+	const why = `is ${percent(row.utilization)} used, at or past the ${percent(maxUtilization)} dispatch threshold`;
+	return { retryAfterSeconds, why };
 }
 
 export interface AssertProviderQuotaOpenInput {
@@ -79,6 +105,11 @@ export interface AssertProviderQuotaOpenInput {
 	readonly now: Date;
 	/** Operator override: dispatch even into a spent window. */
 	readonly force?: boolean;
+	/**
+	 * Refuse while the window's reported utilization (0..1) is at or past this
+	 * share, until the reset. Unset leaves only a rejected window refused.
+	 */
+	readonly maxUtilization?: number;
 }
 
 /** Throw {@link ProviderQuotaExhaustedError} while the credential's window is spent. */
@@ -89,16 +120,16 @@ export async function assertProviderQuotaOpen(
 	if (input.force === true) return;
 	const key = quotaKey(input.credential);
 	const row = await repos.providerQuota.get(key.provider, key.credentialFingerprint);
-	const retryAfterSeconds = row === undefined ? null : secondsUntilReset(row, input.now);
-	if (row === undefined || retryAfterSeconds === null) return;
+	const refusal = row === undefined ? null : refusalReason(row, input.now, input.maxUtilization);
+	if (row === undefined || refusal === null) return;
 	const resetsAtSeconds = row.resetsAt ?? 0;
 	const resetsAt = new Date(resetsAtSeconds * 1000).toISOString();
 	const window = row.rateLimitType ?? "usage";
 	throw new ProviderQuotaExhaustedError(
-		`the ${key.provider} credential's ${window} window is spent until ${resetsAt}`,
+		`the ${key.provider} credential's ${window} window ${refusal.why} until ${resetsAt}`,
 		{
 			reason: PROVIDER_QUOTA_EXHAUSTED,
-			retryAfterSeconds,
+			retryAfterSeconds: refusal.retryAfterSeconds,
 			resetsAt: resetsAtSeconds,
 			recoveryHint: `retry after ${resetsAt}, or dispatch with force: true to run anyway`,
 		},

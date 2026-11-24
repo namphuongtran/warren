@@ -61,7 +61,7 @@ export async function spawnRun(input: SpawnRunInput): Promise<SpawnRunResult> {
 	return withProjectCloneLock(input.projectId, async () => {
 		const prepared = await prepareDispatch(input);
 		// namphuongtran/warren#30: refuse a spent quota once the provider is known.
-		await assertDispatchQuotaOpen(input, prepared.declaredProvider);
+		await assertDispatchQuotaOpen(input, prepared);
 		return launchRun(input, prepared, await createRunRow(input, prepared));
 	});
 }
@@ -81,7 +81,7 @@ export async function spawnOrHoldRun(input: SpawnRunInput): Promise<SpawnOrHoldR
 	return withProjectCloneLock(input.projectId, async () => {
 		const prepared = await prepareDispatch(input);
 		try {
-			await assertDispatchQuotaOpen(input, prepared.declaredProvider);
+			await assertDispatchQuotaOpen(input, prepared);
 		} catch (err) {
 			if (!(err instanceof ProviderQuotaExhaustedError)) throw err;
 			const run = await createRunRow(input, prepared);
@@ -118,7 +118,7 @@ export async function launchHeldRun(
 		let prepared: PreparedDispatch;
 		try {
 			prepared = await prepareDispatch(input);
-			await assertDispatchQuotaOpen(input, prepared.declaredProvider);
+			await assertDispatchQuotaOpen(input, prepared);
 		} catch (err) {
 			if (!(err instanceof ProviderQuotaExhaustedError)) {
 				await rollback(input, heldRunId, bindRunLogger(input.logger, heldRunId, {}), err);

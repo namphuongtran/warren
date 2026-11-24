@@ -101,6 +101,16 @@ describe("DefaultsConfigSchema", () => {
 		);
 	});
 
+	test("accepts a maxProviderUtilization share in (0, 1] (namphuongtran/warren#30)", () => {
+		const parse = (maxProviderUtilization: number) =>
+			DefaultsConfigSchema.safeParse({ admission: { maxProviderUtilization } }).success;
+		expect(parse(0.9)).toBe(true);
+		expect(parse(1)).toBe(true);
+		expect(parse(0)).toBe(false);
+		expect(parse(1.5)).toBe(false);
+		expect(parse(90)).toBe(false);
+	});
+
 	test("rejects unknown keys inside the admission block", () => {
 		expect(DefaultsConfigSchema.safeParse({ admission: { maxConcurrent: 3 } }).success).toBe(false);
 	});
