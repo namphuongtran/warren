@@ -276,8 +276,15 @@ its head commit as `prChecks` on `GET /runs/:id` and the runs list: `state` (`pa
 was read. If the checks are still running when the PR merges or closes, Warren keeps reading
 them until they finish, for up to the same 7-day watch budget. `none` means the commit has no
 checks, or the forge cannot report them (a fine-grained GitHub PAT cannot reach the Checks
-API). Only check runs count: commit statuses are not read. The run's Summary tab and the runs
-list show the result.
+API). Only check runs count toward `state`. The run's Summary tab and the runs list show the
+result.
+
+On GitHub, the same poll reads the `warren/review` commit status that the campaign controller's
+review policy publishes, and stores it as `prChecks.review`: `approved`, `changes_requested`,
+`pending`, or `failed`, with the status description. A review still in progress when the PR
+merges is read until it settles. The field is absent when the head commit has no such status,
+or when the credential cannot read statuses (a GitHub App needs the Commit statuses read
+permission). The Summary tab's Delivery section shows it.
 
 Common `failureReason` values:
 

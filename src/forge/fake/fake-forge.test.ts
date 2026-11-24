@@ -50,6 +50,7 @@ describe("FakeForge capabilities", () => {
 	test("reports the full-featured set with arming and installation listing off", () => {
 		expect(new FakeForge().capabilities).toEqual({
 			checkRuns: true,
+			commitStatuses: true,
 			jobLogs: true,
 			pullRequestBodyEdit: true,
 			branchDelete: true,
@@ -150,6 +151,18 @@ describe("FakeForge checks and logs", () => {
 			const again = await forge.listChecks(ref, "sha-1");
 			if (again.ok) expect(again.value.runs[0]?.conclusion).toBe("success");
 		}
+	});
+
+	test("setCommitStatuses seeds listCommitStatuses; an unseeded commit has none", async () => {
+		const { forge, ref } = setup();
+		forge.setCommitStatuses(ref, "sha-1", [
+			{ context: "warren/review", state: "success", description: "Approved" },
+		]);
+		expect(await forge.listCommitStatuses(ref, "sha-1")).toEqual({
+			ok: true,
+			value: [{ context: "warren/review", state: "success", description: "Approved" }],
+		});
+		expect(await forge.listCommitStatuses(ref, "sha-2")).toEqual({ ok: true, value: [] });
 	});
 
 	test("fetchJobLogTail synthesizes a deterministic log and tails it", async () => {

@@ -17,6 +17,7 @@ describe("AdoForge capabilities and credential", () => {
 		const { forge } = setup();
 		expect(forge.capabilities).toEqual({
 			checkRuns: true,
+			commitStatuses: false,
 			jobLogs: true,
 			pullRequestBodyEdit: true,
 			branchDelete: true,

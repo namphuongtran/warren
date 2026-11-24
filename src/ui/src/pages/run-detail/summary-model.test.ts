@@ -6,6 +6,7 @@ import {
 	findRunJudgeRow,
 	handoffStatusView,
 	prChecksView,
+	prReviewView,
 	pullRequestTone,
 	pushedBranch,
 	qualityGateView,
@@ -235,5 +236,52 @@ describe("prChecksView", () => {
 			tone: "neutral",
 			detail: "Warren reads the checks each time it polls the pull request.",
 		});
+	});
+});
+
+describe("prReviewView", () => {
+	const read = {
+		state: "passing" as const,
+		failing: [] as string[],
+		commit: "a".repeat(40),
+		checkedAt: "2026-11-21T10:00:00.000Z",
+	};
+
+	test("shows the reviewer's own words for a change request", () => {
+		expect(
+			prReviewView({
+				...read,
+				review: {
+					state: "changes_requested",
+					description: "Changes requested (fix round 1 of 2)",
+				},
+			}),
+		).toEqual({
+			label: "Changes requested",
+			tone: "danger",
+			detail: "Changes requested (fix round 1 of 2)",
+		});
+	});
+
+	test("explains each verdict when the status carries no description", () => {
+		const view = (state: "approved" | "pending" | "failed") =>
+			prReviewView({ ...read, review: { state, description: null } });
+		expect(view("approved")).toEqual({
+			label: "Approved",
+			tone: "success",
+			detail: "The reviewer approved the pull request's head commit.",
+		});
+		expect(view("pending")).toMatchObject({ label: "In review", tone: "warning" });
+		expect(view("failed")).toMatchObject({ label: "Review failed", tone: "danger" });
+	});
+
+	test("says honestly when no review was published or the PR was not read yet", () => {
+		expect(prReviewView(read)).toEqual({
+			label: "No review",
+			tone: "neutral",
+			detail:
+				"No review verdict on the pull request's head commit, or this forge credential cannot read commit statuses.",
+		});
+		expect(prReviewView(null)).toMatchObject({ label: "Not read yet", tone: "neutral" });
 	});
 });

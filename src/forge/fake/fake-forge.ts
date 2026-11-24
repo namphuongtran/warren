@@ -26,6 +26,7 @@ import type {
 	AutoMergeRefusalReason,
 	CheckRun,
 	CheckSummary,
+	CommitStatus,
 	Forge,
 	ForgeCapabilities,
 	ForgeRepoListing,
@@ -77,6 +78,7 @@ function refusedArm(reason: AutoMergeRefusalReason, message: string): ArmAutoMer
 export class FakeForge implements Forge {
 	readonly capabilities: ForgeCapabilities = {
 		checkRuns: true,
+		commitStatuses: true,
 		jobLogs: true,
 		pullRequestBodyEdit: true,
 		branchDelete: true,
@@ -90,6 +92,8 @@ export class FakeForge implements Forge {
 	/** Exposed for the seeding seams; never serialized across the seam. */
 	readonly store: FakeForgeStore;
 	private readonly now: () => number;
+	/** Seeded commit statuses by `<repoKey>@<commit>`; in memory only, not in the state file. */
+	private readonly statuses = new Map<string, CommitStatus[]>();
 	/** Queued scripted `armAutoMerge` answers, drained before live behavior. */
 	private readonly armScripts: ArmAutoMergeResult[] = [];
 
@@ -197,6 +201,11 @@ export class FakeForge implements Forge {
 		return ok({ conclusion: rollUpChecks(runs), runs });
 	}
 
+	async listCommitStatuses(ref: RepoRef, commit: string): Promise<ForgeResult<CommitStatus[]>> {
+		const seeded = this.statuses.get(`${ref.key}@${commit}`) ?? [];
+		return ok(seeded.map((status) => ({ ...status })));
+	}
+
 	/**
 	 * Synthetic job logs (§5: `jobLogs` is "synthetic" for the fake). Any
 	 * known job id yields a deterministic log tailed to `maxBytes`; an empty
@@ -257,6 +266,14 @@ export class FakeForge implements Forge {
 	/** Install the check runs `listChecks` reports for a commit. */
 	setChecks(ref: RepoRef, commit: string, runs: CheckRun[]): void {
 		this.store.setChecks(ref.key, commit, runs);
+	}
+
+	/** Install the statuses `listCommitStatuses` reports for a commit. */
+	setCommitStatuses(ref: RepoRef, commit: string, statuses: CommitStatus[]): void {
+		this.statuses.set(
+			`${ref.key}@${commit}`,
+			statuses.map((status) => ({ ...status })),
+		);
 	}
 
 	/** Flip the autoMergeArm capability (default false — pl-92a3). */

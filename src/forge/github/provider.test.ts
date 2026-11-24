@@ -39,6 +39,7 @@ describe("GitHubForge capabilities", () => {
 	test("reports the classic-PAT set: checkRuns, auto-merge arm, static lifetime, no bot identity", () => {
 		expect(new GitHubForge({ token: "t" }).capabilities).toEqual({
 			checkRuns: true,
+			commitStatuses: true,
 			jobLogs: true,
 			pullRequestBodyEdit: true,
 			branchDelete: true,
@@ -356,6 +357,54 @@ describe("GitHubForge.listChecks", () => {
 		]);
 		const result = await forge.listChecks(REF, "sha");
 		expect(result.ok && result.value.conclusion === "pending").toBe(true);
+	});
+});
+
+describe("GitHubForge.listCommitStatuses (namphuongtran/warren#38)", () => {
+	test("reads the combined status and keeps one status per context", async () => {
+		const { forge, calls } = forgeWith([
+			jsonResponse(200, {
+				state: "failure",
+				statuses: [
+					{
+						context: "warren/review",
+						state: "failure",
+						description: "Changes requested (fix round 1 of 2)",
+						target_url: "https://warren.example/runs/r1",
+					},
+					{ context: "deploy/preview", state: "success", description: null },
+					{ context: 42, state: "success" },
+					{ context: "odd", state: "exploded" },
+				],
+			}),
+		]);
+		const result = await forge.listCommitStatuses(REF, "abc123");
+		expect(calls[0]?.url).toBe(
+			`${GITHUB_API_BASE}/repos/octo/widget/commits/abc123/status?per_page=100`,
+		);
+		expect(result).toEqual({
+			ok: true,
+			value: [
+				{
+					context: "warren/review",
+					state: "failure",
+					description: "Changes requested (fix round 1 of 2)",
+				},
+				{ context: "deploy/preview", state: "success", description: null },
+			],
+		});
+	});
+
+	test("a commit with no statuses reads as an empty list", async () => {
+		const { forge } = forgeWith([jsonResponse(200, { state: "pending", statuses: [] })]);
+		expect(await forge.listCommitStatuses(REF, "abc123")).toEqual({ ok: true, value: [] });
+	});
+
+	test("a 403 surfaces as a forbidden error", async () => {
+		const { forge } = forgeWith([jsonResponse(403, { message: "Resource not accessible" })]);
+		const result = await forge.listCommitStatuses(REF, "abc123");
+		expect(result.ok).toBe(false);
+		if (!result.ok) expect(result.error.kind).toBe("forbidden");
 	});
 });
 

@@ -103,6 +103,8 @@ export class GitHubAppForge implements Forge {
 	readonly capabilities: ForgeCapabilities = {
 		// §5: an installation token reaches the Checks API (spike-confirmed).
 		checkRuns: true,
+		// The App needs the statuses read permission; without it the read is forbidden.
+		commitStatuses: true,
 		jobLogs: true,
 		pullRequestBodyEdit: true,
 		branchDelete: true,
@@ -209,6 +211,10 @@ export class GitHubAppForge implements Forge {
 
 	listChecks(ref: RepoRef, commit: string) {
 		return this.transport.listChecks(ref, commit);
+	}
+
+	listCommitStatuses(ref: RepoRef, commit: string) {
+		return this.transport.listCommitStatuses(ref, commit);
 	}
 
 	fetchJobLogTail(ref: RepoRef, jobId: string, maxBytes: number) {

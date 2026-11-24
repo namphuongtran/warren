@@ -81,6 +81,7 @@ describe("GitHubAppForge capabilities (forge-contract.md §5)", () => {
 	test("declares the App-mode flags: full Checks access, bot identity, short-lived credentials", () => {
 		expect(makeForge().capabilities).toEqual({
 			checkRuns: true,
+			commitStatuses: true,
 			jobLogs: true,
 			pullRequestBodyEdit: true,
 			branchDelete: true,

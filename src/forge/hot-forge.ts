@@ -132,6 +132,13 @@ export class HotForge implements Forge {
 		return this.delegate.listChecks(ref, commit);
 	}
 
+	listCommitStatuses(
+		ref: Parameters<Forge["listCommitStatuses"]>[0],
+		commit: Parameters<Forge["listCommitStatuses"]>[1],
+	) {
+		return this.delegate.listCommitStatuses(ref, commit);
+	}
+
 	fetchJobLogTail(
 		ref: Parameters<Forge["fetchJobLogTail"]>[0],
 		jobId: Parameters<Forge["fetchJobLogTail"]>[1],

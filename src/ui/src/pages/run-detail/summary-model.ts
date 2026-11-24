@@ -241,3 +241,55 @@ export function prChecksView(checks: RunPrChecks | null): SummaryFactView {
 			};
 	}
 }
+
+// Derived from the wire type, not a copy: api/types.ts sits at its size ceiling.
+type PrReview = NonNullable<RunPrChecks["review"]>;
+
+const PR_REVIEW_VIEWS: Record<PrReview["state"], SummaryFactView> = {
+	approved: {
+		label: "Approved",
+		tone: "success",
+		detail: "The reviewer approved the pull request's head commit.",
+	},
+	changes_requested: {
+		label: "Changes requested",
+		tone: "danger",
+		detail: "The reviewer asked for changes on the pull request's head commit.",
+	},
+	pending: {
+		label: "In review",
+		tone: "warning",
+		detail: "A review of the pull request's head commit is in progress.",
+	},
+	failed: {
+		label: "Review failed",
+		tone: "danger",
+		detail: "The review ended without a verdict.",
+	},
+};
+
+/**
+ * The review verdict on the PR head commit (namphuongtran/warren#38), read
+ * with the checks. The status description, when the reviewer wrote one, is
+ * the detail line.
+ */
+export function prReviewView(checks: RunPrChecks | null): SummaryFactView {
+	if (checks === null) {
+		return {
+			label: "Not read yet",
+			tone: "neutral",
+			detail: "Warren reads the review each time it polls the pull request.",
+		};
+	}
+	if (checks.review === undefined) {
+		return {
+			label: "No review",
+			tone: "neutral",
+			detail:
+				"No review verdict on the pull request's head commit, or this forge credential cannot read commit statuses.",
+		};
+	}
+	const view = PR_REVIEW_VIEWS[checks.review.state];
+	const words = checks.review.description?.trim() ?? "";
+	return words === "" ? view : { ...view, detail: words };
+}
