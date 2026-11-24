@@ -20,14 +20,16 @@ import { useCapabilities } from "@/hooks/use-capabilities.ts";
  */
 export function OperatorOnly({
 	capability = "dispatch",
+	fallback = null,
 	children,
 }: {
 	capability?: CapabilityName;
+	/** What a caller without `capability` sees instead; nothing by default. */
+	fallback?: ReactNode;
 	children: ReactNode;
 }): ReactElement | null {
 	const caps = useCapabilities();
-	if (!caps.can(capability)) return null;
-	return <>{children}</>;
+	return <>{caps.can(capability) ? children : fallback}</>;
 }
 
 /**

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { JudgeStoreRow } from "../telemetry/judge-verdicts.ts";
 import {
+	answeredContinuationPrompt,
 	changesLink,
 	evidenceHref,
 	findRunJudgeRow,
@@ -283,5 +284,61 @@ describe("prReviewView", () => {
 				"No review verdict on the pull request's head commit, or this forge credential cannot read commit statuses.",
 		});
 		expect(prReviewView(null)).toMatchObject({ label: "Not read yet", tone: "neutral" });
+	});
+});
+
+describe("answeredContinuationPrompt", () => {
+	test("quotes the task, the handoff summary, and each question with its answer", () => {
+		expect(
+			answeredContinuationPrompt({
+				task: "Move the plan-runs table onto cards.",
+				handoffSummary: "Draft spec:\n### Decisions\nKeep the columns.",
+				answers: [
+					{ question: "Grow a progress slot?", answer: "Yes, add a footer slot." },
+					{ question: "Keep the sort header?", answer: "Keep it above the list." },
+				],
+			}),
+		).toBe(
+			[
+				"Move the plan-runs table onto cards.",
+				"",
+				"## The previous run's handoff summary",
+				"",
+				"Draft spec:",
+				"### Decisions",
+				"Keep the columns.",
+				"",
+				"## Answers to your open questions",
+				"",
+				"The previous run stopped blocked on these questions. The operator answered them:",
+				"",
+				"1. Grow a progress slot?",
+				"   Answer: Yes, add a footer slot.",
+				"2. Keep the sort header?",
+				"   Answer: Keep it above the list.",
+			].join("\n"),
+		);
+	});
+
+	test("tells the agent to decide when the operator left a question blank", () => {
+		expect(
+			answeredContinuationPrompt({
+				task: "Task.",
+				handoffSummary: "Stopped.",
+				answers: [{ question: "Which slot?", answer: "   " }],
+			}),
+		).toContain(
+			"1. Which slot?\n   Answer: none given. Decide, and record the decision in your handoff.",
+		);
+	});
+
+	test("keeps a multi-line answer inside its list item", () => {
+		expect(
+			answeredContinuationPrompt({
+				task: "Task.",
+				handoffSummary: "Stopped.",
+				answers: [{ question: "Which slot?", answer: "  A footer slot.\nKeep it optional.\n" }],
+			}),
+		).toContain("1. Which slot?\n   Answer: A footer slot.\n   Keep it optional.");
 	});
 });
