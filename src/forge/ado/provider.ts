@@ -31,6 +31,7 @@ import type {
 	ArmAutoMergeOptions,
 	ArmAutoMergeResult,
 	CheckSummary,
+	CommitStatus,
 	Forge,
 	ForgeCapabilities,
 	ForgeRepoListing,
@@ -140,6 +141,7 @@ export class AdoForge implements Forge {
 		this.timeoutMs = options.timeoutMs;
 		this.capabilities = {
 			checkRuns: true,
+			commitStatuses: false,
 			jobLogs: true,
 			pullRequestBodyEdit: true,
 			branchDelete: true,
@@ -372,6 +374,13 @@ export class AdoForge implements Forge {
 				detail:
 					"AdoForge holds no bot identity — warren names the author via WARREN_GIT_AUTHOR_* (§6.8)",
 			}),
+		);
+	}
+
+	/** No status reader yet: nothing warren reads publishes one here (namphuongtran/warren#38). */
+	listCommitStatuses(_ref: RepoRef, _commit: string): Promise<ForgeResult<CommitStatus[]>> {
+		return Promise.resolve(
+			err({ kind: "unsupported", detail: "AdoForge does not read commit statuses" }),
 		);
 	}
 

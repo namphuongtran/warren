@@ -102,7 +102,11 @@ export async function seedRunSummaries(repos: Repos, ids: SummaryRunIds): Promis
 	});
 	await repos.runs.setHandoff(ids.prOpen, FULL_HANDOFF);
 	await repos.runs.setQualityGateOutcome(ids.prOpen, "passed");
-	await repos.runs.setPrChecks(ids.prOpen, prChecks("failing", ["e2e (phone, dark theme)"]));
+	await repos.runs.setPrChecks(ids.prOpen, {
+		...prChecks("failing", ["e2e (phone, dark theme)"]),
+		// namphuongtran/warren#38: the controller's warren/review verdict on the same head.
+		review: { state: "changes_requested", description: "Changes requested (fix round 1 of 2)" },
+	});
 
 	await repos.runs.setApproach(ids.failed, {
 		state: "recorded",

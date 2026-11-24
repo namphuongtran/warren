@@ -12,6 +12,20 @@ Releases **0.9.10 and earlier** live in
 
 ### Added
 
+- **Review verdict on the run Summary (namphuongtran/warren#38).** The merge
+  watcher now also reads the `warren/review` commit status the campaign
+  controller's review policy publishes on the PR head (namphuongtran/warren#18),
+  through a new `Forge.listCommitStatuses` read, and stores it as
+  `prChecks.review` (`approved`, `changes_requested`, `pending`, or `failed`,
+  plus the status description). The run Summary's Delivery section shows it
+  beside the checks. A review still in progress when the PR merges is read
+  until it settles. GitHub (PAT and App) reads statuses; GitLab and Azure
+  DevOps declare `commitStatuses: false`. A credential that cannot read
+  statuses stores the checks without a review; a transient status-read
+  failure keeps the last review read for the same commit. Only the default
+  `warren/review` context is read; a controller policy with a custom
+  `statusContext` does not show.
+
 - **PR check summary per run (namphuongtran/warren#41).** Each time the merge
   watcher polls a run's PR, it reads the checks for the PR's head commit
   through the forge seam and stores `prChecks` on the run: `passing`,

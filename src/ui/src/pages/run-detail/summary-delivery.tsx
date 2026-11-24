@@ -2,13 +2,19 @@ import type { RunRow } from "@/api/types.ts";
 import { formatPullRequestLifecycle } from "@/lib/labels.ts";
 import { formatTimestamp } from "@/lib/utils.ts";
 import { pendingCopy, SummaryBlock, SummaryCard, SummaryEmpty, ToneChip } from "./summary-card.tsx";
-import { changesLink, prChecksView, pullRequestTone, pushedBranch } from "./summary-model.ts";
+import {
+	changesLink,
+	prChecksView,
+	prReviewView,
+	pullRequestTone,
+	pushedBranch,
+} from "./summary-model.ts";
 
 /**
  * The Summary tab's Changes and Delivery sections (namphuongtran/warren#38):
  * the reap-measured diff size with a link to the forge view of the diff, and
- * where the work went: the pushed branch, the pull request, and its checks
- * (namphuongtran/warren#41).
+ * where the work went: the pushed branch, the pull request, its checks
+ * (namphuongtran/warren#41), and the review verdict on its head commit.
  */
 
 function plural(n: number, word: string): string {
@@ -116,6 +122,17 @@ function PullRequestChecks({ run }: { run: RunRow }) {
 	);
 }
 
+/** The review verdict on the PR head commit, read with the checks. */
+function PullRequestReview({ run }: { run: RunRow }) {
+	const view = prReviewView(run.prChecks);
+	return (
+		<div className="flex flex-col gap-1">
+			<ToneChip tone={view.tone}>{view.label}</ToneChip>
+			<p className="break-words text-(--color-text-3) text-xs">{view.detail}</p>
+		</div>
+	);
+}
+
 export function DeliverySection({ run, isTerminal }: { run: RunRow; isTerminal: boolean }) {
 	const branch = pushedBranch(run);
 	return (
@@ -131,9 +148,14 @@ export function DeliverySection({ run, isTerminal }: { run: RunRow; isTerminal: 
 				<PullRequest run={run} isTerminal={isTerminal} />
 			</SummaryBlock>
 			{run.prUrl !== null ? (
-				<SummaryBlock label="Checks">
-					<PullRequestChecks run={run} />
-				</SummaryBlock>
+				<>
+					<SummaryBlock label="Checks">
+						<PullRequestChecks run={run} />
+					</SummaryBlock>
+					<SummaryBlock label="Review">
+						<PullRequestReview run={run} />
+					</SummaryBlock>
+				</>
 			) : null}
 		</SummaryCard>
 	);

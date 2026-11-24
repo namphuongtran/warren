@@ -140,4 +140,47 @@ describe("createPrMergeWatcher check summary (namphuongtran/warren#41)", () => {
 		expect(row?.prState).toBe("merged");
 		expect(row?.prChecks?.state).toBe("failing");
 	});
+
+	test("keeps reading a review still in progress when the PR merged, until it settles", async () => {
+		forge.setChecks(REF, HEAD, [check("e2e", "completed", "success")]);
+		const review = (state: "pending" | "success") =>
+			forge.setCommitStatuses(REF, HEAD, [{ context: "warren/review", state, description: null }]);
+		review("pending");
+		forge.markMerged(REF, pr);
+		build(async () => review("success"));
+		watcher?.adopt(runId, pr.webUrl);
+		await waitFor(() => watcher?.watching === 0);
+		const row = await repos.runs.get(runId);
+		expect(row?.prState).toBe("merged");
+		expect(row?.prChecks?.review).toEqual({ state: "approved", description: null });
+	});
+
+	test("a status read blip keeps the pending review and the watch, until the verdict lands", async () => {
+		forge.setChecks(REF, HEAD, [check("e2e", "completed", "success")]);
+		forge.setCommitStatuses(REF, HEAD, [
+			{ context: "warren/review", state: "pending", description: null },
+		]);
+		const listStatuses = forge.listCommitStatuses.bind(forge);
+		const polls: string[] = [];
+		forge.markMerged(REF, pr);
+		build(async () => {
+			polls.push("slept");
+			if (polls.length === 1) {
+				forge.listCommitStatuses = async () => ({
+					ok: false,
+					error: { kind: "network", detail: "socket hang up" },
+				});
+				return;
+			}
+			forge.listCommitStatuses = listStatuses;
+			forge.setCommitStatuses(REF, HEAD, [
+				{ context: "warren/review", state: "success", description: null },
+			]);
+		});
+		watcher?.adopt(runId, pr.webUrl);
+		await waitFor(() => watcher?.watching === 0);
+		expect(polls).toEqual(["slept", "slept"]);
+		const row = await repos.runs.get(runId);
+		expect(row?.prChecks?.review).toEqual({ state: "approved", description: null });
+	});
 });

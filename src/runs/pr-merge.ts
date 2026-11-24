@@ -194,7 +194,8 @@ export function mapLifecycle(state: PullRequestState): PrLifecyclePollResult {
 	return state.lifecycle === "closed_unmerged" ? { kind: "closed_unmerged" } : { kind: "open" };
 }
 
-function isTransient(error: ForgeError): boolean {
+/** A forge read failure that may clear on the next poll: a 5xx, a network error, or a rate limit. */
+export function isTransient(error: ForgeError): boolean {
 	if (error.kind === "rate_limited" || error.kind === "network") return true;
 	if (error.kind !== "http_error") return false;
 	return error.status === undefined || error.status >= 500;

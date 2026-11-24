@@ -193,6 +193,18 @@ export interface CheckRun {
 }
 
 /**
+ * One commit status: the forge's legacy status API, which a controller
+ * writes with a credential of its own (the campaign controller's
+ * `warren/review` verdict, namphuongtran/warren#18). The newest status per
+ * context only. A seam DTO, like `CheckRun`.
+ */
+export interface CommitStatus {
+	context: string;
+	state: "pending" | "success" | "failure" | "error";
+	description: string | null;
+}
+
+/**
  * One repository the forge credential can see — the repo picker's row
  * (warren-2601). `cloneUrl` exists for the same reason `PullRequestRef.webUrl`
  * does: display and the POST /projects paste, never parsed by domain code.
@@ -240,6 +252,8 @@ export interface ForgeError {
 export interface ForgeCapabilities {
 	/** Checks API reachable (GitHubPat: FALSE) */
 	checkRuns: boolean;
+	/** commit statuses readable through `listCommitStatuses` (GitHub: TRUE; GitLab/ADO: FALSE) */
+	commitStatuses: boolean;
 	/** log tail available */
 	jobLogs: boolean;
 	/** preview annotation can PATCH the PR body */
@@ -261,7 +275,7 @@ export interface ForgeCapabilities {
 }
 
 /**
- * The forge seam. Eleven methods. `parseRepoRef`, `openPullRequest`,
+ * The forge seam. `parseRepoRef`, `openPullRequest`,
  * `findPullRequest`, `getPullRequest`, `setPullRequestBody`, `listChecks`,
  * `fetchJobLogTail`, and `deleteBranch` are FIRM — each replaces a call site
  * that exists today and the audit grounds every signature. `gitCredential`
@@ -270,6 +284,8 @@ export interface ForgeCapabilities {
  * forge-supplied identity only earns its place once App mode ships.
  * `armAutoMerge` (pl-92a3) is the newest: warren arms the forge's own
  * auto-merge and the forge performs the merge once required checks pass.
+ * `listCommitStatuses` (namphuongtran/warren#38) reads what a controller
+ * published on a commit, such as the `warren/review` verdict.
  *
  * There is still deliberately no `mergePullRequest`: `armAutoMerge` arms
  * and the FORGE merges, which keeps required-check evaluation,
@@ -352,6 +368,13 @@ export interface Forge {
 	 * fine-grained PAT cannot reach this API at all (§5, §6.7).
 	 */
 	listChecks(ref: RepoRef, commit: string): Promise<ForgeResult<CheckSummary>>;
+
+	/**
+	 * Read a commit's statuses, the newest per context. Gated by
+	 * `capabilities.commitStatuses`; a forge without them answers
+	 * `unsupported`.
+	 */
+	listCommitStatuses(ref: RepoRef, commit: string): Promise<ForgeResult<CommitStatus[]>>;
 
 	/**
 	 * Tail a failing job's log. Best-effort by contract: a forge that cannot

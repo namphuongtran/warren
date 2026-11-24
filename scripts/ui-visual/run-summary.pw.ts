@@ -56,6 +56,11 @@ const ASSERTIONS: Record<string, (page: Page) => Promise<void>> = {
 		await expect(
 			section(page, "Delivery").getByRole("list", { name: "Failed checks" }),
 		).toContainText("e2e (phone, dark theme)");
+		// namphuongtran/warren#38: the review verdict, in the reviewer's own words.
+		await expect(
+			section(page, "Delivery").getByText("Changes requested", { exact: true }),
+		).toBeVisible();
+		await expect(section(page, "Delivery")).toContainText("fix round 1 of 2");
 
 		await section(page, "Quality").getByRole("link", { name: "events 2–5" }).click();
 		await expect(page).toHaveURL(/tab=activity&seq=2-5/);

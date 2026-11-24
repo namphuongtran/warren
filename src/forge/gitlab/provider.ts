@@ -35,6 +35,7 @@ import type {
 	ArmAutoMergeResult,
 	CheckRun,
 	CheckSummary,
+	CommitStatus,
 	Forge,
 	ForgeCapabilities,
 	ForgeRepoListing,
@@ -110,6 +111,7 @@ export class GitLabForge implements Forge {
 		this.timeoutMs = options.timeoutMs;
 		this.capabilities = {
 			checkRuns: true,
+			commitStatuses: false,
 			jobLogs: true,
 			pullRequestBodyEdit: true,
 			branchDelete: true,
@@ -351,6 +353,13 @@ export class GitLabForge implements Forge {
 			});
 		}
 		return ok({ name, email });
+	}
+
+	/** No status reader yet: nothing warren reads publishes one here (namphuongtran/warren#38). */
+	listCommitStatuses(_ref: RepoRef, _commit: string): Promise<ForgeResult<CommitStatus[]>> {
+		return Promise.resolve(
+			err({ kind: "unsupported", detail: "GitLabForge does not read commit statuses" }),
+		);
 	}
 
 	/** A token has no installation scope (§5): the repo picker falls back to URL paste. */

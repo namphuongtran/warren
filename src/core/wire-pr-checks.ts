@@ -23,4 +23,26 @@ export interface RunPrChecks {
 	readonly commit: string;
 	/** ISO 8601 instant of the read. */
 	readonly checkedAt: string;
+	/** The review verdict on the same commit; absent when none was published. */
+	readonly review?: RunPrReview;
+}
+
+/**
+ * The `warren/review` commit status the campaign controller publishes on
+ * the PR head (namphuongtran/warren#18), read beside the checks
+ * (namphuongtran/warren#38):
+ *
+ * - `approved` — the reviewer approved this commit.
+ * - `changes_requested` — the reviewer asked for changes, or the fix rounds
+ *   ran out and the PR needs a human.
+ * - `pending` — a review of this commit is in progress.
+ * - `failed` — the review itself failed; no verdict exists.
+ */
+export const RUN_PR_REVIEW_STATES = ["approved", "changes_requested", "pending", "failed"] as const;
+export type RunPrReviewState = (typeof RUN_PR_REVIEW_STATES)[number];
+
+export interface RunPrReview {
+	readonly state: RunPrReviewState;
+	/** The status description, such as "Changes requested (fix round 1 of 2)". */
+	readonly description: string | null;
 }

@@ -138,6 +138,10 @@ API, and a merge method would give the seam a capability with no caller.
 *(Amended 2026-09-17: the seam gained `armAutoMerge` — warren arms GitHub's
 auto-merge and GitHub still performs the merge; see
 [`forge-auto-merge.md`](./forge-auto-merge.md).)*
+*(Amended 2026-11-24: the seam gained `listCommitStatuses(ref, commit)`, a read
+of a commit's newest status per context, gated by `capabilities.commitStatuses`.
+The merge watcher uses it to show the campaign controller's `warren/review`
+verdict on the run Summary, namphuongtran/warren#38.)*
 
 ### 1.1 Registry semantics (decided 2026-08-11)
 
@@ -465,6 +469,7 @@ provider returns when the domain calls past a false flag.
 | Capability | GitHubApp | GitHubPat | AdoForge | GitLabForge | FakeForge | Domain behavior when absent |
 | --- | --- | --- | --- | --- | --- | --- |
 | `checkRuns` | yes | **no** | yes | yes | yes | CI-fixer poller stays idle and logs one notice per project. No run dispatches. The merge watcher stores the run's `prChecks` as `none` (namphuongtran/warren#41). |
+| `commitStatuses` | yes | yes | **no** | **no** | yes | The merge watcher stores `prChecks` without a `review` (namphuongtran/warren#38). |
 | `jobLogs` | yes | yes | yes | yes | synthetic | CI-fixer prompt omits the log tail and says so. |
 | `pullRequestBodyEdit` | yes | yes | yes | yes | yes | Preview annotation sub-step reports `skipped`, and the reap continues. |
 | `branchDelete` | yes | yes | yes | yes | yes | Acceptance cleanup logs and moves on. Never fails a scenario. |

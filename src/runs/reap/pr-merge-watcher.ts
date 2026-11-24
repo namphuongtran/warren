@@ -130,8 +130,9 @@ export function createPrMergeWatcher(input: CreatePrMergeWatcherInput): PrMergeW
 
 	/**
 	 * Store the check summary for the head commit a lifecycle read returned
-	 * (namphuongtran/warren#41), and report whether those checks are still
-	 * running. A failed read stores nothing and never ends the watch.
+	 * (namphuongtran/warren#41), and report whether those checks, or a review
+	 * of the commit (namphuongtran/warren#38), are still running. A failed
+	 * read stores nothing and never ends the watch.
 	 */
 	const recordChecks = async (
 		runId: string,
@@ -140,9 +141,10 @@ export function createPrMergeWatcher(input: CreatePrMergeWatcherInput): PrMergeW
 	): Promise<{ readonly pending: boolean }> => {
 		if (!("headCommit" in polled) || polled.headCommit === undefined) return { pending: false };
 		try {
-			const checks = await readChecks(prUrl, polled.headCommit);
+			const previous = (await repos.runs.get(runId))?.prChecks ?? null;
+			const checks = await readChecks(prUrl, polled.headCommit, previous);
 			if (checks !== null) await repos.runs.setPrChecks(runId, checks);
-			return { pending: checks?.state === "pending" };
+			return { pending: checks?.state === "pending" || checks?.review?.state === "pending" };
 		} catch (error) {
 			const reason = error instanceof Error ? error.message : String(error);
 			logger.warn({ runId, prUrl, reason }, "pr_merge_watch.checks_failed");
