@@ -121,6 +121,21 @@ export async function seedRunSummaries(repos: Repos, ids: SummaryRunIds): Promis
 	await repos.runs.setQualityGateOutcome(ids.succeeded, "unconfigured");
 }
 
+/**
+ * The other gate outcomes, on the first history runs, so the runs list renders
+ * every gate word, including its longest ones (namphuongtran/warren#36).
+ */
+export async function seedListGateOutcomes(
+	repos: Repos,
+	historyRunIds: readonly string[],
+): Promise<void> {
+	const outcomes = ["not_run", "stale", "unknown"] as const;
+	for (const [i, outcome] of outcomes.entries()) {
+		const runId = historyRunIds[i];
+		if (runId !== undefined) await repos.runs.setQualityGateOutcome(runId, outcome);
+	}
+}
+
 /** The full run's judge verdict: one class, pointed at two event ranges. */
 export function pinnedJudgeVerdicts(ids: SummaryRunIds, endedAt: string): PinnedJudgeVerdict[] {
 	return [

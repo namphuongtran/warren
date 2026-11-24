@@ -138,6 +138,10 @@ Releases **0.9.10 and earlier** live in
   Adds two nullable `runs` columns (SQLite 0057, Postgres 0052). A run
   dispatched before the upgrade but reaped after it reads `unconfigured`,
   because no gate was frozen onto it.
+  The runs list shows the outcome too: a Gate column on the desktop table,
+  with a hover that explains the outcome, and a `gate failed`-style figure on
+  the phone card. A project with no gate, or a run not reaped yet, shows a
+  quiet dash on the table and nothing on the card.
 
 - **Campaign-controller reviewer panel (namphuongtran/warren#18, Phase 2).**
   The repository policy's `review` block accepts `additionalReviewers`
