@@ -5,6 +5,7 @@ import {
 	evidenceHref,
 	findRunJudgeRow,
 	handoffStatusView,
+	prChecksView,
 	pullRequestTone,
 	pushedBranch,
 	qualityGateView,
@@ -189,5 +190,50 @@ describe("pullRequestTone", () => {
 		expect(pullRequestTone("open")).toBe("warning");
 		expect(pullRequestTone("closed_unmerged")).toBe("danger");
 		expect(pullRequestTone(null)).toBe("neutral");
+	});
+});
+
+describe("prChecksView", () => {
+	const read = {
+		failing: [] as string[],
+		commit: "a".repeat(40),
+		checkedAt: "2026-11-21T10:00:00.000Z",
+	};
+
+	test("flags failing checks as danger and says how many failed", () => {
+		expect(prChecksView({ ...read, state: "failing", failing: ["e2e", "lint"] })).toEqual({
+			label: "Failing",
+			tone: "danger",
+			detail: "2 checks failed on the pull request's head commit.",
+		});
+	});
+
+	test("names a passing, a running, and a check-less head", () => {
+		expect(prChecksView({ ...read, state: "passing" })).toMatchObject({
+			label: "Passing",
+			tone: "success",
+		});
+		expect(prChecksView({ ...read, state: "pending" })).toMatchObject({
+			label: "Running",
+			tone: "warning",
+		});
+		expect(prChecksView({ ...read, state: "none" })).toMatchObject({
+			label: "No checks",
+			tone: "neutral",
+		});
+	});
+
+	test("counts the failures already in while other checks still run", () => {
+		expect(prChecksView({ ...read, state: "pending", failing: ["e2e"] }).detail).toBe(
+			"1 check failed so far; the rest are still running.",
+		);
+	});
+
+	test("says the checks have not been read yet", () => {
+		expect(prChecksView(null)).toEqual({
+			label: "Not read yet",
+			tone: "neutral",
+			detail: "Warren reads the checks each time it polls the pull request.",
+		});
 	});
 });

@@ -1,0 +1,1 @@
+ALTER TABLE `runs` ADD `pr_checks_json` text;

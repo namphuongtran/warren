@@ -5,13 +5,14 @@
  *
  * - `prOpen` is the full run: an approach note, a `done` handoff that left
  *   the plan with a reason, a passing gate, a transcript, and a judge verdict
- *   whose class points at event ranges inside that transcript.
+ *   whose class points at event ranges inside that transcript. Its PR head
+ *   has a failing check (namphuongtran/warren#41).
  * - `failed` is the blocked run: an approach note, a `blocked` handoff with
  *   open questions, and a failing gate. The judge has not scored it.
  * - `succeeded` is the run with no extras: no approach note and no handoff.
  */
 
-import type { RunHandoffRecord } from "../../src/core/wire.ts";
+import type { RunHandoffRecord, RunPrChecks } from "../../src/core/wire.ts";
 import type { Repos } from "../../src/db/repos/index.ts";
 
 export interface SummaryRunIds {
@@ -101,6 +102,7 @@ export async function seedRunSummaries(repos: Repos, ids: SummaryRunIds): Promis
 	});
 	await repos.runs.setHandoff(ids.prOpen, FULL_HANDOFF);
 	await repos.runs.setQualityGateOutcome(ids.prOpen, "passed");
+	await repos.runs.setPrChecks(ids.prOpen, prChecks("failing", ["e2e (phone, dark theme)"]));
 
 	await repos.runs.setApproach(ids.failed, {
 		state: "recorded",
@@ -133,6 +135,30 @@ export async function seedListGateOutcomes(
 	for (const [i, outcome] of outcomes.entries()) {
 		const runId = historyRunIds[i];
 		if (runId !== undefined) await repos.runs.setQualityGateOutcome(runId, outcome);
+	}
+}
+
+const FIXTURE_HEAD = "4f1c2a9e8b7d6c5f4e3d2c1b0a9f8e7d6c5b4a39";
+
+function prChecks(state: RunPrChecks["state"], failing: string[] = []): RunPrChecks {
+	return { state, failing, commit: FIXTURE_HEAD, checkedAt: "2026-11-21T10:00:00.000Z" };
+}
+
+/**
+ * The other check states, on the first history runs that opened a PR, so the
+ * runs list renders every check word (namphuongtran/warren#41).
+ */
+export async function seedListPrChecks(
+	repos: Repos,
+	historyRunIds: readonly string[],
+): Promise<void> {
+	const states = [prChecks("passing"), prChecks("pending"), prChecks("none")];
+	for (const runId of historyRunIds) {
+		const next = states[0];
+		if (next === undefined) return;
+		if ((await repos.runs.get(runId))?.prUrl == null) continue;
+		await repos.runs.setPrChecks(runId, next);
+		states.shift();
 	}
 }
 

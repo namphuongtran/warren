@@ -63,11 +63,10 @@ export * from "./wire-inbox.ts";
 // The analytics-insight vocabulary (warren-be04) lives in ./wire-insight.ts.
 export * from "./wire-insight.ts";
 export * from "./wire-ops.ts"; // ops-overview window vocabulary (warren-7194)
+export * from "./wire-pr-checks.ts"; // PR check summary (namphuongtran/warren#41)
 export * from "./wire-provider-quota.ts"; // provider usage windows (namphuongtran/warren#30)
 export * from "./wire-quality-gate.ts"; // gate outcomes (namphuongtran/warren#36)
-// The runtime-id vocabulary (warren-c4be) lives in ./wire-runtime.ts
-// (file-size budget); re-exported for one canonical home.
-export * from "./wire-runtime.ts";
+export * from "./wire-runtime.ts"; // runtime-id vocabulary (warren-c4be)
 export * from "./wire-tool-stall.ts"; // stalled tool call (namphuongtran/warren#83)
 // The IssueTracker seam vocabulary (warren-6c29) lives in ./wire-tracker.ts.
 export * from "./wire-tracker.ts";

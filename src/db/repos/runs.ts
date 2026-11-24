@@ -12,6 +12,7 @@ import type {
 	RunFailureReason,
 	RunHandoffRecord,
 	RunMode,
+	RunPrChecks,
 	RunQualityGateOutcome,
 	RunRow,
 	RunState,
@@ -27,7 +28,7 @@ import {
 	setOutcomeFacts as setOutcomeFactsBody,
 	setQualityGateOutcome as setQualityGateOutcomeBody,
 } from "./runs-outcome-facts.ts";
-import { setBranch, setModel, setPrState, setPrUrl } from "./runs-pr.ts";
+import { setBranch, setModel, setPrChecks, setPrState, setPrUrl } from "./runs-pr.ts";
 import { type AttachPreviewInput, attachPreview } from "./runs-preview.ts";
 import {
 	aggregate,
@@ -161,6 +162,7 @@ export class RunsRepo {
 			// Merge-watcher facts (warren-3bc6): unset until post_reap settles the PR.
 			prState: null,
 			prMergedAt: null,
+			prChecks: null,
 			// Outcome facts (warren-ab2b): unknown until reap measures them — NULL.
 			commitsAhead: null,
 			baseSha: null,
@@ -404,27 +406,25 @@ export class RunsRepo {
 		return attachPreview(this.adapter, id, input);
 	}
 
-	/** PR-fact writes (warren-f6af / warren-3bc6); bodies live in runs-pr.ts. */
+	/** PR, branch, model, and check-summary fact writes; bodies live in runs-pr.ts. */
 	setPrUrl(id: string, prUrl: string | null): Promise<RunRow> {
 		return setPrUrl(this.adapter, id, prUrl);
 	}
 
-	/** Branch-fact write (warren-5255); body lives in runs-pr.ts. */
 	setBranch(id: string, branch: string): Promise<RunRow> {
 		return setBranch(this.adapter, id, branch);
 	}
 
-	/** Observed-model write (namphuongtran/warren#7); body lives in runs-pr.ts. */
 	setModel(id: string, model: string): Promise<void> {
 		return setModel(this.adapter, id, model);
 	}
 
-	setPrState(
-		id: string,
-		prState: PullRequestLifecycle,
-		prMergedAt: string | null,
-	): Promise<RunRow> {
+	setPrState(id: string, prState: PullRequestLifecycle, prMergedAt: string | null) {
 		return setPrState(this.adapter, id, prState, prMergedAt);
+	}
+
+	setPrChecks(id: string, checks: RunPrChecks): Promise<void> {
+		return setPrChecks(this.adapter, id, checks);
 	}
 
 	/** PRs the merge watcher still has to settle (warren-3bc6): boot re-adopts these. */

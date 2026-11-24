@@ -7,6 +7,7 @@
 import type {
 	PullRequestLifecycle,
 	RunHandoffStatus,
+	RunPrChecks,
 	RunQualityGateOutcome,
 	RunRow,
 } from "../../api/types.ts";
@@ -190,4 +191,53 @@ const PULL_REQUEST_TONES: Record<PullRequestLifecycle, SummaryTone> = {
 /** A PR's lifecycle as a tone; null (not polled yet) stays neutral. */
 export function pullRequestTone(state: PullRequestLifecycle | null): SummaryTone {
 	return state === null ? "neutral" : PULL_REQUEST_TONES[state];
+}
+
+function countChecks(n: number): string {
+	return `${n} check${n === 1 ? "" : "s"}`;
+}
+
+/**
+ * The PR head commit's check summary (namphuongtran/warren#41) as a labelled
+ * tone. Null means the merge watcher has not read the checks yet.
+ */
+export function prChecksView(checks: RunPrChecks | null): SummaryFactView {
+	if (checks === null) {
+		return {
+			label: "Not read yet",
+			tone: "neutral",
+			detail: "Warren reads the checks each time it polls the pull request.",
+		};
+	}
+	const failed = countChecks(checks.failing.length);
+	switch (checks.state) {
+		case "passing":
+			return {
+				label: "Passing",
+				tone: "success",
+				detail: "Every check passed on the pull request's head commit.",
+			};
+		case "failing":
+			return {
+				label: "Failing",
+				tone: "danger",
+				detail: `${failed} failed on the pull request's head commit.`,
+			};
+		case "pending":
+			return {
+				label: "Running",
+				tone: "warning",
+				detail:
+					checks.failing.length > 0
+						? `${failed} failed so far; the rest are still running.`
+						: "Checks are still running on the pull request's head commit.",
+			};
+		case "none":
+			return {
+				label: "No checks",
+				tone: "neutral",
+				detail:
+					"The forge reported no checks for the pull request's head commit, or this forge credential cannot read checks.",
+			};
+	}
 }

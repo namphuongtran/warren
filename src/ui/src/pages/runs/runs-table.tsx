@@ -3,7 +3,13 @@ import { useNavigate } from "react-router-dom";
 import type { RunRow } from "@/api/types.ts";
 import { INVENTORY_TONE_CLASS } from "@/components/ui/inventory-card.tsx";
 import { cn, relativeTime } from "../../lib/utils.ts";
-import { displayStateOf, gateCellOf, quotaWaitOf, stuckInOf } from "./runs-card.helpers.ts";
+import {
+	checksCellOf,
+	displayStateOf,
+	gateCellOf,
+	quotaWaitOf,
+	stuckInOf,
+} from "./runs-card.helpers.ts";
 import {
 	branchLabelOf,
 	formatDuration,
@@ -159,18 +165,34 @@ function ProjectSubLine({ row }: { row: RunRow }) {
 	);
 }
 
-/** DELIVERY column: PR link when reap opened one, else the commit count. */
+/** The PR's check word beside the PR link (namphuongtran/warren#41); hover names failures. */
+function ChecksWord({ row }: { row: RunRow }) {
+	const cell = checksCellOf(row);
+	if (cell === null) return null;
+	const tone = INVENTORY_TONE_CLASS[cell.tone];
+	return (
+		<span className="flex items-center gap-1.5 whitespace-nowrap" title={cell.title}>
+			<span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", tone.dot)} aria-hidden />
+			<span className={cn(STATUS_WORD, tone.text)}>{cell.label}</span>
+		</span>
+	);
+}
+
+/** DELIVERY column: PR link and its checks when reap opened one, else the commit count. */
 function DeliveryCell({ row }: { row: RunRow }) {
 	if (row.prUrl !== null) {
 		return (
-			<a
-				href={row.prUrl}
-				target="_blank"
-				rel="noreferrer"
-				className="inline-flex h-5 items-center rounded-(--radius-xs) border border-(--color-border-strong) px-1.5 font-mono text-(--color-text-2) text-[9px] leading-3 hover:text-(--color-text)"
-			>
-				PR
-			</a>
+			<span className="flex items-center gap-2">
+				<a
+					href={row.prUrl}
+					target="_blank"
+					rel="noreferrer"
+					className="inline-flex h-5 items-center rounded-(--radius-xs) border border-(--color-border-strong) px-1.5 font-mono text-(--color-text-2) text-[9px] leading-3 hover:text-(--color-text)"
+				>
+					PR
+				</a>
+				<ChecksWord row={row} />
+			</span>
 		);
 	}
 	if (row.commitsAhead !== null) {

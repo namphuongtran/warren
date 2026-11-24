@@ -51,6 +51,11 @@ const ASSERTIONS: Record<string, (page: Page) => Promise<void>> = {
 		await expect(
 			section(page, "Delivery").getByRole("link", { name: /Open the PR/ }),
 		).toBeVisible();
+		// namphuongtran/warren#41: the PR head's failing check, named.
+		await expect(section(page, "Delivery")).toContainText("Failing");
+		await expect(
+			section(page, "Delivery").getByRole("list", { name: "Failed checks" }),
+		).toContainText("e2e (phone, dark theme)");
 
 		await section(page, "Quality").getByRole("link", { name: "events 2–5" }).click();
 		await expect(page).toHaveURL(/tab=activity&seq=2-5/);

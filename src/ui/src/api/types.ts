@@ -39,6 +39,8 @@ export {
 	type RunHandoffRecord,
 	type RunHandoffStatus,
 	type RunMode,
+	type RunPrCheckState,
+	type RunPrChecks,
 	type RunQualityGateOutcome,
 	type RunState,
 	type RunToolStallView,
@@ -61,6 +63,7 @@ import type {
 	RunFailureReason,
 	RunHandoffRecord,
 	RunMode,
+	RunPrChecks,
 	RunQualityGateOutcome,
 	RunState,
 	RunToolStallView,
@@ -141,11 +144,7 @@ export interface RunRow {
 	renderedAgentJson: unknown;
 	state: RunState;
 	failureReason: RunFailureReason | null;
-	/**
-	 * The queued instant as epoch ms (warren-0af9 / pl-103e step 1). Null on
-	 * rows written before the column existed — render as "unknown", never as
-	 * zero queue wait.
-	 */
+	/** Queued instant as epoch ms (warren-0af9). Null = pre-column row: "unknown", never zero wait. */
 	createdAt: number | null;
 	startedAt: string | null;
 	endedAt: string | null;
@@ -168,6 +167,7 @@ export interface RunRow {
 	/** Merge-watcher PR facts (warren-3bc6); null = unknown (no PR, old rows), never "not merged". */
 	prState: PullRequestLifecycle | null;
 	prMergedAt: string | null;
+	prChecks: RunPrChecks | null; // PR head check summary (namphuongtran/warren#41); null = not read
 	/** Existing branch reap pushes the workspace back to (#419). Null when unset. */
 	targetBranch: string | null;
 	branch: string | null; // composed workspace branch frozen at dispatch (warren-5255)

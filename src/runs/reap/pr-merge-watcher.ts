@@ -22,6 +22,9 @@
  *     `pr_state` NULL. NULL reads as "unknown", never "not merged".
  *   - `open` → write `pr_state=open` (first observation) and keep
  *     polling on a bounded exponential backoff.
+ *   - Each lifecycle read also stores the head commit's check summary
+ *     (namphuongtran/warren#41). A `merged` or `closed_unmerged` PR whose
+ *     checks are still `pending` keeps polling until they settle.
  *   - `forge_error` → only `not_found` is fatal (the PR is genuinely
  *     gone — stop, leave NULL); everything else keeps waiting, bounded by
  *     the watch budget. The checker inside already retried the transient
@@ -42,6 +45,7 @@ import type { Repos } from "../../db/repos/index.ts";
 import type { Forge } from "../../forge/contract.ts";
 import type { LifecycleExtension } from "../lifecycle-bus.ts";
 import { WARREN_EXT_PROTOCOL } from "../lifecycle-bus.ts";
+import { createPrChecksReader, type PrChecksReader } from "../pr-check-summary.ts";
 import { createPrMergeChecker, type PrMergeChecker, type PrMergePollResult } from "../pr-merge.ts";
 
 /** First poll after adoption (and the boot re-adoption stagger quantum). */
@@ -64,6 +68,8 @@ export interface CreatePrMergeWatcherInput {
 	readonly logger: PrMergeWatcherLogger;
 	/** Test seam: a pre-built checker replaces the forge-derived one. */
 	readonly checker?: PrMergeChecker;
+	/** Test seam: replaces the forge-derived check summary reader (namphuongtran/warren#41). */
+	readonly checksReader?: PrChecksReader;
 	/** Test seam for the backoff delay. */
 	readonly sleep?: (ms: number) => Promise<void>;
 	readonly initialIntervalMs?: number;
@@ -101,10 +107,11 @@ export function createPrMergeWatcher(input: CreatePrMergeWatcherInput): PrMergeW
 	const { repos, logger } = input;
 	const checker = input.checker ?? createPrMergeChecker({ forge: input.forge, logger });
 	const sleep = input.sleep ?? defaultSleep;
+	const now = input.now ?? (() => new Date());
+	const readChecks = input.checksReader ?? createPrChecksReader({ forge: input.forge, now });
 	const initialIntervalMs = input.initialIntervalMs ?? DEFAULT_INITIAL_INTERVAL_MS;
 	const maxIntervalMs = input.maxIntervalMs ?? DEFAULT_MAX_INTERVAL_MS;
 	const maxWatchMs = input.maxWatchMs ?? DEFAULT_MAX_WATCH_MS;
-	const now = input.now ?? (() => new Date());
 	const entries = new Map<string, WatchEntry>();
 
 	// Resolves when the delay elapses OR when stop() cancels the watch —
@@ -121,13 +128,40 @@ export function createPrMergeWatcher(input: CreatePrMergeWatcherInput): PrMergeW
 		});
 	};
 
-	/** One poll: write what the forge said, report whether the watch ends. */
+	/**
+	 * Store the check summary for the head commit a lifecycle read returned
+	 * (namphuongtran/warren#41), and report whether those checks are still
+	 * running. A failed read stores nothing and never ends the watch.
+	 */
+	const recordChecks = async (
+		runId: string,
+		prUrl: string,
+		polled: PrMergePollResult,
+	): Promise<{ readonly pending: boolean }> => {
+		if (!("headCommit" in polled) || polled.headCommit === undefined) return { pending: false };
+		try {
+			const checks = await readChecks(prUrl, polled.headCommit);
+			if (checks !== null) await repos.runs.setPrChecks(runId, checks);
+			return { pending: checks?.state === "pending" };
+		} catch (error) {
+			const reason = error instanceof Error ? error.message : String(error);
+			logger.warn({ runId, prUrl, reason }, "pr_merge_watch.checks_failed");
+			return { pending: false };
+		}
+	};
+
+	/**
+	 * One poll: write what the forge said, report whether the watch ends. A
+	 * PR that merged or closed while its checks still ran keeps the watch
+	 * going, within the watch budget, so the stored summary is the final one.
+	 */
 	const pollOnce = async (runId: string, prUrl: string): Promise<"done" | "keep"> => {
 		const polled = await checker(prUrl);
+		const checks = await recordChecks(runId, prUrl, polled);
 		const disposition = classifyPoll(polled);
 		if (disposition.action === "settle") {
 			await repos.runs.setPrState(runId, disposition.prState, disposition.prMergedAt);
-			return "done";
+			return checks.pending ? "keep" : "done";
 		}
 		if (disposition.action === "stop") {
 			logger.warn({ runId, prUrl, detail: disposition.detail }, disposition.logMsg);

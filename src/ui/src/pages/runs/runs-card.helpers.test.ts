@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type { RunRow } from "@/api/types.ts";
 import {
 	capPctOf,
+	checksCellOf,
 	costNoteToneOf,
 	displayStateOf,
 	gateCellOf,
@@ -32,6 +33,7 @@ function run(overrides: Partial<RunRow>): RunRow {
 		insertions: null,
 		deletions: null,
 		qualityGateOutcome: null,
+		prChecks: null,
 		handoff: null,
 		approach: null,
 		prompt: "",
@@ -252,5 +254,35 @@ describe("gateCellOf (namphuongtran/warren#36)", () => {
 		expect(gateCellOf(run({ state: "failed" })).title).toBe(
 			"No gate outcome was stored for this run.",
 		);
+	});
+});
+
+describe("checksCellOf (namphuongtran/warren#41)", () => {
+	const read = { commit: "a".repeat(40), checkedAt: "2026-11-21T10:00:00.000Z" };
+	const withPr = { state: "succeeded", prUrl: "https://github.com/o/r/pull/3" } as const;
+
+	test("shows failing checks as a danger word that names them on hover", () => {
+		const cell = checksCellOf(
+			run({ ...withPr, prChecks: { ...read, state: "failing", failing: ["e2e", "lint"] } }),
+		);
+		expect(cell).toEqual({
+			tone: "danger",
+			label: "checks failing",
+			title: "2 checks failed on the pull request's head commit. Failed: e2e, lint",
+		});
+	});
+
+	test("shows nothing for a run without a PR, or with checks not read yet", () => {
+		expect(checksCellOf(run({ state: "succeeded", prUrl: null }))).toBeNull();
+		expect(checksCellOf(run({ ...withPr, prChecks: null }))).toBeNull();
+	});
+
+	test.each([
+		["passing", "success", "checks passing"],
+		["pending", "warning", "checks running"],
+		["none", "muted", "no checks"],
+	] as const)("shows %s checks as a %s word", (state, tone, label) => {
+		const cell = checksCellOf(run({ ...withPr, prChecks: { ...read, state, failing: [] } }));
+		expect(cell).toMatchObject({ tone, label });
 	});
 });

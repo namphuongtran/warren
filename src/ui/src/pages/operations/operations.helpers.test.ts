@@ -34,6 +34,7 @@ function run(overrides: Partial<RunRow>): RunRow {
 		insertions: null,
 		deletions: null,
 		qualityGateOutcome: null,
+		prChecks: null,
 		handoff: null,
 		approach: null,
 		prompt: "do the thing",

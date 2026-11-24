@@ -350,7 +350,10 @@ describe("createMergeStallProbe — integration with the merge poll target", () 
 		const { ref, pr } = await openPr(forge);
 		forge.setChecks(ref, "fake-head-warren/run-1", [GREEN_RUN]);
 		const checker = createPrMergeChecker({ forge });
-		expect(await checker(pr.webUrl)).toEqual({ kind: "open" });
+		expect(await checker(pr.webUrl)).toEqual({
+			kind: "open",
+			headCommit: "fake-head-warren/run-1",
+		});
 		const probe = createMergeStallProbe({ forge });
 		expect(await probe(pr.webUrl)).toEqual({ checksPassing: true, autoMerge: "unarmed" });
 	});

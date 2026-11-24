@@ -42,10 +42,17 @@ import type {
 	RepoRef,
 } from "../forge/contract.ts";
 
+/**
+ * A lifecycle read. The checker sets `headCommit` to the PR head it read, so
+ * the merge watcher can read that commit's checks without a second PR read
+ * (namphuongtran/warren#41). Unset on results mapped without the checker.
+ */
+type LifecycleRead = { readonly headCommit?: string };
+
 export type PrMergePollResult =
-	| { readonly kind: "merged"; readonly mergedAt: string }
-	| { readonly kind: "open" }
-	| { readonly kind: "closed_unmerged" }
+	| ({ readonly kind: "merged"; readonly mergedAt: string } & LifecycleRead)
+	| ({ readonly kind: "open" } & LifecycleRead)
+	| ({ readonly kind: "closed_unmerged" } & LifecycleRead)
 	| { readonly kind: "unparseable"; readonly detail: string }
 	| { readonly kind: "forge_error"; readonly errorKind: ForgeErrorKind; readonly detail: string };
 
@@ -121,7 +128,9 @@ export function createPrMergeChecker(input: CreatePrMergeCheckerInput): PrMergeC
 		let last: ForgeError = { kind: "network", detail: "no result" };
 		for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
 			const result = await forge.getPullRequest(target.ref, target.pr);
-			if (result.ok) return mapLifecycle(result.value);
+			if (result.ok) {
+				return { ...mapLifecycle(result.value), headCommit: result.value.headCommit };
+			}
 			last = result.error;
 			if (!isTransient(result.error)) {
 				noticeUnauthorized(target.ref.key, result.error);

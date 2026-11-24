@@ -12,7 +12,7 @@
 import { eq } from "drizzle-orm";
 import { NotFoundError } from "../../core/errors.ts";
 import type { SqliteDrizzleDb } from "../client.ts";
-import type { PullRequestLifecycle, RunRow } from "../schema.ts";
+import type { PullRequestLifecycle, RunPrChecks, RunRow } from "../schema.ts";
 import type { DrizzleAdapter } from "./drizzle-adapter.ts";
 
 /** Load the row or throw NotFoundError (mirrors RunsRepo.require). */
@@ -89,4 +89,19 @@ export async function setPrState(
 	const current = await requireRun(adapter, id);
 	await adapter.runWrite(db.update(runs).set({ prState, prMergedAt }).where(eq(runs.id, id)));
 	return { ...current, prState, prMergedAt };
+}
+
+/**
+ * Persist the merge watcher's read of the PR head commit's checks
+ * (namphuongtran/warren#41). Last write wins: each poll overwrites the
+ * previous read, so the row follows the checks as they change.
+ */
+export async function setPrChecks(
+	adapter: DrizzleAdapter,
+	id: string,
+	prChecks: RunPrChecks,
+): Promise<void> {
+	const db = adapter.drizzle as SqliteDrizzleDb;
+	const runs = adapter.schema.runs;
+	await adapter.runWrite(db.update(runs).set({ prChecks }).where(eq(runs.id, id)));
 }

@@ -1,4 +1,4 @@
-import type { RunRow } from "@/api/types.ts";
+import type { RunPrCheckState, RunRow } from "@/api/types.ts";
 import type { InventoryCardTone } from "@/components/ui/inventory-card.tsx";
 // Relative, not `@/` — this module is imported by runs-card.helpers.test.ts,
 // which runs under the repo-root `bun test`, where the `@/` alias does not
@@ -6,7 +6,7 @@ import type { InventoryCardTone } from "@/components/ui/inventory-card.tsx";
 import { isTerminalRunState } from "../../api/types.ts";
 import { formatWaitMs } from "../../lib/format-wait.ts";
 import { humanizeWireValue } from "../../lib/labels.ts";
-import { qualityGateView, type SummaryTone } from "../run-detail/summary-model.ts";
+import { prChecksView, qualityGateView, type SummaryTone } from "../run-detail/summary-model.ts";
 
 /**
  * Pure cell/subline logic for the Runs mobile row card (warren-f8a2):
@@ -172,7 +172,7 @@ export function costNoteToneOf(row: RunRow): "default" | "warning" {
 	return row.costUsd / row.maxCostUsd >= CAP_WARNING_RATIO ? "warning" : "default";
 }
 
-const GATE_TONES: Record<SummaryTone, InventoryCardTone> = {
+const SUMMARY_TONES: Record<SummaryTone, InventoryCardTone> = {
 	success: "success",
 	warning: "warning",
 	danger: "danger",
@@ -191,9 +191,41 @@ export function gateCellOf(row: RunRow): RunGateCell {
 		return { tone: "muted", label: "—", title: view.detail, hasOutcome: false };
 	}
 	return {
-		tone: GATE_TONES[view.tone],
+		tone: SUMMARY_TONES[view.tone],
 		label: view.label.toLowerCase(),
 		title: view.detail,
 		hasOutcome: true,
+	};
+}
+
+/** The runs-list word per check state; the Summary tab says the same at length. */
+const CHECKS_LABELS: Record<RunPrCheckState, string> = {
+	passing: "checks passing",
+	failing: "checks failing",
+	pending: "checks running",
+	none: "no checks",
+};
+
+/** The runs-list check word for a run's PR (namphuongtran/warren#41). */
+export interface RunChecksCell {
+	readonly tone: InventoryCardTone;
+	readonly label: string;
+	readonly title: string;
+}
+
+/**
+ * The PR head commit's checks as a short toned word, with the Summary copy
+ * and the failed check names on hover. Null when the run has no PR or the
+ * checks have not been read yet: the list then shows the PR alone.
+ */
+export function checksCellOf(row: RunRow): RunChecksCell | null {
+	const checks = row.prChecks;
+	if (row.prUrl === null || checks === null) return null;
+	const view = prChecksView(checks);
+	const failed = checks.failing.length > 0 ? ` Failed: ${checks.failing.join(", ")}` : "";
+	return {
+		tone: SUMMARY_TONES[view.tone],
+		label: CHECKS_LABELS[checks.state],
+		title: `${view.detail}${failed}`,
 	};
 }

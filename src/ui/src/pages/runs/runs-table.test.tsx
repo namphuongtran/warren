@@ -26,6 +26,7 @@ function run(overrides: Partial<RunRow>): RunRow {
 		insertions: null,
 		deletions: null,
 		qualityGateOutcome: null,
+		prChecks: null,
 		handoff: null,
 		approach: null,
 		prompt: "",
@@ -148,5 +149,24 @@ describe("RunsTable Gate column (namphuongtran/warren#36)", () => {
 			false,
 		);
 		expect(html).toContain('title="The project sets no quality gate."');
+	});
+});
+
+describe("RunsTable Delivery checks (namphuongtran/warren#41)", () => {
+	test("shows the PR's failing checks beside the PR link, named on hover", () => {
+		const prChecks = {
+			state: "failing",
+			failing: ["e2e"],
+			commit: "a".repeat(40),
+			checkedAt: "2026-11-21T10:00:00.000Z",
+		} as const;
+		const html = renderTable(
+			[run({ state: "succeeded", prUrl: "https://github.com/o/r/pull/3", prChecks })],
+			false,
+		);
+		expect(html).toContain(">checks failing<");
+		expect(html).toContain(
+			'title="1 check failed on the pull request&#x27;s head commit. Failed: e2e"',
+		);
 	});
 });
