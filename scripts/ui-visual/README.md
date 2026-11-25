@@ -255,7 +255,8 @@ sparse daily series production returned. Filter cases from
 `harnessCases()` down to the pages, viewports, and themes the bug touches.
 
 Name repros `<seed-id>.pw.ts`, never `<seed-id>.spec.ts`: `bun test` would
-load a spec file and fail the root suite. `repros.test.ts` enforces the
+load a spec file and fail the root suite. A bug tracked as a GitHub issue
+on this fork uses `gh-<number>.pw.ts`. `repros.test.ts` enforces the
 name and checks that `.github/ISSUE_TEMPLATE/ui-bug.yml` keeps asking for
 the page, viewport, theme, and a screenshot.
 

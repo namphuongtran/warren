@@ -568,8 +568,9 @@ does. The repro stays in the tree after the merge. `check:ui-visual`
 runs every file in the directory, so the bug cannot return silently.
 
 Name each file `<seed-id>.pw.ts`, never `<seed-id>.spec.ts`, because
-`bun test` loads spec files. `scripts/ui-visual/repros.test.ts` enforces
-the name.
+`bun test` loads spec files. A bug tracked as a GitHub issue on this
+fork uses `gh-<number>.pw.ts` instead.
+`scripts/ui-visual/repros.test.ts` enforces the name.
 
 Human reporters use the UI bug issue template
 (`.github/ISSUE_TEMPLATE/ui-bug.yml`), which asks for the page,
