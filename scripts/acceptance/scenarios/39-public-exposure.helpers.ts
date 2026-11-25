@@ -102,14 +102,14 @@ export const SENTINELS = {
 
 /**
  * Field names that must never appear in an anonymous body, derived from the
- * exported complements of each public projection. Every name here is
- * substring-unambiguous: none is a prefix or infix of a field the
- * projections deliberately keep (`costUsd`, `previewState`, …), so a raw
- * body scan is sound.
+ * exported complements of each public projection. `assertNoLeak` matches
+ * each as a whole identifier (namphuongtran/warren#118), so no name here may
+ * EQUAL a field the projections keep; one that only prefixes a kept field
+ * (`qualityGate` / `qualityGateOutcome`) is sound. The leaks test pins it.
  *
  * `REDACTED_RUN_TOTALS_FIELDS` (`cost`) and `REDACTED_RUN_GROUP_FIELDS`
- * (`costUsd` / `priced`) are deliberately NOT here — those names DO collide
- * with public ones, so the scenario holds them structurally instead
+ * (`costUsd` / `priced`) are deliberately NOT here — those names DO equal
+ * public ones, so the scenario holds them structurally instead
  * (`assertAnalyticsRollupsAbsent`).
  */
 export const FORBIDDEN_FIELD_NAMES: readonly string[] = [
