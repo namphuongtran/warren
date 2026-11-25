@@ -435,6 +435,13 @@
 			"when": 1795528533709,
 			"tag": "0061_chief_bruce_banner",
 			"breakpoints": true
+		},
+		{
+			"idx": 62,
+			"version": "6",
+			"when": 1795646721165,
+			"tag": "0062_cloudy_captain_flint",
+			"breakpoints": true
 		}
 	]
 }

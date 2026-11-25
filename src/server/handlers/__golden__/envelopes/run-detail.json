@@ -60,6 +60,8 @@
 			"deletions": null,
 			"qualityGate": null,
 			"qualityGateOutcome": null,
+			"protectedPaths": null,
+			"qualityFlags": null,
 			"handoff": null,
 			"approach": null,
 			"maxCostUsd": null,

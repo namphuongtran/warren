@@ -93,6 +93,17 @@ function readToolTrace(
 	return { uses, results };
 }
 
+/**
+ * The shell commands the agent ran, in order, read through the runtime's
+ * tool shape. The shortcut scan (namphuongtran/warren#37) reads git
+ * invocations from these.
+ */
+export function readToolCommands(runtime: RuntimeId, events: readonly GateToolEvent[]): string[] {
+	return readToolTrace(runtime, events).uses.flatMap((use) =>
+		use.command === null ? [] : [use.command],
+	);
+}
+
 /** The last tool call that invoked the gate, with where the invocation sits in its command. */
 function findLastGateCall(
 	uses: readonly ToolUse[],

@@ -58,8 +58,9 @@ describe("reapRun", () => {
 		);
 		// Reap runs `git push` then `git rev-list --count <base>..HEAD`
 		// (warren-f3bb), then `git diff --numstat <base>..HEAD` + the
-		// `git merge-base <base> HEAD` for base_sha (warren-ab2b/b19e).
-		expect(e.calls).toHaveLength(4);
+		// `git merge-base <base> HEAD` for base_sha (warren-ab2b/b19e) + the
+		// `git diff --unified=0` the shortcut scan reads (namphuongtran/warren#37).
+		expect(e.calls).toHaveLength(5);
 		expect(e.calls[0]?.cmd).toBe("git");
 		expect(e.calls[0]?.args).toEqual(["push", "origin", "HEAD:agent/refactor-bot/run-1"]);
 		expect(e.calls[0]?.cwd).toBe("/data/sandbox/ws");

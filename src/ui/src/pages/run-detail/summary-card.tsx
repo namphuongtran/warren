@@ -67,6 +67,31 @@ export function SummaryBlock({ label, children }: { label: string; children: Rea
 	);
 }
 
+/** A link out to the forge, opened in a new tab. `mono` sets it as a path. */
+export function ExternalLink({
+	href,
+	mono = false,
+	children,
+}: {
+	href: string;
+	mono?: boolean;
+	children: string;
+}) {
+	return (
+		<a
+			href={href}
+			target="_blank"
+			rel="noreferrer noopener"
+			className={cn(
+				"w-fit text-(--color-primary) text-xs underline-offset-2 hover:underline",
+				mono ? "break-all font-mono" : "font-medium",
+			)}
+		>
+			{children} ↗
+		</a>
+	);
+}
+
 /** The muted line a section shows when it has nothing to report. */
 export function SummaryEmpty({ children }: { children: ReactNode }) {
 	return <p className="text-(--color-text-3) text-xs">{children}</p>;

@@ -50,6 +50,7 @@ import { HandoffConfigSchema } from "./handoff-config.ts";
 import { MigrationsConfigSchema } from "./migrations-config.ts";
 import { PrConfigSchema } from "./pr-config.ts";
 import { AdmissionConfigSchema, ResourcesConfigSchema } from "./resources-config.ts";
+import { ShortcutFlagsConfigSchema } from "./shortcut-flags-config.ts";
 import { TrackerConfigSchema } from "./tracker-config.ts";
 
 // warren-3db0: re-exported so the historical import sites (and
@@ -403,21 +404,20 @@ export const DefaultsConfigSchema = z
 		// warren-3db0: opt-in closed-loop healer; missing block → intake skips it.
 		healer: HealerConfigSchema.optional(),
 		qualityGate: z.string().min(1, "qualityGate must be non-empty if provided").optional(),
-		// warren-540f: free-text onboarding context composeDispatchPrompt injects
-		// into every agent's prompt ("Python repo, gate is pytest -q, no tracker")
-		// for a mirror you do not control. Capped at 8 KiB so a runaway blob
-		// cannot eat the prompt budget; counted in dispatch-context `prompt_bytes`.
+		// warren-540f: free-text onboarding context injected into every agent's
+		// prompt for a mirror you do not control. Capped at 8 KiB so a runaway
+		// blob cannot eat the prompt budget (counted in `prompt_bytes`).
 		repoContext: z
 			.string()
 			.min(1, "repoContext must be non-empty if provided")
 			.max(8192, "repoContext must be at most 8192 characters")
 			.optional(),
-		// warren-d3a9: external tracker container (warren-tracker/v1). Absent →
-		// the boot-resolved default tracker (SeedsTracker today).
+		// warren-d3a9: external tracker container (warren-tracker/v1); absent → default.
 		tracker: TrackerConfigSchema.optional(),
 		// warren-6c5a / pl-92a3 step 4: opt-in PR auto-merge (pr-config.ts).
 		pr: PrConfigSchema.optional(),
 		handoff: HandoffConfigSchema.optional(), // namphuongtran/warren#21 (handoff-config.ts)
+		shortcutFlags: ShortcutFlagsConfigSchema.optional(), // namphuongtran/warren#37
 		// warren-4371: in-sandbox migration repair guidance (migrations-config.ts).
 		migrations: MigrationsConfigSchema.optional(),
 	})

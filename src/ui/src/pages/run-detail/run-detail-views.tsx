@@ -62,7 +62,7 @@ function SummaryTab({
 		>
 			<ApproachSection run={run} isTerminal={isTerminal} />
 			<OutcomeSection run={run} isTerminal={isTerminal} />
-			<QualitySection run={run} isTerminal={isTerminal} />
+			<QualitySection run={run} isTerminal={isTerminal} gitUrl={gitUrl} />
 			<ChangesSection run={run} isTerminal={isTerminal} gitUrl={gitUrl} />
 			<DeliverySection run={run} isTerminal={isTerminal} />
 		</section>

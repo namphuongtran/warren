@@ -48,6 +48,7 @@ import {
 	type RunApproachRecord,
 	type RunHandoffRecord,
 	type RunPrChecks,
+	type RunQualityFlags,
 	TABLE_NAMES,
 } from "./columns.ts";
 
@@ -235,8 +236,7 @@ export const runs = sqliteTable(
 		// rendered agent frontmatter once the override chain resolves. The bridge
 		// then overwrites `model` with the model a harness names in its init
 		// envelope (claude-code, namphuongtran/warren#7); `provider` stays the
-		// declared one. Nullable: historical rows predate the columns, and
-		// analytics labels them "unknown" rather than folding them into a bucket.
+		// declared one. NULL on historical rows: analytics labels them "unknown".
 		provider: text("provider"),
 		model: text("model"),
 		// Merge-watcher PR facts (warren-3bc6): the post_reap subscriber polls the
@@ -246,11 +246,8 @@ export const runs = sqliteTable(
 		prState: text("pr_state", { enum: PULL_REQUEST_LIFECYCLES }),
 		prMergedAt: text("pr_merged_at"),
 		prChecks: text("pr_checks_json", { mode: "json" }).$type<RunPrChecks>(),
-		// Reap-time outcome facts (warren-ab2b / pl-103e): what the reap
-		// pipeline MEASURED at finalize — commits the pushed branch was ahead
-		// of the base, plus the parsed `git diff --numstat` totals. Recorded,
-		// not interpreted. All nullable: pre-column rows, skipped/failed finalizes,
-		// and unmeasurable diffs are NULL: analytics reads "unknown" (out of denominators), never 0.
+		// Reap-time outcome facts (warren-ab2b): commits ahead of base + `git diff --numstat`
+		// totals, recorded not interpreted. NULL = unknown (out of denominators), never 0.
 		commitsAhead: integer("commits_ahead"),
 		filesChanged: integer("files_changed"),
 		insertions: integer("insertions"),
@@ -258,6 +255,10 @@ export const runs = sqliteTable(
 		// Quality gate (namphuongtran/warren#36): command frozen at dispatch, outcome reap-derived.
 		qualityGate: text("quality_gate"),
 		qualityGateOutcome: text("quality_gate_outcome", { enum: RUN_QUALITY_GATE_OUTCOMES }),
+		// Shortcut flags (namphuongtran/warren#37): protected globs frozen at dispatch
+		// (null = built-in default) and the flags reap scanned (null = not scanned).
+		protectedPaths: text("protected_paths_json", { mode: "json" }).$type<string[]>(),
+		qualityFlags: text("quality_flags_json", { mode: "json" }).$type<RunQualityFlags>(),
 		// Reap-recorded agent notes, null = not derived: the validated handoff report
 		// (namphuongtran/warren#21) and the approach note (namphuongtran/warren#33).
 		handoff: text("handoff_json", { mode: "json" }).$type<RunHandoffRecord>(),

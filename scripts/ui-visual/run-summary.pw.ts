@@ -44,6 +44,15 @@ const ASSERTIONS: Record<string, (page: Page) => Promise<void>> = {
 		await expect(section(page, "Outcome")).toContainText("bun test src/ui/src/pages/telemetry");
 		await expect(section(page, "Quality")).toContainText("Passed");
 		await expect(section(page, "Quality")).toContainText("scope creep");
+		// namphuongtran/warren#37: shortcut flags, each linked to its file and line.
+		const flags = section(page, "Quality").getByRole("list", { name: "Shortcut flags" });
+		await expect(section(page, "Quality")).toContainText("3 flags");
+		await expect(flags).toContainText("Git hooks bypassed");
+		await expect(flags).toContainText("Protected file edited");
+		await expect(flags.getByRole("link", { name: /tab-strip\.tsx:42/ })).toHaveAttribute(
+			"href",
+			/\/blob\/.+\/src\/ui\/src\/pages\/telemetry\/tab-strip\.tsx#L42$/,
+		);
 		await expect(section(page, "Changes")).toContainText("4 files changed");
 		await expect(
 			section(page, "Changes").getByRole("link", { name: /Files on the PR/ }),
@@ -73,6 +82,7 @@ const ASSERTIONS: Record<string, (page: Page) => Promise<void>> = {
 		await expect(section(page, "Outcome")).toContainText("progress slot");
 		await expect(section(page, "Quality")).toContainText("Failed");
 		await expect(section(page, "Quality")).toContainText("The judge has not scored this run");
+		await expect(section(page, "Quality")).toContainText("None found");
 
 		// The answer controls: each open question labels its own answer field,
 		// and answering opens Dispatch as a continuation with the answers.
@@ -97,6 +107,7 @@ const ASSERTIONS: Record<string, (page: Page) => Promise<void>> = {
 			"The agent ended without writing a handoff report",
 		);
 		await expect(section(page, "Quality")).toContainText("No gate");
+		await expect(section(page, "Quality")).toContainText("Not scanned");
 		await expect(section(page, "Changes")).toContainText("The run changed no files");
 		await expect(section(page, "Delivery")).toContainText("No pull request was opened");
 	},

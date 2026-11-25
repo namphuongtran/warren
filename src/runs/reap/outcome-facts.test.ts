@@ -11,10 +11,14 @@ import type { ReapExec } from "./types.ts";
 /** A 40-hex SHA served as the merge-base stdout when the stub carries one. */
 const MERGE_BASE_SHA = "a".repeat(40);
 
+/** The canned `git diff --unified=0` stdout the stub serves. */
+const UNIFIED_DIFF = "diff --git a/src/a.ts b/src/a.ts\n@@ -1 +1 @@\n-a\n+b\n";
+
 /**
  * Exec stub routing `git diff --numstat` to a canned stdout (or a throw);
- * `git merge-base` returns `mergeBase` (a 40-hex SHA or a throw), everything
- * else the numstat payload. `null` mergeBase degrades the SHA measurement.
+ * `git merge-base` returns `mergeBase` (a 40-hex SHA or a throw),
+ * `git diff --unified=0` returns {@link UNIFIED_DIFF}, everything else the
+ * numstat payload. `null` mergeBase degrades the SHA measurement.
  */
 function stubExec(
 	numstat: string | Error,
@@ -34,6 +38,7 @@ function stubExec(
 					return { stdout: mergeBase, stderr: "" };
 				}
 				if (numstat instanceof Error) throw numstat;
+				if (args[1] === "--unified=0") return { stdout: UNIFIED_DIFF, stderr: "" };
 				return { stdout: numstat, stderr: "" };
 			},
 		},
@@ -88,7 +93,7 @@ describe("recordOutcomeFacts (warren-ab2b)", () => {
 	test("commitsAhead null means the whole measurement stays unknown (all NULL)", async () => {
 		const { exec, calls } = stubExec("1\t1\ta.ts\n");
 		const captured: { facts: Record<string, unknown> | null } = { facts: null };
-		const stats = await recordOutcomeFacts(inputFor({ commitsAhead: null }, exec, captured));
+		const { stats } = await recordOutcomeFacts(inputFor({ commitsAhead: null }, exec, captured));
 		expect(stats).toBeNull();
 		expect(calls).toHaveLength(0);
 		expect(captured.facts).toEqual({
@@ -103,7 +108,7 @@ describe("recordOutcomeFacts (warren-ab2b)", () => {
 	test("commitsAhead 0 is a known empty diff — zeros without a git read", async () => {
 		const { exec, calls } = stubExec(new Error("must not run"));
 		const captured: { facts: Record<string, unknown> | null } = { facts: null };
-		const stats = await recordOutcomeFacts(inputFor({ commitsAhead: 0 }, exec, captured));
+		const { stats } = await recordOutcomeFacts(inputFor({ commitsAhead: 0 }, exec, captured));
 		expect(stats).toEqual({ filesChanged: 0, insertions: 0, deletions: 0 });
 		expect(calls).toHaveLength(0);
 		expect(captured.facts).toEqual({
@@ -118,10 +123,10 @@ describe("recordOutcomeFacts (warren-ab2b)", () => {
 	test("local path diffs base..HEAD on the workspace and stamps the parsed totals", async () => {
 		const { exec, calls } = stubExec("5\t2\tsrc/a.ts\n");
 		const captured: { facts: Record<string, unknown> | null } = { facts: null };
-		const stats = await recordOutcomeFacts(inputFor({}, exec, captured));
+		const { stats } = await recordOutcomeFacts(inputFor({}, exec, captured));
 		expect(stats).toEqual({ filesChanged: 1, insertions: 5, deletions: 2 });
-		// numstat + merge-base (parallel) — the SHA measurement rides the diff read.
-		expect(calls).toHaveLength(2);
+		// numstat + merge-base + unified diff (parallel), all off the one range.
+		expect(calls).toHaveLength(3);
 		expect(calls[0]?.args).toEqual(["diff", "--numstat", "main..HEAD"]);
 		expect(calls[0]?.cwd).toBe("/data/sandbox/ws");
 		expect(captured.facts).toEqual({
@@ -133,10 +138,33 @@ describe("recordOutcomeFacts (warren-ab2b)", () => {
 		});
 	});
 
+	test("returns the unified diff of the same range for the shortcut scan (#37)", async () => {
+		const { exec, calls } = stubExec("5\t2\tsrc/a.ts\n");
+		const captured: { facts: Record<string, unknown> | null } = { facts: null };
+		const { diff } = await recordOutcomeFacts(inputFor({}, exec, captured));
+		expect(diff).toBe(UNIFIED_DIFF);
+		expect(calls[2]?.args).toEqual([
+			"diff",
+			"--unified=0",
+			"--no-color",
+			"--no-ext-diff",
+			"-M",
+			"main...HEAD",
+		]);
+	});
+
+	test("reads a zero-commit range as a known-empty diff without git", async () => {
+		const { exec, calls } = stubExec("");
+		const captured: { facts: Record<string, unknown> | null } = { facts: null };
+		const { diff } = await recordOutcomeFacts(inputFor({ commitsAhead: 0 }, exec, captured));
+		expect(diff).toBe("");
+		expect(calls).toHaveLength(0);
+	});
+
 	test("a failed numstat degrades the diff to unknown but keeps commitsAhead", async () => {
 		const { exec } = stubExec(new Error("git exploded"));
 		const captured: { facts: Record<string, unknown> | null } = { facts: null };
-		const stats = await recordOutcomeFacts(inputFor({}, exec, captured));
+		const { stats } = await recordOutcomeFacts(inputFor({}, exec, captured));
 		expect(stats).toBeNull();
 		expect(captured.facts).toEqual({
 			commitsAhead: 1,
@@ -162,7 +190,7 @@ describe("recordOutcomeFacts (warren-ab2b)", () => {
 	test("K8s without a forge credential leaves the diff unknown", async () => {
 		const { exec, calls } = stubExec("1\t1\ta.ts\n");
 		const captured: { facts: Record<string, unknown> | null } = { facts: null };
-		const stats = await recordOutcomeFacts(
+		const { stats } = await recordOutcomeFacts(
 			inputFor({ workspacePath: null, forge: undefined }, exec, captured),
 		);
 		expect(stats).toBeNull();
@@ -187,19 +215,19 @@ describe("recordOutcomeFacts (warren-ab2b)", () => {
 				value: { username: "x-access-token", secret: "tok", expiresAt: null },
 			}),
 		};
-		const stats = await recordOutcomeFacts(
+		const { stats } = await recordOutcomeFacts(
 			inputFor({ workspacePath: null, forge: forge as never }, exec, captured),
 		);
 		expect(stats).toEqual({ filesChanged: 1, insertions: 7, deletions: 3 });
-		// fetch → numstat + merge-base (parallel) → temp-ref cleanup.
-		expect(calls).toHaveLength(4);
+		// fetch → numstat + merge-base + unified diff (parallel) → temp-ref cleanup.
+		expect(calls).toHaveLength(5);
 		expect(calls[0]?.args[0]).toBe("fetch");
 		expect(calls[0]?.args[3]).toBe("https://x-access-token:tok@github.com/x/y.git");
 		expect(calls[0]?.args[4]).toBe("agent/bot/run-1:refs/warren/outcome-facts/run-1");
 		expect(calls[0]?.cwd).toBe("/data/projects/x/y");
 		expect(calls[1]?.args).toEqual(["diff", "--numstat", "main..refs/warren/outcome-facts/run-1"]);
 		expect(calls[2]?.args).toEqual(["merge-base", "main", "refs/warren/outcome-facts/run-1"]);
-		expect(calls[3]?.args).toEqual(["update-ref", "-d", "refs/warren/outcome-facts/run-1"]);
+		expect(calls[4]?.args).toEqual(["update-ref", "-d", "refs/warren/outcome-facts/run-1"]);
 		expect(captured.facts).toEqual({
 			commitsAhead: 1,
 			baseSha: null,
@@ -213,7 +241,7 @@ describe("recordOutcomeFacts (warren-ab2b)", () => {
 		const { exec } = stubExec("1\t1\ta.ts\n");
 		const captured: { facts: Record<string, unknown> | null } = { facts: null };
 		const input = inputFor({}, exec, captured);
-		const stats = await recordOutcomeFacts({
+		const { stats } = await recordOutcomeFacts({
 			...input,
 			setOutcomeFacts: async () => {
 				throw new Error("db down");

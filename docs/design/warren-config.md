@@ -70,7 +70,7 @@ never silently cancels every run. `config.yaml` and legacy
 `defaults.json` share the same
 schema — `{ defaultRole?, defaultBranch?, defaultPrompt?, defaultProvider?,
 defaultModel?, runBranchPrefix?, agentImage?, preview?, maxCostUsd?, maxDurationMinutes?,
-toolStallWarnMinutes?, toolStallKillMinutes?, pr?, handoff? }` — all optional,
+toolStallWarnMinutes?, toolStallKillMinutes?, pr?, handoff?, shortcutFlags? }` — all optional,
 all strict. `maxCostUsd` on `config.yaml` is the project-wide default
 spend cap, the weakest source in the warren-a63d chain: an explicit
 dispatch override (a `POST /runs` `maxCostUsd` body field / `warren run
@@ -120,6 +120,12 @@ have succeeded as `failed` with `failureReason: handoff_missing`. The PR still
 opens so a reviewer sees the pushed work, but reap does not arm auto-merge,
 dispatch auto-plan-runs, or launch a preview for that run. The schema
 lives in `src/warren-config/handoff-config.ts`.
+`shortcutFlags` (namphuongtran/warren#37) is `{ protectedPaths?: string[] }`:
+globs over repo-relative paths. Dispatch freezes the list onto the run, and
+reap flags any diff file that matches one. The list replaces the built-in
+default (`**/*budget*.json`, `**/*allowlist*.json`, `**/*ratchet*.json`), and
+`[]` turns the protected-file flag off. The other shortcut flags have no
+config. The schema lives in `src/warren-config/shortcut-flags-config.ts`.
 `runBranchPrefix` (warren-9993) overrides the prefix warren composes the
 burrow branch from (`${prefix}/${run.id}`); precedence project default >
 `WARREN_RUN_BRANCH_PREFIX` env > built-in `"warren"` (warren-2de0; the

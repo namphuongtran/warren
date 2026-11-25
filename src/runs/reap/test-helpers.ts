@@ -164,6 +164,8 @@ export interface FakeExecOpts {
 	 * facts). Default `""` (no rows → zeroed totals).
 	 */
 	numstat?: string;
+	/** Stdout for `git diff --unified=0` (shortcut flags, namphuongtran/warren#37). Default `""`. */
+	unifiedDiff?: string;
 	/**
 	 * Stdout for `git merge-base <base> HEAD` (warren-b19e base_sha). Default
 	 * {@link FAKE_REV_PARSE_SHA} — a plausible resolved workspace base.
@@ -263,12 +265,14 @@ function routeDiffProbe(
 	numstat: string,
 	failNameOnlyDiff: string | null,
 	nameOnlyDiff: string,
+	unifiedDiff: string,
 ): ExecResult | null {
 	if (args.includes("--name-only")) return handleNameOnlyDiff(failNameOnlyDiff, nameOnlyDiff);
 	if (args.includes("--cached") && args.includes("--quiet")) {
 		return handleDiffCached(stagedDelta);
 	}
 	if (args.includes("--numstat")) return { stdout: numstat, stderr: "" };
+	if (args.includes("--unified=0")) return { stdout: unifiedDiff, stderr: "" };
 	return null;
 }
 
@@ -286,6 +290,7 @@ export function fakeExec(opts: FakeExecOpts = {}): FakeExec {
 	const revListCount = opts.revListCount ?? "1";
 	const revParse = opts.revParse ?? FAKE_REV_PARSE_SHA;
 	const numstat = opts.numstat ?? "";
+	const unifiedDiff = opts.unifiedDiff ?? "";
 	const mergeBase = opts.mergeBase ?? FAKE_REV_PARSE_SHA;
 	const stagedDelta = opts.stagedDelta === true;
 	const gitStatus = opts.gitStatus ?? "";
@@ -312,7 +317,14 @@ export function fakeExec(opts: FakeExecOpts = {}): FakeExec {
 		const sub = routeSub(cmd, args);
 		if (sub !== null) return sub;
 		if (isGitSub(cmd, args, "diff")) {
-			return routeDiffProbe(args, stagedDelta, numstat, failNameOnlyDiff, nameOnlyDiff);
+			return routeDiffProbe(
+				args,
+				stagedDelta,
+				numstat,
+				failNameOnlyDiff,
+				nameOnlyDiff,
+				unifiedDiff,
+			);
 		}
 		return null;
 	};

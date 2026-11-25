@@ -1,9 +1,17 @@
 import type { RunRow } from "@/api/types.ts";
 import { formatPullRequestLifecycle } from "@/lib/labels.ts";
 import { formatTimestamp } from "@/lib/utils.ts";
-import { pendingCopy, SummaryBlock, SummaryCard, SummaryEmpty, ToneChip } from "./summary-card.tsx";
+import {
+	ExternalLink,
+	pendingCopy,
+	SummaryBlock,
+	SummaryCard,
+	SummaryEmpty,
+	ToneChip,
+} from "./summary-card.tsx";
 import {
 	changesLink,
+	plural,
 	prChecksView,
 	prReviewView,
 	pullRequestTone,
@@ -16,23 +24,6 @@ import {
  * where the work went: the pushed branch, the pull request, its checks
  * (namphuongtran/warren#41), and the review verdict on its head commit.
  */
-
-function plural(n: number, word: string): string {
-	return `${n} ${word}${n === 1 ? "" : "s"}`;
-}
-
-function ExternalLink({ href, children }: { href: string; children: string }) {
-	return (
-		<a
-			href={href}
-			target="_blank"
-			rel="noreferrer noopener"
-			className="w-fit font-medium text-(--color-primary) text-xs underline-offset-2 hover:underline"
-		>
-			{children} ↗
-		</a>
-	);
-}
 
 export function ChangesSection({
 	run,

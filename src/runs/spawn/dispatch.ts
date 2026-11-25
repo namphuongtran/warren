@@ -155,6 +155,7 @@ async function createRunRow(input: SpawnRunInput, prepared: PreparedDispatch): P
 		// bill. Resolved beside the provider env registry (core/providers.ts).
 		costBasis: resolveRunCostBasis(declaredProvider, input.serverEnv ?? process.env),
 		qualityGate: projectDefaults?.qualityGate ?? null, // namphuongtran/warren#36
+		protectedPaths: projectDefaults?.shortcutFlags?.protectedPaths ?? null, // namphuongtran/warren#37
 		trigger: input.trigger ?? "manual",
 		...(input.seedId !== undefined ? { seedId: input.seedId } : {}),
 		...(input.mode !== undefined ? { mode: input.mode } : {}),

@@ -41,6 +41,8 @@ export {
 	type RunMode,
 	type RunPrCheckState,
 	type RunPrChecks,
+	type RunQualityFlag,
+	type RunQualityFlags,
 	type RunQualityGateOutcome,
 	type RunState,
 	type RunToolStallView,
@@ -64,6 +66,7 @@ import type {
 	RunHandoffRecord,
 	RunMode,
 	RunPrChecks,
+	RunQualityFlags,
 	RunQualityGateOutcome,
 	RunState,
 	RunToolStallView,
@@ -148,17 +151,16 @@ export interface RunRow {
 	createdAt: number | null;
 	startedAt: string | null;
 	endedAt: string | null;
-	/** Stage timestamps (warren-7116): the four observed run edges — null = never observed. */
-	workspaceReadyAt: string | null;
+	workspaceReadyAt: string | null; // stage timestamps (warren-7116); null = never observed
 	agentReadyAt: string | null;
 	agentEndedAt: string | null;
 	reapedAt: string | null;
-	/** Reap-time measured outcome facts (warren-ab2b): null = unknown, never zero. */
-	commitsAhead: number | null;
+	commitsAhead: number | null; // reap-measured outcome facts (warren-ab2b): null = unknown, not 0
 	filesChanged: number | null;
 	insertions: number | null;
 	deletions: number | null;
 	qualityGateOutcome: RunQualityGateOutcome | null; // reap-derived (namphuongtran/warren#36)
+	qualityFlags: RunQualityFlags | null; // shortcut flags (namphuongtran/warren#37); null = not scanned
 	handoff: RunHandoffRecord | null; // reap-validated handoff report (namphuongtran/warren#21)
 	approach: RunApproachRecord | null; // agent approach note, render escaped (namphuongtran/warren#33)
 	prompt: string;
@@ -168,8 +170,7 @@ export interface RunRow {
 	prState: PullRequestLifecycle | null;
 	prMergedAt: string | null;
 	prChecks: RunPrChecks | null; // PR head check summary (namphuongtran/warren#41); null = not read
-	/** Existing branch reap pushes the workspace back to (#419). Null when unset. */
-	targetBranch: string | null;
+	targetBranch: string | null; // existing branch reap pushes the workspace back to (#419)
 	branch: string | null; // composed workspace branch frozen at dispatch (warren-5255)
 	/** Dispatch-supplied clone ref (warren-afeb) / base-commit pin (warren-aaf7). Null when unset. */
 	ref: string | null;
