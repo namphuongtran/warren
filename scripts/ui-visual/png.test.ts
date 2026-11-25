@@ -129,8 +129,12 @@ describe("encodePng / decodePng", () => {
 			readFileSync(join(import.meta.dir, "__golden__", "agents-phone-light.png")),
 		);
 		const img = decodePng(bytes);
-		expect(pngSize(bytes)).toEqual({ width: 393, height: 852 });
-		expect(img.data.length).toBe(393 * 852 * 4);
+		// Width is the phone viewport. Height follows the page content, so it
+		// moves whenever the baselines are regenerated: read it from the header.
+		const { width, height } = pngSize(bytes);
+		expect(width).toBe(393);
+		expect(height).toBeGreaterThan(0);
+		expect(img.data.length).toBe(width * height * 4);
 		expect(pixel(img, 0, 0)[3]).toBe(255);
 	});
 
