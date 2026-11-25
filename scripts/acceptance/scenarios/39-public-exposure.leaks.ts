@@ -82,6 +82,17 @@ export const FLOW_PAGE_PATTERNS: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * Each forbidden name matched as a whole identifier, never as a substring
+ * (namphuongtran/warren#118): the public `qualityGateOutcome` must not trip
+ * the redacted `qualityGate`. The boundary is any non-identifier byte, so a
+ * key still matches when it arrives escaped inside a JSON-encoded string
+ * (`\"qualityGate\":`), not only as a bare `"qualityGate":` key.
+ */
+const FORBIDDEN_FIELD_PATTERNS: readonly (readonly [string, RegExp])[] = FORBIDDEN_FIELD_NAMES.map(
+	(name) => [name, new RegExp(`(?<![A-Za-z0-9_$])${escapeRegExp(name)}(?![A-Za-z0-9_$])`)] as const,
+);
+
+/**
  * The one assertion the whole scenario exists for: `body` — the verbatim
  * bytes an anonymous caller received from `label` — carries no redacted
  * field name, no planted sentinel, no host path, and no live bearer.
@@ -92,15 +103,16 @@ export function assertNoLeak(label: string, body: string): void {
 	// the wire on purpose — the same posture as `Bearer [redacted]`. Blank
 	// those censored pairs before the field-name scan so only a LIVE value
 	// under the key trips it.
-	const names = body
+	const scrubbedBody = body
 		.split('"sandboxId":"[redacted]"')
 		.join("")
 		.split('"sandboxRunId":"[redacted]"')
 		.join("");
-	for (const name of FORBIDDEN_FIELD_NAMES) {
-		if (names.includes(name)) {
+	for (const [name, pattern] of FORBIDDEN_FIELD_PATTERNS) {
+		const hit = pattern.exec(scrubbedBody);
+		if (hit !== null) {
 			throw new AcceptanceError(
-				`${label}: anonymous body carries redacted field name ${JSON.stringify(name)} — a public projection widened (${excerptAround(body, name)})`,
+				`${label}: anonymous body carries redacted field name ${JSON.stringify(name)} — a public projection widened (${excerptAt(scrubbedBody, hit.index, name.length)})`,
 			);
 		}
 	}
@@ -136,7 +148,7 @@ export function assertNoLeak(label: string, body: string): void {
 /**
  * `GET /analytics/runs`: the USD rollups whose names collide with public
  * ones, checked structurally at the level they live on rather than by
- * substring. Field lists are imported so a re-classification reaches here.
+ * name scan. Field lists are imported so a re-classification reaches here.
  * warren-97ae: also walks `outcomes.costPerMergedPr` — the `overall` shape
  * and the byAgent/byModel/byProvider buckets — against the REDACTED
  * constants, so the public instance-wide `costPerMergedPrUsd` is fenced by
@@ -204,7 +216,7 @@ function assertGroupRollupsAbsent(
 
 /**
  * `GET /plan-runs` / `GET /plan-runs/:id`: `failureReason` is redacted on
- * BOTH plan-run projections but public on runs, so a substring scan can't
+ * BOTH plan-run projections but public on runs, so the name scan can't
  * hold it. Walk the parsed bodies and refuse the KEY wherever it appears —
  * top level, list rows, nested children (warren-b0bd).
  */
@@ -226,10 +238,20 @@ export function assertPlanRunFailureReasonAbsent(label: string, body: unknown): 
 	}
 }
 
+/** `name` as a literal regex fragment: a `$` in it must not act as an anchor. */
+function escapeRegExp(name: string): string {
+	return name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 /** A short window around `needle` so a failure names the offending bytes. */
 function excerptAround(body: string, needle: string): string {
 	const at = body.indexOf(needle);
 	if (at < 0) return "no excerpt";
+	return excerptAt(body, at, needle.length);
+}
+
+/** The same window around a match already located at `at`. */
+function excerptAt(body: string, at: number, length: number): string {
 	const from = Math.max(0, at - 60);
-	return `…${body.slice(from, at + needle.length + 60)}…`;
+	return `…${body.slice(from, at + length + 60)}…`;
 }

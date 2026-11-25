@@ -261,7 +261,7 @@ async function assertNoLeakOnPublicReads(
 	}
 
 	// The rollup families whose names collide with public ones, checked
-	// structurally instead of by substring (field lists imported inside
+	// structurally instead of by name scan (field lists imported inside
 	// 39-public-exposure.leaks.ts, so a re-classification reaches them).
 	const analytics = await fetch(`${base}/analytics/runs`);
 	assertAnalyticsRollupsAbsent((await analytics.json()) as Record<string, unknown>);
