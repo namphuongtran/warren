@@ -25,15 +25,13 @@ name: UI visual
 #
 # Contract for the downstream steps of pl-10db:
 #   - The job and its status check are both named `ui-visual`. Keep the
-#     name stable: warren-dbef requires it for auto-merge of src/ui PRs.
-#     The path filter means the check never reports on a PR that touches
+#     name stable: branch protection may require it. The path filter means the check never reports on a PR that touches
 #     none of these paths, so require it only for PRs that match them.
 #   - Every run uploads `scripts/ui-visual/out/` (screenshots, HTML report,
 #     traces, and Playwright's expected/actual/diff images once
 #     toHaveScreenshot lands) as `ui-screenshots-<head sha>`, plus
-#     `out/ci-meta.json` naming the PR, head sha, and outcome, so a
-#     `workflow_run` follow-up (warren-70d9's PR comment) can find the
-#     artifact without the PR's write permissions.
+#     `out/ci-meta.json` naming the PR, head sha, and outcome, so the
+#     ui-design-review skill can find the artifact for a PR.
 #   - Golden screenshots (warren-a132): `golden.pw.ts` compares every
 #     golden case against `scripts/ui-visual/__golden__/`. It runs only
 #     here: the job sets WARREN_UI_VISUAL_GOLDEN=1, and the spec also
@@ -46,9 +44,8 @@ name: UI visual
 #     The run deletes the old PNGs, renders the set with
 #     `--update-snapshots=all`, writes `manifest.json`, and uploads
 #     `__golden__/` as `ui-goldens-<sha>`. It never commits; someone
-#     downloads the artifact and commits it. The PR then cannot auto-merge
-#     until a human approver applies `ui-baseline-approved` (warren-4780,
-#     docs/design/ui-visual-gate.md). This file is itself a baseline path.
+#     downloads the artifact and commits it. The maintainer reviews that
+#     PR before merging it (namphuongtran/warren#109).
 
 on:
   pull_request:

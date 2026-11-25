@@ -85,11 +85,9 @@ definitions in `src/registry/builtins/` require explicit human review —
 they must not ride an auto-merged PR. An agent does not rewrite the
 standard it is measured against, and does not schedule itself.
 
-Executable form: the "Article IX check" step in
-`.github/workflows/auto-merge.yml` refuses to enable auto-merge on any
-PR touching this file, `.warren/triggers.yaml`, or that
-workflow itself. The gate can be deleted; the deletion is itself a
-protected change, so a human sees it.
+Executable form: no auto-merge workflow runs on this repository, so the
+maintainer's manual merge is the human review for every PR, including
+any that touches this file or `.warren/triggers.yaml`.
 
 ## Amendments
 

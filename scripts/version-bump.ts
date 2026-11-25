@@ -340,9 +340,9 @@ function main(): void {
 	console.log(`     rename the heading to [${next}] — YYYY-MM-DD, delete the draft markers`);
 	console.log("  2. bun run check:all");
 	console.log(`  3. git add -A && git commit -m "chore: release v${next}"`);
-	console.log("  4. git push  (on merge to main, .github/workflows/release.yml verifies");
-	console.log(`     package.json == src/index.ts, tags v${next}, and cuts the GitHub`);
-	console.log("     release from the matching CHANGELOG.md section)");
+	console.log("  4. git push, merge to main, then tag by hand (no release workflow");
+	console.log(`     runs on this fork): git tag v${next} && git push origin v${next},`);
+	console.log("     and cut the GitHub release from the matching CHANGELOG.md section");
 }
 
 if (import.meta.main) main();

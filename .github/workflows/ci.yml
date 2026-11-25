@@ -57,25 +57,6 @@ jobs:
         if: always()
         run: bun run report:quality-metrics
 
-      - name: Build the file-size overshoot report
-        if: failure()
-        run: |
-          set -euo pipefail
-          if bun run check:size > /dev/null 2>&1; then
-            echo "check:size passes on this branch, so the failure was something else."
-            exit 0
-          fi
-          mkdir -p size-overshoot
-          bun run scripts/check-file-sizes.ts --headroom 10 > size-overshoot/report.txt
-
-      - name: Upload the file-size overshoot report
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: size-overshoot-report
-          path: size-overshoot/report.txt
-          if-no-files-found: ignore
-
       - name: Upload test timing artifact
         if: always()
         uses: actions/upload-artifact@v7
@@ -98,13 +79,9 @@ jobs:
   # GitHub Actions layer caching (type=gha) keeps it affordable. This is a
   # CI-only job, deliberately not a check:all gate (the manifest is frozen).
   #
-  # amd64-only, even though the released public image is multi-arch
-  # (warren-fe9f): an arm64 build runs under QEMU emulation and would slow
-  # every PR by many minutes. The release-time arm64 failure risk this
-  # leaves open is bounded by the draft-until-image-exists ordering
-  # (warren-89f2) — a broken arm64 build fails release.yml's deploy job and
-  # blocks promotion, never a published release pointing at a missing
-  # image.
+  # amd64-only: an arm64 build runs under QEMU emulation and would slow
+  # every PR by many minutes. This fork has no release workflow
+  # (namphuongtran/warren#109), so nothing builds arm64 automatically.
   docker-build:
     runs-on: ubuntu-latest
     steps:

@@ -292,9 +292,7 @@ Warren's resolved manifest, in order:
 - `check:coverage` (tests + coverage ratchet)
 - `check:ci-parity`
 
-The release workflow (`.github/workflows/release.yml`) runs the same
-`check:all` before any release work, so a release can never ship code
-CI would reject. `check:ci-parity` proves the local manifest and the CI
+`check:ci-parity` proves the local manifest and the CI
 workflow agree in both directions. Per-repo escape hatches live in
 `scripts/ci-parity-config.json`.
 
@@ -394,8 +392,7 @@ Details on the additional checks:
   reports the files with 10 lines of slack or less, and never fails
   (warren-8746). A file at its ceiling passes every PR that touches it
   alone. It then fails once a merge lands the union of two of them.
-  `.github/workflows/size-overshoot-report.yml` names what overshot, on
-  the PR itself.
+  Run the `--headroom` report to see what overshot.
 - **`check:debt`** (warren-7f2b) — scans `src/` and `scripts/` for
   `TODO` / `FIXME` / `HACK` / `XXX`. Any marker without a tracker
   reference on the same line fails the gate. Accepted references are
@@ -426,8 +423,8 @@ Details on the additional checks:
   writes measured numbers. Ordinary growth auto-raises within
   `AUTO_RAISE_CAP`. A heavy new dep past the cap needs
   `WARREN_BUNDLE_SIZE_ALLOW_RAISE=1`. On a PR that fails on a
-  within-cap overshoot, the `bundle-size-autoheal` workflow
-  re-baselines and pushes for you. Lowering applies on a laptop or in
+  within-cap overshoot, run `--update` and push the new budget.
+  Lowering applies on a laptop or in
   CI, but `--update` REFUSES to lower budgets when running inside a
   warren-dispatched run (warren-6397): the agent image's toolchain
   gzips the build ~1.3-1.5KB cooler than CI, so a pod-written lower
@@ -493,7 +490,7 @@ published (warren-d602).
 ## UI conventions
 
 Agents write most of `src/ui/`, so each UI rule names the check that
-holds it. Two design records describe the CI gates in full:
+holds it. Two design records describe the UI gates in full:
 [docs/design/ui-visual-gate.md](docs/design/ui-visual-gate.md) and
 [docs/design/ui-design-review.md](docs/design/ui-design-review.md).
 
@@ -520,22 +517,19 @@ It is not part of `check:all`.
 [scripts/ui-visual/README.md](scripts/ui-visual/README.md) names the
 output paths and the filter flags.
 
-CI adds two gates that a local run cannot give you.
+CI adds the golden comparison, which a local run cannot give you.
 
-- The golden comparison runs only in the pinned CI container.
+- The golden comparison runs only in the pinned CI container of
+  `.github/workflows/ui-visual.yml`.
   Never commit a baseline that a laptop rendered.
 - New PNGs under `scripts/ui-visual/__golden__/` come from the
   `update_goldens` dispatch of `.github/workflows/ui-visual.yml`.
-- Auto-merge refuses a PR that changes the goldens until a human
-  approver applies the `ui-baseline-approved` label.
-  A label from a bot never counts.
-- For a PR that touches `src/ui/` or `scripts/ui-visual/`, auto-merge
-  waits for the `ui-visual` and `design-review` checks to succeed on
-  the head commit.
-- The design review grades the CI screenshots against the rubric, with
-  the skill in `.claude/skills/ui-design-review/SKILL.md`.
-  It fails on a blocker, or on more than two majors that the diff adds.
-  A failed check needs a fix and a new push.
+  The maintainer reviews a PR that changes them before merging it.
+- The design review has no CI workflow on this fork
+  (namphuongtran/warren#109). Run the skill in
+  `.claude/skills/ui-design-review/SKILL.md` against the `ui-visual`
+  screenshots. It fails on a blocker, or on more than two majors that
+  the diff adds.
 
 A UI bug fix starts with a failing reproduction.
 The next section gives the steps.
@@ -720,9 +714,9 @@ The script also drafts an `[Unreleased]` block into `CHANGELOG.md` from
 markers. The draft is assistive only. Curate it and delete the markers
 before releasing. All rewrites roll back together on failure.
 
-`.github/workflows/release.yml` fails the release job if `package.json`
-and `src/index.ts` disagree. It then auto-tags the release and creates
-it from the matching `CHANGELOG.md` section.
+No release workflow runs on this fork (namphuongtran/warren#109).
+After the bump merges, tag `vX.Y.Z` by hand and create the GitHub
+release from the matching `CHANGELOG.md` section.
 
 `bun run check:version-sync` (warren-0210,
 `scripts/check-version-sync.ts`) asserts on every PR that all four
@@ -757,13 +751,9 @@ Per [docs/CONSTITUTION.md](docs/CONSTITUTION.md) Article IX, some
 changes require explicit human review and must not ride an auto-merged
 PR. The protected paths are `docs/CONSTITUTION.md` itself,
 `.warren/triggers.yaml`, and the agent definitions in
-`src/registry/builtins/`. The "Article IX check" step in
-`.github/workflows/auto-merge.yml` refuses to enable auto-merge on any
-PR touching those paths or the workflow itself.
-For a PR that touches `src/ui/` or `scripts/ui-visual/`, the same workflow
-also waits for the `ui-visual` and `design-review` checks to succeed on
-the head commit, as "The merge gate" in
-[docs/design/ui-visual-gate.md](docs/design/ui-visual-gate.md) describes.
+`src/registry/builtins/`. No auto-merge workflow runs on this fork
+(namphuongtran/warren#109), so the maintainer's manual merge is the
+human review for every PR, these paths included.
 
 ## Auth modes
 
