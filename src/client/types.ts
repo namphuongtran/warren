@@ -26,6 +26,7 @@ import type {
 	RunHandoffRecord,
 	RunMode,
 	RunPrChecks,
+	RunQualityFlags,
 	RunQualityGateOutcome,
 	RunState,
 	RunToolStallView,
@@ -56,6 +57,7 @@ export {
 	RUN_HANDOFF_STATES,
 	RUN_HANDOFF_STATUSES,
 	RUN_PR_CHECK_STATES,
+	RUN_QUALITY_FLAG_KINDS,
 	RUN_QUALITY_GATE_OUTCOMES,
 	RUN_TERMINAL_STATES,
 	type RunApproachRecord,
@@ -73,6 +75,9 @@ export {
 	type RunMode,
 	type RunPrCheckState,
 	type RunPrChecks,
+	type RunQualityFlag,
+	type RunQualityFlagKind,
+	type RunQualityFlags,
 	type RunQualityGateOutcome,
 	type RunState,
 	type RunTerminalState,
@@ -152,26 +157,22 @@ export interface RunRow {
 	filesChanged: number | null;
 	insertions: number | null;
 	deletions: number | null;
-	/**
-	 * The `qualityGate` frozen at dispatch (namphuongtran/warren#36), null when
-	 * the project set none. Operator-only: absent for spectators.
-	 */
+	/** Gate frozen at dispatch (namphuongtran/warren#36); operator-only, null = none set. */
 	qualityGate?: string | null;
-	/**
-	 * The gate outcome reap derived from the agent's tool calls. Null = not
-	 * derived (pre-column rows, or a run that has not reaped yet).
-	 */
+	/** Reap-derived gate outcome; null = not derived (old row, or not reaped yet). */
 	qualityGateOutcome: RunQualityGateOutcome | null;
+	/** Protected-path globs frozen at dispatch (namphuongtran/warren#37); operator-only. */
+	protectedPaths?: string[] | null;
+	/** Shortcut flags reap scanned off the diff; null = not scanned. */
+	qualityFlags: RunQualityFlags | null;
 	/**
 	 * The handoff report reap validated from `.warren/handoff.json`
-	 * (namphuongtran/warren#21): recorded, missing, or invalid with a reason.
-	 * Null = not derived (pre-column rows, or a run that has not reaped yet).
+	 * (namphuongtran/warren#21); null = not derived (old row, or not reaped yet).
 	 */
 	handoff: RunHandoffRecord | null;
 	/**
-	 * The approach note reap read from `.warren/approach.md`
-	 * (namphuongtran/warren#33): recorded (agent Markdown, render it escaped)
-	 * or missing. Null = not derived (pre-column rows, or not reaped yet).
+	 * Approach note from `.warren/approach.md` (namphuongtran/warren#33): agent
+	 * Markdown, render it escaped. Null = not derived (old row, not reaped).
 	 */
 	approach: RunApproachRecord | null;
 	prompt: string;
@@ -199,10 +200,7 @@ export interface RunRow {
 	 * misses. Null = never measured (pre-column rows, skipped finalize).
 	 */
 	baseSha: string | null;
-	/**
-	 * Declared provider/model frozen at dispatch (warren-2ede / #860).
-	 * Null on rows predating the columns — read as "unknown".
-	 */
+	/** Declared provider/model frozen at dispatch (warren-2ede); null on old rows = "unknown". */
 	provider: string | null;
 	model: string | null;
 	/**

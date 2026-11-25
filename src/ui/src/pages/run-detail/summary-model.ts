@@ -8,6 +8,8 @@ import type {
 	PullRequestLifecycle,
 	RunHandoffStatus,
 	RunPrChecks,
+	RunQualityFlag,
+	RunQualityFlags,
 	RunQualityGateOutcome,
 	RunRow,
 } from "../../api/types.ts";
@@ -81,9 +83,21 @@ export interface ChangesLink {
 	readonly label: string;
 }
 
+/** `n word`, with an `s` unless n is 1. */
+export function plural(n: number, word: string): string {
+	return `${n} ${word}${n === 1 ? "" : "s"}`;
+}
+
 const GITHUB_PR_URL = /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+$/;
 const GITHUB_REMOTE =
 	/^(?:https:\/\/github\.com\/|git@github\.com:)([^/]+)\/([^/]+?)(?:\.git)?\/?$/;
+
+/** The `owner/repo` of a GitHub remote, or null for any other remote. */
+function githubRepo(gitUrl: string | null | undefined): { owner: string; repo: string } | null {
+	const match = gitUrl === null || gitUrl === undefined ? null : GITHUB_REMOTE.exec(gitUrl);
+	const [, owner, repo] = match ?? [];
+	return owner === undefined || repo === undefined ? null : { owner, repo };
+}
 
 /**
  * The forge view of the run's diff: the PR's files view when reap opened a
@@ -101,9 +115,9 @@ export function changesLink(
 			: { href: run.prUrl, label: "Open the PR" };
 	}
 	const pushed = pushedBranch(run);
-	const remote = gitUrl === null || gitUrl === undefined ? null : GITHUB_REMOTE.exec(gitUrl);
+	const remote = githubRepo(gitUrl);
 	if (remote === null || run.baseSha === null || pushed === null) return null;
-	const [, owner, repo] = remote;
+	const { owner, repo } = remote;
 	return {
 		href: `https://github.com/${owner}/${repo}/compare/${run.baseSha}...${pushed}`,
 		label: "Compare on GitHub",
@@ -169,6 +183,65 @@ export function qualityGateView(
 				tone: "neutral",
 				detail: "Warren reads the gate outcome when the run finishes.",
 			};
+}
+
+/**
+ * The shortcut-flag fact (namphuongtran/warren#37). Null means reap has not
+ * scanned the diff: not yet on a live run, and never on a finished one (no
+ * diff was measured, it was too large to read, or the row predates the scan).
+ */
+export function qualityFlagsView(
+	flags: RunQualityFlags | null,
+	isTerminal: boolean,
+): SummaryFactView {
+	if (flags === null) {
+		return isTerminal
+			? {
+					label: "Not scanned",
+					tone: "neutral",
+					detail: "Warren did not scan this run's diff for shortcuts.",
+				}
+			: {
+					label: "Pending",
+					tone: "neutral",
+					detail: "Warren scans the diff for shortcuts when the run finishes.",
+				};
+	}
+	const total = flags.flags.length + flags.omitted;
+	const label = plural(total, "flag");
+	if (total === 0) {
+		return {
+			label: "None found",
+			tone: "success",
+			detail: "No suppressions, skipped tests, protected-file edits, or hook bypasses.",
+		};
+	}
+	return {
+		label,
+		tone: "warning",
+		detail: "Signals for a reviewer to check, not failures.",
+	};
+}
+
+/**
+ * Where a flag points on GitHub: the file at its line on the PR head commit
+ * the merge watcher last read (it outlives a branch deleted on merge), else
+ * on the pushed branch, or at the base commit for a deleted test file. Null
+ * for a command flag, a remote off GitHub, or a run without the ref.
+ */
+export function qualityFlagHref(
+	run: Pick<RunRow, "baseSha" | "branch" | "targetBranch" | "prChecks">,
+	gitUrl: string | null | undefined,
+	flag: RunQualityFlag,
+): string | null {
+	const remote = githubRepo(gitUrl);
+	const head = run.prChecks?.commit ?? pushedBranch(run);
+	const ref = flag.kind === "deleted_test" ? run.baseSha : head;
+	if (flag.path === null || remote === null || ref === null) return null;
+	const { owner, repo } = remote;
+	const path = flag.path.split("/").map(encodeURIComponent).join("/");
+	const anchor = flag.line === null ? "" : `#L${flag.line}`;
+	return `https://github.com/${owner}/${repo}/blob/${ref}/${path}${anchor}`;
 }
 
 const HANDOFF_STATUS_VIEWS: Record<RunHandoffStatus, Omit<SummaryFactView, "detail">> = {

@@ -13,6 +13,7 @@ import type {
 	RunHandoffRecord,
 	RunMode,
 	RunPrChecks,
+	RunQualityFlags,
 	RunQualityGateOutcome,
 	RunRow,
 	RunState,
@@ -26,6 +27,7 @@ import {
 	setApproach as setApproachBody,
 	setHandoff as setHandoffBody,
 	setOutcomeFacts as setOutcomeFactsBody,
+	setQualityFlags as setQualityFlagsBody,
 	setQualityGateOutcome as setQualityGateOutcomeBody,
 } from "./runs-outcome-facts.ts";
 import { setBranch, setModel, setPrChecks, setPrState, setPrUrl } from "./runs-pr.ts";
@@ -82,8 +84,7 @@ export interface CreateRunInput {
 	parentRunId?: string | null;
 	/** Infra-lost auto-retry back-link (warren-4af7); null for first attempts. */
 	retryOf?: string | null;
-	/** Chain kind (warren-e96f); null for root runs. */
-	cloneKind?: CloneKind | null;
+	cloneKind?: CloneKind | null; // chain kind (warren-e96f); null for root runs
 	/** Operator-requested target branch (warren-1f81, #419); null = none. */
 	targetBranch?: string | null;
 	/** Dispatch-supplied git ref the workspace clones from (warren-afeb); null = none. */
@@ -93,11 +94,18 @@ export interface CreateRunInput {
 	provider?: string | null; // declared provider/model frozen at dispatch (warren-2ede)
 	model?: string | null;
 	qualityGate?: string | null; // frozen at dispatch (namphuongtran/warren#36); null = unconfigured
-	/** Cost basis (warren-f3c3); defaults to `api`. */
-	costBasis?: RunCostBasis;
-	/** Queued-instant override (warren-0af9); defaults to the wall clock at insert. */
-	now?: Date;
+	protectedPaths?: string[] | null; // frozen at dispatch (namphuongtran/warren#37); null = default
+	costBasis?: RunCostBasis; // cost basis (warren-f3c3); defaults to `api`
+	now?: Date; // queued-instant override (warren-0af9); defaults to the wall clock
 }
+
+/** Paging and sort for the run list reads. */
+type RunListOptions = {
+	limit?: number;
+	offset?: number;
+	sort?: "started" | "cost";
+	dir?: "asc" | "desc";
+};
 
 export interface AttachBurrowInput {
 	sandboxId?: string;
@@ -125,7 +133,7 @@ export class RunsRepo {
 	}
 
 	async create(input: CreateRunInput): Promise<RunRow> {
-		const { costBasis = "api", qualityGate = null } = input;
+		const { costBasis = "api", qualityGate = null, protectedPaths = null } = input;
 		const row: RunRow = {
 			id: input.id ?? generateId("run"),
 			agentName: input.agentName,
@@ -140,9 +148,7 @@ export class RunsRepo {
 			renderedAgentJson: input.renderedAgentJson,
 			state: "queued",
 			failureReason: null,
-			// The queued instant (warren-0af9), stamped at insert; queue wait is
-			// `startedAt - createdAt`.
-			createdAt: (input.now ?? new Date()).getTime(),
+			createdAt: (input.now ?? new Date()).getTime(), // queued instant (warren-0af9)
 			startedAt: null,
 			endedAt: null,
 			// Stage timestamps (warren-7116); every edge stamps post-insert.
@@ -171,6 +177,8 @@ export class RunsRepo {
 			deletions: null,
 			qualityGate,
 			qualityGateOutcome: null,
+			protectedPaths,
+			qualityFlags: null,
 			handoff: null,
 			approach: null,
 			salvageRef: null,
@@ -211,38 +219,15 @@ export class RunsRepo {
 	}
 
 	/** Read/query methods (warren-ac7f); bodies live in runs-queries.ts. */
-	listAll(
-		options: {
-			limit?: number;
-			offset?: number;
-			sort?: "started" | "cost";
-			dir?: "asc" | "desc";
-		} = {},
-	): Promise<RunRow[]> {
+	listAll(options: RunListOptions = {}): Promise<RunRow[]> {
 		return listAll(this.adapter, options);
 	}
 
-	listByProject(
-		projectId: string,
-		options: {
-			limit?: number;
-			offset?: number;
-			sort?: "started" | "cost";
-			dir?: "asc" | "desc";
-		} = {},
-	): Promise<RunRow[]> {
+	listByProject(projectId: string, options: RunListOptions = {}): Promise<RunRow[]> {
 		return listByProject(this.adapter, projectId, options);
 	}
 
-	listByAgent(
-		agentName: string,
-		options: {
-			limit?: number;
-			offset?: number;
-			sort?: "started" | "cost";
-			dir?: "asc" | "desc";
-		} = {},
-	): Promise<RunRow[]> {
+	listByAgent(agentName: string, options: RunListOptions = {}): Promise<RunRow[]> {
 		return listByAgent(this.adapter, agentName, options);
 	}
 
@@ -453,19 +438,25 @@ export class RunsRepo {
 		return setOutcomeFactsBody(this.adapter, id, facts);
 	}
 
-	/** Reap-derived gate outcome (namphuongtran/warren#36); body in runs-outcome-facts.ts. */
+	/**
+	 * Reap-recorded facts, bodies in runs-outcome-facts.ts: the gate outcome
+	 * (namphuongtran/warren#36), the handoff report (#21), the approach note
+	 * (#33), and the shortcut flags (#37).
+	 */
 	async setQualityGateOutcome(id: string, outcome: RunQualityGateOutcome): Promise<void> {
 		await setQualityGateOutcomeBody(this.adapter, id, outcome);
 	}
 
-	/** Reap-validated handoff report (namphuongtran/warren#21); body in runs-outcome-facts.ts. */
 	async setHandoff(id: string, record: RunHandoffRecord): Promise<void> {
 		await setHandoffBody(this.adapter, id, record);
 	}
 
-	/** Reap-recorded approach note (namphuongtran/warren#33); body in runs-outcome-facts.ts. */
 	async setApproach(id: string, record: RunApproachRecord): Promise<void> {
 		await setApproachBody(this.adapter, id, record);
+	}
+
+	async setQualityFlags(id: string, flags: RunQualityFlags): Promise<void> {
+		await setQualityFlagsBody(this.adapter, id, flags);
 	}
 
 	/** CI-fixer queries (warren-0b75); bodies live in runs-ci-fixer.ts. */
@@ -477,10 +468,7 @@ export class RunsRepo {
 		return fixAttemptHistoryByPrUrl(this.adapter, prUrl);
 	}
 
-	/**
-	 * Atomic queued → running transition, mirroring the runtime's "the run loop
-	 * picked this up". Null when the row is gone or no longer `queued`.
-	 */
+	/** Atomic queued → running ("the run loop picked this up"); null if gone or not queued. */
 	async claimById(id: string, now: Date = new Date()): Promise<RunRow | null> {
 		return this.adapter.runInTransaction(async (tx) => {
 			const txDb = tx.drizzle as SqliteDrizzleDb;

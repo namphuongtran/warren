@@ -33,6 +33,7 @@ function run(overrides: Partial<RunRow>): RunRow {
 		insertions: null,
 		deletions: null,
 		qualityGateOutcome: null,
+		qualityFlags: null,
 		prChecks: null,
 		handoff: null,
 		approach: null,

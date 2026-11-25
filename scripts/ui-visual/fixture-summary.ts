@@ -6,13 +6,16 @@
  * - `prOpen` is the full run: an approach note, a `done` handoff that left
  *   the plan with a reason, a passing gate, a transcript, and a judge verdict
  *   whose class points at event ranges inside that transcript. Its PR head
- *   has a failing check (namphuongtran/warren#41).
+ *   has a failing check (namphuongtran/warren#41), and reap flagged three
+ *   shortcuts in its diff (namphuongtran/warren#37).
  * - `failed` is the blocked run: an approach note, a `blocked` handoff with
- *   open questions, and a failing gate. The judge has not scored it.
- * - `succeeded` is the run with no extras: no approach note and no handoff.
+ *   open questions, a failing gate, and a diff scanned clean. The judge has
+ *   not scored it.
+ * - `succeeded` is the run with no extras: no approach note, no handoff, and
+ *   no shortcut scan.
  */
 
-import type { RunHandoffRecord, RunPrChecks } from "../../src/core/wire.ts";
+import type { RunHandoffRecord, RunPrChecks, RunQualityFlags } from "../../src/core/wire.ts";
 import type { Repos } from "../../src/db/repos/index.ts";
 
 export interface SummaryRunIds {
@@ -93,6 +96,26 @@ const BLOCKED_HANDOFF: RunHandoffRecord = {
 	},
 };
 
+/** The full run's shortcut flags: a command flag, a whole-file flag, and a line flag. */
+const FULL_FLAGS: RunQualityFlags = {
+	flags: [
+		{ kind: "hook_bypass", path: null, line: null, detail: "git commit --no-verify" },
+		{
+			kind: "protected_file",
+			path: "scripts/bundle-size-budgets.json",
+			line: null,
+			detail: "**/*budget*.json",
+		},
+		{
+			kind: "suppression",
+			path: "src/ui/src/pages/telemetry/tab-strip.tsx",
+			line: 42,
+			detail: "biome-ignore",
+		},
+	],
+	omitted: 0,
+};
+
 /** Attach the Summary facts to the three runs. */
 export async function seedRunSummaries(repos: Repos, ids: SummaryRunIds): Promise<void> {
 	await repos.runs.setApproach(ids.prOpen, {
@@ -102,6 +125,7 @@ export async function seedRunSummaries(repos: Repos, ids: SummaryRunIds): Promis
 	});
 	await repos.runs.setHandoff(ids.prOpen, FULL_HANDOFF);
 	await repos.runs.setQualityGateOutcome(ids.prOpen, "passed");
+	await repos.runs.setQualityFlags(ids.prOpen, FULL_FLAGS);
 	await repos.runs.setPrChecks(ids.prOpen, {
 		...prChecks("failing", ["e2e (phone, dark theme)"]),
 		// namphuongtran/warren#38: the controller's warren/review verdict on the same head.
@@ -115,6 +139,7 @@ export async function seedRunSummaries(repos: Repos, ids: SummaryRunIds): Promis
 	});
 	await repos.runs.setHandoff(ids.failed, BLOCKED_HANDOFF);
 	await repos.runs.setQualityGateOutcome(ids.failed, "failed");
+	await repos.runs.setQualityFlags(ids.failed, { flags: [], omitted: 0 });
 
 	await repos.runs.setApproach(ids.succeeded, {
 		state: "missing",

@@ -46,6 +46,7 @@
 		"../core/wire-handoff.ts",
 		"../core/wire-approach.ts",
 		"../core/wire-pr-checks.ts",
+		"../core/wire-quality-flags.ts",
 		"../core/wire-cost.ts",
 		"../core/wire-inbox.ts",
 		"../core/wire-insight.ts",

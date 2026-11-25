@@ -10,6 +10,8 @@ import {
 	prReviewView,
 	pullRequestTone,
 	pushedBranch,
+	qualityFlagHref,
+	qualityFlagsView,
 	qualityGateView,
 	readRunDetailView,
 } from "./summary-model.ts";
@@ -167,6 +169,72 @@ describe("qualityGateView", () => {
 	test("reads a pass as success and a failure as danger", () => {
 		expect(qualityGateView("passed", true).tone).toBe("success");
 		expect(qualityGateView("failed", true).tone).toBe("danger");
+	});
+});
+
+describe("qualityFlagsView", () => {
+	test("reads a null record as pending on a live run", () => {
+		expect(qualityFlagsView(null, false).label).toBe("Pending");
+	});
+
+	test("reads a null record as not scanned on a finished run", () => {
+		expect(qualityFlagsView(null, true)).toMatchObject({ label: "Not scanned", tone: "neutral" });
+	});
+
+	test("reads an empty scan as none found", () => {
+		expect(qualityFlagsView({ flags: [], omitted: 0 }, true)).toMatchObject({
+			label: "None found",
+			tone: "success",
+		});
+	});
+
+	test("counts the flags, including the ones past the cap", () => {
+		const flag = { kind: "suppression", path: "a.ts", line: 1, detail: "noqa" } as const;
+		expect(qualityFlagsView({ flags: [flag, flag], omitted: 3 }, true)).toMatchObject({
+			label: "5 flags",
+			tone: "warning",
+		});
+		expect(qualityFlagsView({ flags: [flag], omitted: 0 }, true).label).toBe("1 flag");
+	});
+});
+
+describe("qualityFlagHref", () => {
+	const run = {
+		baseSha: "b".repeat(40),
+		branch: "agent/bot/run-1",
+		targetBranch: null,
+		prChecks: null,
+	};
+	const remote = "https://github.com/acme/app.git";
+
+	test("links a line flag to the file at that line on the pushed branch", () => {
+		const flag = { kind: "suppression", path: "src/a b.ts", line: 12, detail: "noqa" } as const;
+		expect(qualityFlagHref(run, remote, flag)).toBe(
+			"https://github.com/acme/app/blob/agent/bot/run-1/src/a%20b.ts#L12",
+		);
+	});
+
+	test("prefers the PR head commit, which outlives a branch deleted on merge", () => {
+		const head = "c".repeat(40);
+		const checks = { state: "passing", failing: [], commit: head, checkedAt: "" } as const;
+		const flag = { kind: "suppression", path: "a.ts", line: 3, detail: "noqa" } as const;
+		expect(qualityFlagHref({ ...run, prChecks: checks }, remote, flag)).toBe(
+			`https://github.com/acme/app/blob/${head}/a.ts#L3`,
+		);
+	});
+
+	test("links a deleted test file at the base commit, where it still exists", () => {
+		const flag = { kind: "deleted_test", path: "t/x.test.ts", line: null, detail: "" } as const;
+		expect(qualityFlagHref(run, remote, flag)).toBe(
+			`https://github.com/acme/app/blob/${"b".repeat(40)}/t/x.test.ts`,
+		);
+	});
+
+	test("gives no link for a command flag or a remote off GitHub", () => {
+		const command = { kind: "hook_bypass", path: null, line: null, detail: "git" } as const;
+		const file = { kind: "protected_file", path: "a.json", line: null, detail: "*.json" } as const;
+		expect(qualityFlagHref(run, remote, command)).toBeNull();
+		expect(qualityFlagHref(run, "https://gitlab.com/acme/app.git", file)).toBeNull();
 	});
 });
 

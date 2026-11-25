@@ -195,6 +195,15 @@ admission:
 - The agent should run the gate as `$WARREN_QUALITY_GATE` or as the exact configured command.
   A pipe or `; echo` hides the exit status, so such a command should print `exit=$?`.
   Otherwise the outcome reads `unknown`.
+- At reap, Warren also scans the run's diff and the git commands the agent ran for shortcut
+  signals: new suppressions (`@ts-expect-error`, `biome-ignore`, `eslint-disable`, `noqa`, and
+  similar), skipped or focused tests, deleted test files, test files that lose assertions, edits
+  to protected files, and `--no-verify`. The result is `qualityFlags` on `GET /runs/:id` and the
+  runs list, plus a `quality.flags` event. Each flag names its file and line where it has one,
+  and the run Summary links it. Flags are signals for a reviewer, never failures. The protected
+  files default to `**/*budget*.json`, `**/*allowlist*.json`, and `**/*ratchet*.json`. Set
+  `shortcutFlags: { protectedPaths: [...] }` to replace that list, or `[]` to turn it off.
+  A diff larger than about 1 MB is not scanned.
 - Every built-in agent writes a handoff report to `.warren/handoff.json` before it ends:
   `status` (`done`, `partial`, or `blocked`), `summary`, `verification`, `howToTry`, and
   `openQuestions`. Git ignores the file. Reap validates it, serves it as `handoff` on

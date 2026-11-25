@@ -57,9 +57,10 @@ export const PUBLIC_WARREN_CONFIG_DEFAULTS_FIELDS = [
  * - `maxCostUsd`, `maxDurationMinutes`, `toolStallWarnMinutes`,
  *   `toolStallKillMinutes` — admission-cap and watchdog-threshold disclosures.
  * - `agentImage`, `preview`, `agent`, `interactiveAgents`, `resources`,
- *   `admission`, `ciFixer`, `healer`, `tracker`, `pr`, `handoff` — nested
- *   operator configuration blocks (image names, ports, pod specs, prompt
- *   knobs, PR auto-merge policy, the required-handoff policy).
+ *   `admission`, `ciFixer`, `healer`, `tracker`, `pr`, `handoff`,
+ *   `shortcutFlags` — nested operator configuration blocks (image names,
+ *   ports, pod specs, prompt knobs, PR auto-merge policy, the
+ *   required-handoff policy, the protected-path globs).
  */
 export const REDACTED_WARREN_CONFIG_FIELDS = [
 	"triggers",
@@ -84,6 +85,7 @@ export const REDACTED_WARREN_CONFIG_FIELDS = [
 	"tracker",
 	"pr",
 	"handoff",
+	"shortcutFlags",
 ] as const satisfies readonly (keyof LoadedWarrenConfig | keyof DefaultsConfig)[];
 
 /**

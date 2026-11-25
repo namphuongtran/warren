@@ -97,6 +97,9 @@ export const PUBLIC_RUN_FIELDS = [
 	// over the same work the diff totals describe. The gate command stays
 	// redacted, like `qualityGate` in the warren-config projection.
 	"qualityGateOutcome",
+	// namphuongtran/warren#37: the shortcut flags name paths and lines in the
+	// same diff the totals describe, and git commands the event stream shows.
+	"qualityFlags",
 	// namphuongtran/warren#21: the agent's handoff report is agent output of the
 	// same class as the event stream and the prompt, which spectators already see.
 	"handoff",
@@ -130,6 +133,8 @@ export const PUBLIC_RUN_FIELDS = [
  *   same posture as the runtime handles.
  * - `qualityGate` — an executable command string, redacted for the same
  *   reason the warren-config projection redacts it (namphuongtran/warren#36).
+ * - `protectedPaths` — the project's protected-path globs frozen at
+ *   dispatch (namphuongtran/warren#37): operator config, not run output.
  */
 export const REDACTED_RUN_FIELDS = [
 	"renderedAgentJson",
@@ -139,6 +144,7 @@ export const REDACTED_RUN_FIELDS = [
 	"previewFailureMessage",
 	"salvagePath",
 	"qualityGate",
+	"protectedPaths",
 ] as const satisfies readonly (keyof RunRow)[];
 
 /** A run row as a `readPublic`-only caller sees it. */

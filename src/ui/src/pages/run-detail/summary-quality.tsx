@@ -8,15 +8,16 @@ import {
 	useJudgeVerdicts,
 } from "@/pages/telemetry/judge-verdicts.ts";
 import { SummaryBlock, SummaryCard, SummaryEmpty, ToneChip } from "./summary-card.tsx";
+import { ShortcutFlags } from "./summary-flags.tsx";
 import { evidenceHref, findRunJudgeRow, qualityGateView } from "./summary-model.ts";
 
 /**
  * The Summary tab's Quality section (namphuongtran/warren#38): the
- * reap-derived quality-gate outcome (#36) and the judge extension's
- * verdict for this run. Core never reads the judge; the UI reads it
- * through the operator-gated `/extensions/judge/verdicts.jsonl` proxy
- * with the same query the Telemetry → Judge tab uses, so both share one
- * cached page.
+ * reap-derived quality-gate outcome (#36), the shortcut flags reap scanned
+ * off the diff (#37), and the judge extension's verdict for this run. Core
+ * never reads the judge; the UI reads it through the operator-gated
+ * `/extensions/judge/verdicts.jsonl` proxy with the same query the
+ * Telemetry → Judge tab uses, so both share one cached page.
  */
 
 const JUDGE_ABSENT_COPY: Record<JudgeVerdictsAbsent["reason"], string> = {
@@ -106,13 +107,24 @@ function JudgeVerdict({ run }: { run: RunRow }) {
 	return <VerdictClasses runId={run.id} row={row} />;
 }
 
-export function QualitySection({ run, isTerminal }: { run: RunRow; isTerminal: boolean }) {
+export function QualitySection({
+	run,
+	isTerminal,
+	gitUrl,
+}: {
+	run: RunRow;
+	isTerminal: boolean;
+	gitUrl: string | undefined;
+}) {
 	const gate = qualityGateView(run.qualityGateOutcome, isTerminal);
 	return (
 		<SummaryCard title="Quality">
 			<SummaryBlock label="Quality gate">
 				<ToneChip tone={gate.tone}>{gate.label}</ToneChip>
 				<span>{gate.detail}</span>
+			</SummaryBlock>
+			<SummaryBlock label="Shortcut flags">
+				<ShortcutFlags run={run} isTerminal={isTerminal} gitUrl={gitUrl} />
 			</SummaryBlock>
 			<SummaryBlock label="Judge verdict">
 				<JudgeVerdict run={run} />

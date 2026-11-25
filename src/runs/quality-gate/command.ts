@@ -185,6 +185,15 @@ function expandSegments(
 	});
 }
 
+/**
+ * The words of each simple command inside `command`, with `VAR=value`
+ * prefixes, `eval`, and `bash -c '…'` unwrapped. The shortcut scan
+ * (namphuongtran/warren#37) reads git invocations through this.
+ */
+export function simpleCommandWords(command: string): string[][] {
+	return expandSegments(splitShellCommand(command), []).map((segment) => [...segment.words]);
+}
+
 function sameWords(a: readonly string[], b: readonly string[]): boolean {
 	return a.length === b.length && a.every((word, i) => word === b[i]);
 }

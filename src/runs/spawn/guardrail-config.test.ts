@@ -161,6 +161,17 @@ describe("spawnRun: guardrail config fails closed (warren-02aa)", () => {
 		expect(run.qualityGate).toBe("bun run check:all");
 	});
 
+	test("freezes the project's protected-path globs onto the run row (#37)", async () => {
+		const cache = makeCache({
+			".warren/config.yaml": "shortcutFlags:\n  protectedPaths:\n    - ci/*.lock\n",
+		});
+		const { provider, specs } = makeRecordingProvider();
+
+		await dispatch(repos, provider, cache);
+		const run = await repos.runs.require(specs[0]?.runId ?? "");
+		expect(run.protectedPaths).toEqual(["ci/*.lock"]);
+	});
+
 	test("a project with no .warren/ directory keeps today's uncapped behavior", async () => {
 		const cache = makeCache({});
 		const { provider, specs } = makeRecordingProvider();

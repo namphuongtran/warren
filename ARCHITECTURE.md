@@ -178,7 +178,7 @@ partly in `reap/`.
 ```text
 src/runs/
 ├── index.ts                     public barrel
-├── spawn/  stream/  reap/  retry/  quota/  quality-gate/  analytics/
+├── spawn/  stream/  reap/  retry/  quota/  quality-gate/  shortcut-flags/  analytics/
 ├── pr.ts  pr-template.ts  pr-annotate.ts  pr-agent-report.ts
 │   pr-checks.ts  pr-handoff.ts  pr-merge.ts                 delivery
 ├── watchdog.ts  watchdog-config.ts  watchdog-reconcile.ts
@@ -236,6 +236,7 @@ src/runs/
 ├── retry/           provider-error, infra-loss, and quota resume
 ├── quota/           subscription quota holds
 ├── quality-gate/    gate command and outcome
+├── shortcut-flags/  diff and git-command scan for shortcut signals
 └── insights/        read side: analytics, usage, cost, ops stats
 ```
 

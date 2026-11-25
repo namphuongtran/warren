@@ -12,6 +12,22 @@ Releases **0.9.10 and earlier** live in
 
 ### Added
 
+- **Shortcut flags per run (namphuongtran/warren#37).** Reap now scans the
+  run's `base..head` diff, which it reads beside the outcome facts, and the git
+  commands the agent ran, for cheap signs of a worked-around gate: new
+  suppressions, skipped or focused tests, deleted test files, test files that
+  lose assertions, edits to protected files, and `--no-verify`. It stores
+  `qualityFlags` on the run (at most 100 flags, plus a count of the rest),
+  serves it on `GET /runs/:id` and the runs list, and emits `quality.flags`.
+  A flag carries its file and line where it has one. The run Summary's Quality
+  section lists the flags and links each to its line on GitHub
+  (namphuongtran/warren#38). Protected files default to budget, allowlist, and
+  ratchet JSON files; `shortcutFlags.protectedPaths` in `.warren/config.yaml`
+  replaces the list, and dispatch freezes it onto the run. Flags are signals,
+  not failures: core never blocks a run or a merge on one. A diff that cannot
+  be read, including one past exec's 1 MB output buffer, leaves the run
+  unscanned.
+
 - **Review verdict on the run Summary (namphuongtran/warren#38).** The merge
   watcher now also reads the `warren/review` commit status the campaign
   controller's review policy publishes on the PR head (namphuongtran/warren#18),

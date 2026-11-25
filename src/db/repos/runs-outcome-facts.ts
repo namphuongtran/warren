@@ -11,6 +11,7 @@ import type { SqliteDrizzleDb } from "../client.ts";
 import type {
 	RunApproachRecord,
 	RunHandoffRecord,
+	RunQualityFlags,
 	RunQualityGateOutcome,
 	RunRow,
 } from "../schema.ts";
@@ -99,4 +100,18 @@ export async function setApproach(
 	const db = adapter.drizzle as SqliteDrizzleDb;
 	const runs = adapter.schema.runs;
 	await adapter.runWrite(db.update(runs).set({ approach: record }).where(eq(runs.id, id)));
+}
+
+/**
+ * Store the shortcut flags reap scanned off the run's diff
+ * (namphuongtran/warren#37). Last write wins, like the approach note above.
+ */
+export async function setQualityFlags(
+	adapter: DrizzleAdapter,
+	id: string,
+	flags: RunQualityFlags,
+): Promise<void> {
+	const db = adapter.drizzle as SqliteDrizzleDb;
+	const runs = adapter.schema.runs;
+	await adapter.runWrite(db.update(runs).set({ qualityFlags: flags }).where(eq(runs.id, id)));
 }

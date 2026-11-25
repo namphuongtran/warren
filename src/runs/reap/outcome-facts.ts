@@ -16,6 +16,9 @@
  * the pushed run branch fetched into the project clone under K8s (the same
  * warren-ab66 trick `pr-context.ts` uses for PR bodies). Best-effort
  * throughout: any git or fetch failure degrades that measurement to NULL.
+ *
+ * The same pass reads the zero-context unified diff for the shortcut-flag
+ * scan (namphuongtran/warren#37), so K8s fetches the branch once.
  */
 
 import type { Forge } from "../../forge/contract.ts";
@@ -67,26 +70,32 @@ export interface RecordOutcomeFactsInput {
 	) => Promise<unknown>;
 }
 
-/** The diff totals plus the resolved base SHA, read in one pass. */
-interface OutcomeMeasurement {
+/** What {@link recordOutcomeFacts} read: the totals and the diff text, each null when unreadable. */
+export interface OutcomeReading {
 	readonly stats: DiffStats | null;
+	/** `git diff --unified=0` text for the shortcut scan; "" for a known-empty range. */
+	readonly diff: string | null;
+}
+
+/** The diff totals, diff text, and resolved base SHA, read in one pass. */
+interface OutcomeMeasurement extends OutcomeReading {
 	/** Resolved workspace base SHA (warren-b19e); null = unmeasurable. */
 	readonly baseSha: string | null;
 }
+
+const UNMEASURED: OutcomeMeasurement = { stats: null, diff: null, baseSha: null };
 
 /** Temp-ref namespace for the K8s clone fetch; deleted after the read. */
 const FETCH_REF_PREFIX = "refs/warren/outcome-facts/";
 
 /**
  * Measure the diff totals and the resolved base SHA, then persist all five
- * facts. Returns the measured stats (null when unmeasurable) so the pipeline
- * can carry them on its state accumulator. The row write itself is best-effort
+ * facts. Returns the measured stats and diff text (null when unmeasurable) so
+ * the pipeline can carry them on. The row write itself is best-effort
  * bookkeeping: a failure is logged, never thrown out of reap.
  */
-export async function recordOutcomeFacts(
-	input: RecordOutcomeFactsInput,
-): Promise<DiffStats | null> {
-	const { stats, baseSha } = await measureOutcome(input);
+export async function recordOutcomeFacts(input: RecordOutcomeFactsInput): Promise<OutcomeReading> {
+	const { stats, diff, baseSha } = await measureOutcome(input);
 	try {
 		await input.setOutcomeFacts(input.runId, {
 			commitsAhead: input.commitsAhead,
@@ -105,7 +114,7 @@ export async function recordOutcomeFacts(
 			"outcome facts measured but the run row could not be stamped",
 		);
 	}
-	return stats;
+	return { stats, diff };
 }
 
 /**
@@ -119,29 +128,25 @@ export async function recordOutcomeFacts(
  * the workspace was actually cut at, pin or not.
  */
 async function measureOutcome(input: RecordOutcomeFactsInput): Promise<OutcomeMeasurement> {
-	if (input.commitsAhead === null) return { stats: null, baseSha: null };
+	if (input.commitsAhead === null) return UNMEASURED;
 	if (input.commitsAhead === 0) {
-		return { stats: { filesChanged: 0, insertions: 0, deletions: 0 }, baseSha: null };
+		return { stats: { filesChanged: 0, insertions: 0, deletions: 0 }, diff: "", baseSha: null };
 	}
-	if (input.baseBranch === null) return { stats: null, baseSha: null };
+	if (input.baseBranch === null) return UNMEASURED;
 	// LocalProvider: read straight off the still-live host worktree.
 	if (input.workspacePath !== null) {
-		const [stats, baseSha] = await Promise.all([
-			numstat(input.exec, input.workspacePath, input.baseBranch, "HEAD"),
-			mergeBase(input.exec, input.workspacePath, input.baseBranch, "HEAD"),
-		]);
-		return { stats, baseSha };
+		return readRange(input.exec, input.workspacePath, input.baseBranch, "HEAD");
 	}
 	// K8s: no host worktree — fetch the pushed branch into the project clone
 	// and read the range there (warren-ab66 posture). Requires the push to
 	// have landed and a forge credential for the fetch.
 	if (!input.branchPushed || input.branch === null || input.forge === undefined) {
-		return { stats: null, baseSha: null };
+		return UNMEASURED;
 	}
 	const gitCredential = await mintGitCredential(input.forge, input.project.gitUrl).catch(() => {
 		return undefined;
 	});
-	if (gitCredential === undefined) return { stats: null, baseSha: null };
+	if (gitCredential === undefined) return UNMEASURED;
 	return numstatFromClone(input, gitCredential);
 }
 
@@ -151,7 +156,7 @@ async function numstatFromClone(
 	gitCredential: GitSpawnCredential,
 ): Promise<OutcomeMeasurement> {
 	const { branch, baseBranch, runId, exec, project } = input;
-	if (branch === null || baseBranch === null) return { stats: null, baseSha: null };
+	if (branch === null || baseBranch === null) return UNMEASURED;
 	const tempRef = `${FETCH_REF_PREFIX}${runId}`;
 	const url = authenticatedCloneUrl(project.gitUrl, gitCredential);
 	try {
@@ -160,14 +165,10 @@ async function numstatFromClone(
 			timeoutMs: 30_000,
 		});
 	} catch {
-		return { stats: null, baseSha: null };
+		return UNMEASURED;
 	}
 	try {
-		const [stats, baseSha] = await Promise.all([
-			numstat(exec, project.localPath, baseBranch, tempRef),
-			mergeBase(exec, project.localPath, baseBranch, tempRef),
-		]);
-		return { stats, baseSha };
+		return await readRange(exec, project.localPath, baseBranch, tempRef);
 	} finally {
 		try {
 			await exec.run("git", ["update-ref", "-d", tempRef], {
@@ -178,6 +179,46 @@ async function numstatFromClone(
 			// Best-effort cleanup — a leaked temp ref is harmless (`--force`
 			// overwrites it on the next reap of the same run id).
 		}
+	}
+}
+
+/** Read the totals, the merge-base, and the unified diff of `base..head` in parallel. */
+async function readRange(
+	exec: ReapExec,
+	cwd: string,
+	baseRef: string,
+	headRef: string,
+): Promise<OutcomeMeasurement> {
+	const [stats, baseSha, diff] = await Promise.all([
+		numstat(exec, cwd, baseRef, headRef),
+		mergeBase(exec, cwd, baseRef, headRef),
+		unifiedDiff(exec, cwd, baseRef, headRef),
+	]);
+	return { stats, diff, baseSha };
+}
+
+/**
+ * Run `git diff --unified=0 base...head` for the shortcut scan; null on
+ * failure, including a diff past exec's output buffer (a huge diff is not
+ * scanned). Three dots diff from the merge-base, so work that landed on the
+ * base branch after dispatch never reads as the agent's. Renames are
+ * detected so a moved test file is not a deleted one.
+ */
+async function unifiedDiff(
+	exec: ReapExec,
+	cwd: string,
+	baseRef: string,
+	headRef: string,
+): Promise<string | null> {
+	try {
+		const out = await exec.run(
+			"git",
+			["diff", "--unified=0", "--no-color", "--no-ext-diff", "-M", `${baseRef}...${headRef}`],
+			{ cwd, timeoutMs: 10_000 },
+		);
+		return out.stdout;
+	} catch {
+		return null;
 	}
 }
 

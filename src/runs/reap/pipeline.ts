@@ -34,6 +34,7 @@ import { isHandoffShortfall, recordHandoff } from "./handoff.ts";
 import { type DiffStats, recordOutcomeFacts } from "./outcome-facts.ts";
 import { type OpenedPr, prOpenStep } from "./pr-open.ts";
 import { runPreviewAnnotate, runPreviewLaunch } from "./preview.ts";
+import { recordShortcutFlags } from "./shortcut-flags.ts";
 import type { ReapExec, ReapFs, ReapRunInput, ReapStep } from "./types.ts";
 import { classifyEmptyPush } from "./util.ts";
 
@@ -491,7 +492,7 @@ export async function runReapPipeline(
 	// Skipped when finalize never measured (commitsAhead null ⇒ all unknown).
 	// warren-ba08: diff against the SAME ref finalize counted from (repair runs: a SHA).
 	if (state.commitsAhead !== null) {
-		state.diffStats = await recordOutcomeFacts({
+		const reading = await recordOutcomeFacts({
 			runId: ctx.run.id,
 			workspacePath: ctx.workspacePath,
 			branch: ctx.branch,
@@ -504,6 +505,8 @@ export async function runReapPipeline(
 			log: ctx.log,
 			setOutcomeFacts: (id, facts) => ctx.input.repos.runs.setOutcomeFacts(id, facts),
 		});
+		state.diffStats = reading.stats;
+		await recordShortcutFlags(ctx, reading.diff); // namphuongtran/warren#37
 	}
 
 	// warren-df3e: the clone-side seed-close safety net is no longer a pipeline
