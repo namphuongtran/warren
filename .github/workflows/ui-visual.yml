@@ -25,8 +25,9 @@ name: UI visual
 #
 # Contract for the downstream steps of pl-10db:
 #   - The job and its status check are both named `ui-visual`. Keep the
-#     name stable: branch protection may require it. The path filter means the check never reports on a PR that touches
-#     none of these paths, so require it only for PRs that match them.
+#     name stable: branch protection may require it. The path filter
+#     means the check never reports on a PR that touches none of these
+#     paths, so require it only for PRs that match them.
 #   - Every run uploads `scripts/ui-visual/out/` (screenshots, HTML report,
 #     traces, and Playwright's expected/actual/diff images once
 #     toHaveScreenshot lands) as `ui-screenshots-<head sha>`, plus

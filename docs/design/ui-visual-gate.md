@@ -23,15 +23,20 @@ human to look at the pixels.
 | Part | Seed | Delivery |
 |---|---|---|
 | Container-only golden generation and the `check:ui-goldens` manifest guard | `warren-a132` | `shipped` |
-| Auto-merge refusal and the human approval label (this record) | `warren-4780` | `shipped` |
+| Auto-merge refusal and the human approval label (this record) | `warren-4780` | `deferred` |
 | Before/after/diff crops posted as a sticky PR comment | `warren-70d9` | `next` in plan `pl-10db` |
-| `ui-visual` and `design-review` as required checks for `src/ui` PRs | `warren-dbef` | `shipped` |
+| `ui-visual` and `design-review` as required checks for `src/ui` PRs | `warren-dbef` | `deferred` |
 
-Current truth for the shipped rows: `scripts/ui-visual/baseline-approval.ts`
-(the approval gate), `scripts/ui-visual/required-checks.ts` (the merge
-gate for the UI checks), `.github/workflows/auto-merge.yml` (the wiring),
-`scripts/ui-visual/golden-manifest.ts` (the manifest guard), and
-`scripts/ui-visual/README.md` (the operator steps).
+Current truth for the shipped row: `scripts/ui-visual/golden-manifest.ts`
+(the manifest guard) and `.github/workflows/ui-visual.yml` (the
+container-only generation).
+
+The `warren-4780` and `warren-dbef` rows are `deferred` on this fork.
+Their wiring, the auto-merge workflow, needed an upstream GitHub App
+secret and was deleted in namphuongtran/warren#109. The maintainer's
+manual merge is the human approval now. The rest of this record
+describes the upstream design. `scripts/ui-visual/baseline-approval.ts`
+and `scripts/ui-visual/required-checks.ts` remain, with no caller.
 
 ## What needs an approval
 

@@ -85,7 +85,7 @@ definitions in `src/registry/builtins/` require explicit human review —
 they must not ride an auto-merged PR. An agent does not rewrite the
 standard it is measured against, and does not schedule itself.
 
-Executable form: no auto-merge workflow runs on this repository, so the
+Enforcement: no auto-merge workflow runs on this repository, so the
 maintainer's manual merge is the human review for every PR, including
 any that touches this file or `.warren/triggers.yaml`.
 

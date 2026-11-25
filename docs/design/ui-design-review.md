@@ -22,7 +22,7 @@ module disagree, the module wins and this record is the bug.
 |---|---|---|
 | Rubric, verdict schema, and validator | `shipped` | `warren-7d12`: this record, `scripts/design-review/verdict.ts` |
 | Evaluator skill | `shipped` | `warren-7d12`: `.claude/skills/ui-design-review/SKILL.md` |
-| Workflow and `design-review` status check | `shipped` | `warren-a694`: `.github/workflows/ui-design-review.yml`, `scripts/design-review/` |
+| Workflow and `design-review` status check | `deferred` | `warren-a694`: the workflow needed an upstream `ANTHROPIC_API_KEY` and was deleted in namphuongtran/warren#109. Run the evaluator skill by hand. |
 | Auto-merge requires the check for UI PRs | `unscheduled` | `warren-dbef` in plan `pl-10db` |
 
 ---
