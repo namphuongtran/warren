@@ -2,8 +2,8 @@
  * Leak assertions for scenario 39 (`39-public-exposure.ts`).
  *
  * Split out of `39-public-exposure.helpers.ts` under the per-file line
- * budget: the helpers keep the db seeder, the forbidden-token vocabulary
- * and the route derivation; this module owns every assertion that scans
+ * budget: the helpers keep the db seeder and the route derivation, the
+ * vocabulary module keeps the forbidden tokens; this module owns every assertion that scans
  * an anonymous body for content that must never be on the wire.
  */
 
@@ -19,7 +19,7 @@ import {
 	FORBIDDEN_PATH_FRAGMENTS,
 	SENTINELS,
 	UNREDACTED_BEARER,
-} from "./39-public-exposure.helpers.ts";
+} from "./39-public-exposure.vocabulary.ts";
 
 /**
  * Forge-wiring probes (warren-2600). The campaign's falsification test 2
