@@ -5,7 +5,7 @@ import { join } from "node:path";
 /**
  * Layout guard for the repro-first convention (warren-9fd7). Each UI bug
  * gets one `repros/<seed-id>.pw.ts` that the ui-visual harness runs. A bug
- * tracked as a GitHub issue on this fork uses `repros/gh-<number>.pw.ts`. The
+ * tracked as a GitHub issue with no seed uses `repros/gh-<number>.pw.ts`. The
  * `.pw.ts` suffix matters: `bun test` loads any `.spec.ts`, and a
  * Playwright spec loaded there fails the root suite.
  */

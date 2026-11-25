@@ -549,7 +549,7 @@ change non-test code until the reproduction exists and fails. This rule
 applies to every seed or issue that reports a rendering, layout, or copy
 defect in `src/ui/`, and to every agent that works one.
 
-1. Write `scripts/ui-visual/repros/<seed-id>.pw.ts`. It loads the page
+1. Write `scripts/ui-visual/repros/<seed-id>.pw.ts` (`gh-<number>.pw.ts` for a GitHub issue with no seed). It loads the page
    through `openCase` from `scripts/ui-visual/harness.ts` against the
    fixture boot. Assert on layout, overflow, or text. Use a targeted
    `toHaveScreenshot` only when no structural assertion can see the bug,
@@ -568,9 +568,8 @@ does. The repro stays in the tree after the merge. `check:ui-visual`
 runs every file in the directory, so the bug cannot return silently.
 
 Name each file `<seed-id>.pw.ts`, never `<seed-id>.spec.ts`, because
-`bun test` loads spec files. A bug tracked as a GitHub issue on this
-fork uses `gh-<number>.pw.ts` instead.
-`scripts/ui-visual/repros.test.ts` enforces the name.
+`bun test` loads spec files. `scripts/ui-visual/repros.test.ts` enforces
+the name.
 
 Human reporters use the UI bug issue template
 (`.github/ISSUE_TEMPLATE/ui-bug.yml`), which asks for the page,

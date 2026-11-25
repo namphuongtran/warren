@@ -10,7 +10,7 @@
  * name, so every page's scroll region is keyboard-reachable however little
  * interactive content it holds.
  *
- * Asserts on axe's verdict and on focus, never pixels.
+ * Asserts on axe's verdict and the tab order, never pixels.
  */
 
 import { AxeBuilder } from "@axe-core/playwright";
@@ -21,12 +21,12 @@ import { harnessCases, openCase } from "../harness.ts";
 const SEED = "gh-119";
 const RULE = "scrollable-region-focusable";
 /** Pages whose phone <main> scrolls with no focusable content inside it. */
-const PAGES = ["agents", "instance"];
+const SCROLLING_PHONE_PAGES = ["agents", "instance"];
 
 const { fixture, cases } = harnessCases();
 
 for (const c of cases.filter(
-	(x) => PAGES.includes(x.page.id) && x.viewport === "phone" && x.theme === "light",
+	(x) => SCROLLING_PHONE_PAGES.includes(x.page.id) && x.viewport === "phone" && x.theme === "light",
 )) {
 	test.describe(`${SEED} ${c.name}`, () => {
 		test.use({ viewport: c.size, colorScheme: c.theme });
@@ -35,11 +35,13 @@ for (const c of cases.filter(
 			await openCase(page, c, fixture);
 			const results = await new AxeBuilder({ page }).withRules([RULE]).analyze();
 			const targets = results.violations.flatMap((v) => v.nodes.map((n) => n.target.join(" ")));
-			expect(targets, `${RULE} violations`).toEqual([]);
+			expect.soft(targets, `${RULE} violations`).toEqual([]);
 
+			// Assert the attribute, not a Tab walk: Chromium's keyboard-focusable
+			// scrollers already let Tab reach a bare scroller, so a walk passes
+			// before the fix. Safari does not, and axe does not count on it.
 			const main = page.getByRole("main");
-			await main.focus();
-			await expect(main, "main takes keyboard focus").toBeFocused();
+			await expect(main, "main is in the tab order").toHaveAttribute("tabindex", "0");
 			await expect(main, "main has an accessible name").toHaveAccessibleName(/.+/);
 		});
 	});
