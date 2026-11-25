@@ -4,14 +4,15 @@ import { join } from "node:path";
 
 /**
  * Layout guard for the repro-first convention (warren-9fd7). Each UI bug
- * gets one `repros/<seed-id>.pw.ts` that the ui-visual harness runs. The
+ * gets one `repros/<seed-id>.pw.ts` that the ui-visual harness runs. A bug
+ * tracked as a GitHub issue on this fork uses `repros/gh-<number>.pw.ts`. The
  * `.pw.ts` suffix matters: `bun test` loads any `.spec.ts`, and a
  * Playwright spec loaded there fails the root suite.
  */
 
 const REPROS = join(import.meta.dir, "repros");
 const ISSUE_TEMPLATE = join(import.meta.dir, "..", "..", ".github", "ISSUE_TEMPLATE", "ui-bug.yml");
-const REPRO_FILE = /^(warren-[0-9a-f]{4,})\.pw\.ts$/;
+const REPRO_FILE = /^(warren-[0-9a-f]{4,}|gh-[1-9][0-9]*)\.pw\.ts$/;
 /** playwright.config.ts `testMatch`. */
 const PW_TEST_MATCH = /.*\.pw\.ts$/;
 
