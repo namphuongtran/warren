@@ -18,7 +18,7 @@ import { PAGES, type PageSpec, THEMES, VIEWPORT_NAMES } from "./pages.ts";
  * the PR that deletes an entry; raising it needs review justification and
  * a tracker id on the new entry.
  */
-const ALLOWLIST_CEILING = 1;
+const ALLOWLIST_CEILING = 0;
 
 const RUNS: PageSpec = { id: "runs", route: "/runs", path: () => "/runs" };
 const CASE = { page: RUNS, viewport: "phone", theme: "dark" } as const;

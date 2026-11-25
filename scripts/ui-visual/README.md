@@ -231,8 +231,9 @@ cannot carry the attribute.
 ## Reproductions
 
 A UI bug fix starts with a failing reproduction (warren-9fd7). The spec
-lives in `repros/<seed-id>.pw.ts`, one per bug, and stays after the fix as
-a regression guard. Playwright's `testMatch` already covers the directory,
+lives in `repros/<seed-id>.pw.ts` (or `gh-<number>.pw.ts` for a GitHub
+issue with no seed), one per bug, and stays after the fix as a regression
+guard. Playwright's `testMatch` already covers the directory,
 so `check:ui-visual` runs every repro with the other specs. The workflow:
 
 1. Write the spec. Load the page with `openCase` from `harness.ts`, then

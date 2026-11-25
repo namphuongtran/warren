@@ -549,7 +549,7 @@ change non-test code until the reproduction exists and fails. This rule
 applies to every seed or issue that reports a rendering, layout, or copy
 defect in `src/ui/`, and to every agent that works one.
 
-1. Write `scripts/ui-visual/repros/<seed-id>.pw.ts`. It loads the page
+1. Write `scripts/ui-visual/repros/<seed-id>.pw.ts` (`gh-<number>.pw.ts` for a GitHub issue with no seed). It loads the page
    through `openCase` from `scripts/ui-visual/harness.ts` against the
    fixture boot. Assert on layout, overflow, or text. Use a targeted
    `toHaveScreenshot` only when no structural assertion can see the bug,

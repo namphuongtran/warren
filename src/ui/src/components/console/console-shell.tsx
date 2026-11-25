@@ -95,7 +95,15 @@ export function ConsoleShell() {
 					<ConsoleTopbar stats={stats} />
 				</div>
 
-				<main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+				{/* <main> is the page's scroll container. It takes focus itself so a
+				    keyboard user can scroll pages whose content holds no link or
+				    button, like the phone Agents cards (namphuongtran/warren#119). */}
+				<main
+					// biome-ignore lint/a11y/noNoninteractiveTabindex: a scroll region must be keyboard-focusable (axe scrollable-region-focusable)
+					tabIndex={0}
+					aria-label="Page content"
+					className="min-h-0 min-w-0 flex-1 overflow-y-auto focus-visible:outline-none focus-visible:ring-(--color-ring) focus-visible:ring-2 focus-visible:ring-inset"
+				>
 					{/* Boundary sits INSIDE the chrome so a page-level throw costs
 					    the page, not the shell (warren-1f12). */}
 					<ErrorBoundary resetKey={location.pathname}>
