@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template: replace __HOME__ with your home directory, then copy to ~/Library/LaunchAgents/.
+     docs/self-host/macos-launchd.md section 1 says how. -->
+<plist version="1.0">
+<dict>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>HOME</key>
+		<string>__HOME__</string>
+		<key>PATH</key>
+		<string>__HOME__/.bun/bin:__HOME__/.docker/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+		<key>WARREN_AUTO_OPEN_PR</key>
+		<string>true</string>
+		<key>WARREN_BASE_URL</key>
+		<string>http://localhost:8080</string>
+		<key>WARREN_DOCKER_AGENT_IMAGE</key>
+		<string>warren-agent:latest</string>
+		<key>WARREN_RUNTIME</key>
+		<string>docker</string>
+	</dict>
+	<key>KeepAlive</key>
+	<dict>
+		<key>SuccessfulExit</key>
+		<false/>
+	</dict>
+	<key>Label</key>
+	<string>dev.warren.server</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/sh</string>
+		<string>-c</string>
+		<string>set -a; . "$HOME/.warren/env"; set +a; exec "$HOME/.bun/bin/bun" run "$HOME/.warren/server-src/src/cli/main.ts" up --no-open --no-wizard</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StandardErrorPath</key>
+	<string>__HOME__/.warren/logs/server.log</string>
+	<key>StandardOutPath</key>
+	<string>__HOME__/.warren/logs/server.log</string>
+	<key>ThrottleInterval</key>
+	<integer>30</integer>
+	<key>WorkingDirectory</key>
+	<string>__HOME__/.warren/server-src</string>
+</dict>
+</plist>
