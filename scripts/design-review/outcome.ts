@@ -31,7 +31,13 @@ export const DESIGN_REVIEW_MARKER = stickyMarker("design-review");
 /** Rows shown per findings table; the rest are counted, not listed. */
 export const MAX_ROWS = 25;
 
-export type SkipReason = "no-ui-changes" | "no-rendered-changes";
+/**
+ * Why no review ran. `not-configured` (#123): the repo holds no
+ * `ANTHROPIC_API_KEY`, so the evaluator cannot start. That passes the check
+ * with the reason in its title instead of failing every UI PR closed.
+ */
+export const SKIP_REASONS = ["no-ui-changes", "no-rendered-changes", "not-configured"] as const;
+export type SkipReason = (typeof SKIP_REASONS)[number];
 
 export type Outcome =
 	| { readonly kind: "waiting" }
@@ -75,6 +81,15 @@ export type CheckState =
 const SKIP_TITLES: Record<SkipReason, string> = {
 	"no-ui-changes": "Skipped: no src/ui changes",
 	"no-rendered-changes": "Skipped: no rendered src/ui changes",
+	"not-configured": "Skipped: design review not configured",
+};
+
+const NOTHING_RENDERED = "Nothing in this PR changes what the web UI renders, so no review ran.";
+const SKIP_SUMMARIES: Record<SkipReason, string> = {
+	"no-ui-changes": NOTHING_RENDERED,
+	"no-rendered-changes": NOTHING_RENDERED,
+	"not-configured":
+		"This repository has no ANTHROPIC_API_KEY secret, so the evaluator cannot run. Set the secret to turn the review on.",
 };
 
 /** Read a verdict file's text through the validator; null text means missing. */
@@ -114,7 +129,7 @@ export function checkFor(outcome: Outcome, ctx: ReportContext | null): CheckStat
 				status: "completed",
 				conclusion: "success",
 				title: SKIP_TITLES[outcome.reason],
-				summary: "Nothing in this PR changes what the web UI renders, so no review ran.",
+				summary: SKIP_SUMMARIES[outcome.reason],
 			};
 		case "running":
 			return { status: "in_progress", title: "Reviewing screenshots", summary };

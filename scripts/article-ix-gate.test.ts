@@ -219,10 +219,11 @@ describe("the gate fails closed", () => {
 		// warren-4780 adds the UI baseline approval check as a second gate with
 		// the same contract (scripts/ui-visual/baseline-approval.test.ts), and
 		// warren-dbef the UI required checks as a third
-		// (scripts/ui-visual/required-checks.workflow.test.ts).
+		// (scripts/ui-visual/required-checks.workflow.test.ts). #123 skips the
+		// arm when no auto-merge App is configured.
 		expect(merge?.if).toBe(
 			"steps.protected.outputs.hit == 'false' && steps.baseline.outputs.hit == 'false' && " +
-				"steps.ui_checks.outputs.hit == 'false'",
+				"steps.ui_checks.outputs.hit == 'false' && vars.AUTO_MERGE_APP_ID != ''",
 		);
 	});
 });

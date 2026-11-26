@@ -39,6 +39,9 @@ name: UI design review
 #   DESIGN_REVIEW_MAX_TURNS       turn cap per review (default 60)
 #   DESIGN_REVIEW_MAX_BUDGET_USD  spend cap per review (default 5)
 # A review that hits a cap writes no verdict, so the check fails closed.
+# Without the ANTHROPIC_API_KEY secret, prepare picks a skip and the check
+# passes as "Skipped: design review not configured" (#123). With the key, an
+# evaluator that fails still fails closed.
 #
 # Manual re-run, e.g. after the evaluator failed or for a PR whose pusher
 # has no write access (the action refuses to run for them):
@@ -144,6 +147,8 @@ jobs:
           OUT_DIR: ${{ runner.temp }}/design-review
           REVIEW_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           ALLOW_CLOSED: ${{ github.event_name == 'workflow_dispatch' && inputs.allow_closed }}
+          # #123: no key means a "not configured" skip, not a fail-closed check.
+          REVIEW_CONFIGURED: ${{ secrets.ANTHROPIC_API_KEY != '' }}
         run: bun scripts/design-review/prepare.ts
       - name: Upload the evaluator's inputs
         if: steps.prepare.outputs.mode == 'review'

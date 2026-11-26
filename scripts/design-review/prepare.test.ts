@@ -47,6 +47,7 @@ interface Setup {
 	state?: string;
 	allowClosed?: boolean;
 	pr?: unknown;
+	reviewConfigured?: boolean;
 }
 
 function setup(opts: Setup = {}) {
@@ -84,6 +85,7 @@ function setup(opts: Setup = {}) {
 		},
 		reviewUrl: "https://example.test/runs/100",
 		allowClosed: opts.allowClosed ?? false,
+		...(opts.reviewConfigured === undefined ? {} : { reviewConfigured: opts.reviewConfigured }),
 	};
 	return { api, deps, outputs, outDir };
 }
@@ -124,6 +126,19 @@ describe("runPrepare", () => {
 		expect(outputs.skip_reason).toBe("no-rendered-changes");
 		expect(existsSync(outDir)).toBe(false);
 		expect(api.checkRuns).toEqual([]);
+	});
+
+	test("skips as not configured, without staging, when the repo has no evaluator key", async () => {
+		const { api, deps, outputs, outDir } = setup({ reviewConfigured: false });
+		expect(await runPrepare(deps)).toBe("skip");
+		expect(outputs).toMatchObject({ mode: "skip", skip_reason: "not-configured" });
+		expect(existsSync(outDir)).toBe(false);
+		expect(api.checkRuns).toEqual([]);
+	});
+
+	test("keeps a failed ui-visual run as not-run even with no evaluator key", async () => {
+		const { deps } = setup({ conclusion: "failure", reviewConfigured: false });
+		expect(await runPrepare(deps)).toBe("not-run");
 	});
 
 	test("reports not-run, without staging, when ui-visual failed", async () => {
