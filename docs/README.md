@@ -8,6 +8,8 @@ This directory holds operator, API, architecture, and contributor documentation.
 - [`usage-guide.md`](usage-guide.md): a guide to install, project config, runs, plan-runs, schedules, and operations.
 - [`credentials.md`](credentials.md) — the two model paths and the two GitHub paths, including machine-account guidance.
 - [`self-host/docker.md`](self-host/docker.md) — local and sibling-container Docker topologies, agent images, persistence, and macOS Docker Desktop requirements.
+- [`self-host/macos-launchd.md`](self-host/macos-launchd.md): run the server and a work queue as launchd services on a Mac, deploy a new `main`, and rebuild agent images.
+- [`self-host/onboard-project.md`](self-host/onboard-project.md): add a project to that server, build its agent image, and put its issues on the queue.
 - [`RUNBOOK-K8S.md`](RUNBOOK-K8S.md) — Kubernetes deployment, secrets, RBAC, garbage collection, admission, and incident response.
 - [`../deploy/k8s/README.md`](../deploy/k8s/README.md) — Kubernetes manifest and overlay commands.
 - [`operations.md`](operations.md) — probes, structured logs, metrics, run events, cost, backups, and common triage.

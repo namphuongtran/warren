@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template: replace __HOME__ with your home directory, then copy to ~/Library/LaunchAgents/.
+     docs/self-host/macos-launchd.md section 1 says how. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>dev.warren.queue</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/bash</string>
+		<string>__HOME__/.warren/bin/warren-queue.sh</string>
+	</array>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>__HOME__/.bun/bin:__HOME__/.docker/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+		<key>HOME</key>
+		<string>__HOME__</string>
+	</dict>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>ThrottleInterval</key>
+	<integer>60</integer>
+	<key>StandardOutPath</key>
+	<string>__HOME__/.warren/logs/queue.stdout.log</string>
+	<key>StandardErrorPath</key>
+	<string>__HOME__/.warren/logs/queue.stdout.log</string>
+</dict>
+</plist>
