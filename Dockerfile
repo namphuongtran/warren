@@ -30,7 +30,7 @@
 # because a full checkout has the files. Every out-of-tree entry in
 # that `include` list needs a matching COPY below, or the image build
 # breaks again.
-FROM oven/bun:1.2 AS ui-builder
+FROM oven/bun:1.4 AS ui-builder
 WORKDIR /build/ui
 COPY src/core /build/core
 COPY src/client/ndjson.ts src/client/errors.ts /build/client/
@@ -42,7 +42,7 @@ RUN bun install --frozen-lockfile
 RUN bun run build
 
 # ---------- stage 2: runtime ----------
-FROM oven/bun:1.2
+FROM oven/bun:1.4
 
 # bubblewrap is the sandbox primitive warren's own sandbox uses
 # (src/sandbox/, warren-5af7); uidmap provides newuidmap/newgidmap for the
