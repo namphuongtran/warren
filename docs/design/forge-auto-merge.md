@@ -27,7 +27,7 @@ Plan-runs gate each child on the previous child's pull request merging,
 but warren does not control the thing that makes a pull request merge.
 Arming lives in a per-repo GitHub Actions workflow
 (`.github/workflows/auto-merge.yml`) that holds its own credential:
-`AUTO_MERGE_PAT`, or `AUTO_MERGE_APP_ID` plus a `.pem`-backed
+`AUTO_MERGE_PAT`, or `AUTO_MERGE_APP_CLIENT_ID` plus a `.pem`-backed
 `AUTO_MERGE_APP_PRIVATE_KEY`.
 
 That is a second credential per repository, outside warren and invisible
@@ -393,7 +393,7 @@ and at most one extra no-op. The removal order for an operator:
 
 1. Set `pr.autoMerge`, with `protectedPaths` covering the Article IX
    paths, and confirm `reap.auto_merge_armed` events on new runs.
-2. Delete `.github/workflows/auto-merge.yml`, the `AUTO_MERGE_APP_ID`
+2. Delete `.github/workflows/auto-merge.yml`, the `AUTO_MERGE_APP_CLIENT_ID`
    variable, the `AUTO_MERGE_APP_PRIVATE_KEY` secret, and any
    `AUTO_MERGE_PAT` secret.
 3. Keep `protectedPaths`. The starter list in §3 is the recommended
