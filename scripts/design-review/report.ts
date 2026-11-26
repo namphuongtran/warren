@@ -31,6 +31,7 @@ import {
 	interpretVerdict,
 	type Outcome,
 	type ReportContext,
+	SKIP_REASONS,
 	type SkipReason,
 } from "./outcome.ts";
 import { parseUsage } from "./usage.ts";
@@ -64,7 +65,7 @@ function readSmall(path: string): string | null {
 }
 
 function isSkipReason(value: string): value is SkipReason {
-	return value === "no-ui-changes" || value === "no-rendered-changes";
+	return (SKIP_REASONS as readonly string[]).includes(value);
 }
 
 /** The outcome for the prepare job's mode, reading the verdict for a review. */

@@ -39,10 +39,16 @@ permissions:
 # a non-main branch and let the `pr-gate` step prove the branch has an open
 # same-repo PR before spending a token or a checkout on it.
 
+#
+# No App configured (AUTO_MERGE_APP_ID unset) means the job skips (#123). It
+# must not fall back to GITHUB_TOKEN: a GITHUB_TOKEN push does not re-trigger
+# CI, so the healed commit would never be checked.
+
 jobs:
   autoheal:
     runs-on: ubuntu-latest
     if: >-
+      vars.AUTO_MERGE_APP_ID != '' &&
       github.event.workflow_run.conclusion == 'failure' &&
       github.event.workflow_run.head_branch != 'main' &&
       github.event.workflow_run.head_repository.full_name == github.repository

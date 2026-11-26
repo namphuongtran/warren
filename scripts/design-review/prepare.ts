@@ -10,7 +10,8 @@
  * `pages`, `all_pages`, `skip_reason`, and `mode`:
  *
  *   none     no open PR whose head is this run's head: report nothing
- *   skip     the PR changes nothing the UI renders: the check passes
+ *   skip     the PR changes nothing the UI renders, or the repo has no
+ *            evaluator key (`reviewConfigured: false`): the check passes
  *   not-run  ui-visual failed: the check fails without spending a review
  *   review   stage the inputs and mark the check in progress
  *
@@ -44,6 +45,8 @@ export interface PrepareDeps extends JobDeps {
 	readonly reviewUrl: string;
 	/** Manual dispatch only: review a closed or merged PR's last head too. */
 	readonly allowClosed?: boolean;
+	/** False when the repo holds no evaluator key (#123). Absent means configured. */
+	readonly reviewConfigured?: boolean;
 }
 
 /** The rendered UI patches as one unified diff, capped at `max` characters. */
@@ -93,6 +96,21 @@ function skipReason(files: readonly string[], scope: Scope): SkipReason | null {
 	return scope.pages.length === 0 ? "no-rendered-changes" : null;
 }
 
+/**
+ * A failed ui-visual run still reports not-run when no key is configured:
+ * that failure is real, and the key changes nothing about it.
+ */
+function chooseMode(
+	skip: SkipReason | null,
+	conclusion: string,
+	configured: boolean,
+): { mode: Mode; skip: SkipReason | null } {
+	if (skip !== null) return { mode: "skip", skip };
+	if (conclusion !== "success") return { mode: "not-run", skip: null };
+	if (!configured) return { mode: "skip", skip: "not-configured" };
+	return { mode: "review", skip: null };
+}
+
 /** The whole prepare step; returns the mode it chose. */
 export async function runPrepare(deps: PrepareDeps): Promise<Mode> {
 	const run = await readRun(deps);
@@ -116,8 +134,11 @@ export async function runPrepare(deps: PrepareDeps): Promise<Mode> {
 	deps.output("pages", scope.pages.join(","));
 	deps.output("all_pages", String(scope.allPages));
 
-	const skip = complete ? skipReason(names, scope) : null;
-	const mode: Mode = skip !== null ? "skip" : run.conclusion === "success" ? "review" : "not-run";
+	const { mode, skip } = chooseMode(
+		complete ? skipReason(names, scope) : null,
+		run.conclusion,
+		deps.reviewConfigured !== false,
+	);
 	deps.log(`PR #${pr} at ${run.headSha}: ${mode} (${scope.pages.length} page(s) in scope)`);
 	if (skip !== null) deps.output("skip_reason", skip);
 	if (mode === "review") {
@@ -157,6 +178,8 @@ async function main(): Promise<void> {
 		},
 		reviewUrl: process.env.REVIEW_URL ?? "",
 		allowClosed: process.env.ALLOW_CLOSED === "true",
+		// Only an explicit "false" skips, so a missing variable keeps the fail-closed review.
+		reviewConfigured: process.env.REVIEW_CONFIGURED !== "false",
 	});
 	console.log(`design-review prepare: ${mode}`);
 }

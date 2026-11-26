@@ -75,6 +75,11 @@ describe("checkFor", () => {
 		expect(checkFor({ kind: "skipped", reason: "no-rendered-changes" }, null).title).toBe(
 			"Skipped: no rendered src/ui changes",
 		);
+		expect(checkFor({ kind: "skipped", reason: "not-configured" }, null)).toMatchObject({
+			conclusion: "success",
+			title: "Skipped: design review not configured",
+			summary: expect.stringContaining("ANTHROPIC_API_KEY"),
+		});
 	});
 
 	test("fails a FAIL verdict, an invalid verdict, and a failed ui-visual run", () => {

@@ -355,6 +355,7 @@ points.
 | State | When |
 |---|---|
 | `success`, "Skipped: no src/ui changes" | The PR changes nothing under `src/ui/` that renders |
+| `success`, "Skipped: design review not configured" | The repository holds no `ANTHROPIC_API_KEY` secret, so the evaluator cannot run (#123) |
 | `queued`, "Waiting for ui-visual" | The PR changes rendered UI; ui-visual has not finished |
 | `in_progress`, "Reviewing screenshots" | The evaluator is running |
 | `success`, "PASS: ..." | A valid PASS verdict |

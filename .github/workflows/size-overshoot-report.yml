@@ -27,7 +27,9 @@ name: size-overshoot-report
 # Uses the same GitHub App installation token as auto-merge.yml and
 # bundle-size-autoheal.yml, minted per run from AUTO_MERGE_APP_ID +
 # AUTO_MERGE_APP_PRIVATE_KEY. The App needs `pull_requests: write` to post the
-# comment; it already needs that scope to enable auto-merge.
+# comment; it already needs that scope to enable auto-merge. With no App
+# configured (AUTO_MERGE_APP_ID unset) the job falls back to GITHUB_TOKEN, which
+# is enough to read an artifact and post a comment (#123).
 # NOTE: workflow_run jobs run from the DEFAULT branch's copy of this file, so
 # this only takes effect once merged to main (warren-8746).
 
@@ -38,6 +40,9 @@ on:
 
 permissions:
   contents: read
+  # Only used by the GITHUB_TOKEN fallback when no App is configured.
+  actions: read
+  pull-requests: write
 
 # Same reasoning as bundle-size-autoheal.yml (warren-ffd2): do NOT guard on
 # `github.event.workflow_run.event == 'pull_request'`. Warren pushes agent
@@ -60,6 +65,7 @@ jobs:
     steps:
       - name: Mint app installation token
         id: app-token
+        if: ${{ vars.AUTO_MERGE_APP_ID != '' }}
         uses: actions/create-github-app-token@v3.2.0
         with:
           app-id: ${{ vars.AUTO_MERGE_APP_ID }}
@@ -73,7 +79,7 @@ jobs:
       - name: Require an open same-repo PR on the head branch
         id: pr-gate
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
           GH_REPO: ${{ github.repository }}
           HEAD_REF: ${{ github.repository_owner }}:${{ github.event.workflow_run.head_branch }}
         run: |
@@ -101,12 +107,12 @@ jobs:
           name: size-overshoot-report
           path: size-overshoot
           run-id: ${{ github.event.workflow_run.id }}
-          github-token: ${{ steps.app-token.outputs.token }}
+          github-token: ${{ steps.app-token.outputs.token || github.token }}
 
       - name: Post the overshoot report
         if: steps.pr-gate.outputs.has-pr == 'true' && steps.artifact.outcome == 'success'
         env:
-          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
           GH_REPO: ${{ github.repository }}
           PR_NUMBER: ${{ steps.pr-gate.outputs.number }}
         run: |

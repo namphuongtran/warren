@@ -1,0 +1,53 @@
+# Dependabot version updates (#123 follow-up). Labels come from
+# .github/labels.yml (`dependencies`, `javascript`, `area/deps`).
+#
+# - The nine Bun projects each keep their own bun.lock: the root, src/ui, and
+#   every extensions/* package (they are not workspaces).
+# - @os-eco/* packages are left to the os-eco-dep-sync skill, which moves
+#   package.json, bun.lock and the Dockerfile CLI pins together.
+# - Dependabot PRs do not auto-merge: auto-merge.yml arms only PRs from the
+#   repo owner or AUTO_MERGE_BOT_LOGIN.
+# - On a fork, version updates also need turning on in Settings -> Code
+#   security, or nothing runs.
+version: 2
+updates:
+  - package-ecosystem: "bun"
+    directories:
+      - "/"
+      - "/src/ui"
+      - "/extensions/*"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels: ["dependencies", "javascript", "area/deps"]
+    commit-message:
+      prefix: "chore(deps)"
+    ignore:
+      - dependency-name: "@os-eco/*"
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    labels: ["dependencies", "area/deps"]
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: "docker"
+    directories:
+      - "/"
+      - "/deploy/docker"
+      - "/extensions/*"
+    schedule:
+      interval: "monthly"
+    labels: ["dependencies", "area/deps"]
+    commit-message:
+      prefix: "chore(docker)"
