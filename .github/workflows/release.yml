@@ -325,5 +325,5 @@ jobs:
       - name: Mint an auto-merge app token (proof the credential is alive)
         uses: actions/create-github-app-token@v3.2.0
         with:
-          app-id: ${{ vars.AUTO_MERGE_APP_ID }}
+          client-id: ${{ vars.AUTO_MERGE_APP_CLIENT_ID }}
           private-key: ${{ secrets.AUTO_MERGE_APP_PRIVATE_KEY }}

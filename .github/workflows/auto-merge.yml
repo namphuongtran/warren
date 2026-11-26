@@ -18,7 +18,7 @@ name: auto-merge
 # resulting push to main triggers downstream workflows (CI, Release).
 # GITHUB_TOKEN-authored pushes are deliberately suppressed by GitHub to
 # prevent recursive loops (seed warren-a2dc). The token is minted fresh
-# per run from AUTO_MERGE_APP_ID (repo variable) + AUTO_MERGE_APP_PRIVATE_KEY
+# per run from AUTO_MERGE_APP_CLIENT_ID (repo variable) + AUTO_MERGE_APP_PRIVATE_KEY
 # (secret), so there is no expiring PAT to rotate — the static
 # AUTO_MERGE_PAT that silently died on 2026-08-07 is retired (warren-2565).
 #
@@ -285,27 +285,27 @@ jobs:
             echo "auto-merge disarmed: ui-visual and design-review have not both succeeded on this head."
           fi
 
-      # #123: a deployment with no auto-merge App (AUTO_MERGE_APP_ID unset)
+      # #123: a deployment with no auto-merge App (AUTO_MERGE_APP_CLIENT_ID unset)
       # cannot arm. GITHUB_TOKEN is no substitute, because its merge to main
       # would not trigger CI or Release. Say so and skip the arm, rather than
       # failing at the mint step.
       - name: Report that the auto-merge App is not configured
         if: >-
           steps.protected.outputs.hit == 'false' && steps.baseline.outputs.hit == 'false' &&
-          steps.ui_checks.outputs.hit == 'false' && vars.AUTO_MERGE_APP_ID == ''
+          steps.ui_checks.outputs.hit == 'false' && vars.AUTO_MERGE_APP_CLIENT_ID == ''
         env:
           PR_NUMBER: ${{ matrix.pr.number }}
         run: |
-          echo "::notice::auto-merge App not configured (AUTO_MERGE_APP_ID is unset); merge PR #${PR_NUMBER} by hand."
+          echo "::notice::auto-merge App not configured (AUTO_MERGE_APP_CLIENT_ID is unset); merge PR #${PR_NUMBER} by hand."
 
       - name: Mint app installation token
         if: >-
           steps.protected.outputs.hit == 'false' && steps.baseline.outputs.hit == 'false' &&
-          steps.ui_checks.outputs.hit == 'false' && vars.AUTO_MERGE_APP_ID != ''
+          steps.ui_checks.outputs.hit == 'false' && vars.AUTO_MERGE_APP_CLIENT_ID != ''
         id: app-token
         uses: actions/create-github-app-token@v3.2.0
         with:
-          app-id: ${{ vars.AUTO_MERGE_APP_ID }}
+          client-id: ${{ vars.AUTO_MERGE_APP_CLIENT_ID }}
           private-key: ${{ secrets.AUTO_MERGE_APP_PRIVATE_KEY }}
 
       # warren-4681: two live failures (pl-882c, #783 and #784) came from this
@@ -319,7 +319,7 @@ jobs:
       - name: Enable auto-merge (squash)
         if: >-
           steps.protected.outputs.hit == 'false' && steps.baseline.outputs.hit == 'false' &&
-          steps.ui_checks.outputs.hit == 'false' && vars.AUTO_MERGE_APP_ID != ''
+          steps.ui_checks.outputs.hit == 'false' && vars.AUTO_MERGE_APP_CLIENT_ID != ''
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
           PR_URL: ${{ matrix.pr.url }}
