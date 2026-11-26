@@ -303,7 +303,7 @@ jobs:
           steps.protected.outputs.hit == 'false' && steps.baseline.outputs.hit == 'false' &&
           steps.ui_checks.outputs.hit == 'false' && vars.AUTO_MERGE_APP_CLIENT_ID != ''
         id: app-token
-        uses: actions/create-github-app-token@v3.2.0
+        uses: actions/create-github-app-token@v3.4.0
         with:
           client-id: ${{ vars.AUTO_MERGE_APP_CLIENT_ID }}
           private-key: ${{ secrets.AUTO_MERGE_APP_PRIVATE_KEY }}
