@@ -164,7 +164,7 @@ The removal order:
    paths. The starter list in §2 is the recommended minimum.
 2. Dispatch a real run and confirm a `reap.auto_merge_armed` event on
    its stream.
-3. Delete `.github/workflows/auto-merge.yml`, the `AUTO_MERGE_APP_ID`
+3. Delete `.github/workflows/auto-merge.yml`, the `AUTO_MERGE_APP_CLIENT_ID`
    repository variable, the `AUTO_MERGE_APP_PRIVATE_KEY` secret, any
    `AUTO_MERGE_PAT` secret, and the `AUTO_MERGE_BOT_LOGIN` variable.
 4. Keep `protectedPaths`. The list is the guard that keeps protected
@@ -208,7 +208,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3.2.0
         with:
-          app-id: ${{ vars.AUTO_MERGE_APP_ID }}
+          client-id: ${{ vars.AUTO_MERGE_APP_CLIENT_ID }}
           private-key: ${{ secrets.AUTO_MERGE_APP_PRIVATE_KEY }}
 
       - name: Enable auto-merge (squash)
@@ -236,21 +236,23 @@ App** (<https://github.com/settings/apps/new>)
   `<owner>-warren-automerge`
 - **Homepage URL:** the repo URL (a required field, not otherwise used)
 - **Webhook:** uncheck **Active**
-- **Repository permissions:** Contents with Read and write. Pull requests with Read and write
+- **Repository permissions:** Contents with Read and write. Pull requests with Read and write. Actions with Read, so `size-overshoot-report.yml` can download CI's artifact
 - **Where can this GitHub App be installed:** Only on this account
 
 After you create the app, on its settings page:
 
-1. Note the **App ID**.
+1. Note the **Client ID** (it starts with `Iv`). Use it, not the numeric
+   App ID: `actions/create-github-app-token` deprecated `app-id` in favour of
+   `client-id`.
 2. **Generate a private key**, which downloads a `.pem` file.
 3. **Install App** → your account → **Only select repositories** → pick
    the repo.
 
-Give the credentials to Actions (App ID is not a secret, so it goes in a
-variable):
+Give the credentials to Actions (the Client ID is not a secret, so it goes
+in a variable):
 
 ```bash
-gh variable set AUTO_MERGE_APP_ID --repo owner/repo --body '<app id>'
+gh variable set AUTO_MERGE_APP_CLIENT_ID --repo owner/repo --body '<client id>'
 gh secret set AUTO_MERGE_APP_PRIVATE_KEY --repo owner/repo < path/to/downloaded-key.pem
 ```
 
