@@ -170,7 +170,7 @@ describe("auto-merge app credential heartbeat", () => {
 		const steps = releaseSteps("app-heartbeat");
 		const mint = steps.find((s) => s.uses?.startsWith("actions/create-github-app-token@"));
 		expect(mint).toBeDefined();
-		expect(mint?.with?.["app-id"]).toMatch(/^\$\{\{ vars\.AUTO_MERGE_APP_ID \}\}$/);
+		expect(mint?.with?.["client-id"]).toMatch(/^\$\{\{ vars\.AUTO_MERGE_APP_CLIENT_ID \}\}$/);
 		expect(mint?.with?.["private-key"]).toMatch(
 			/^\$\{\{ secrets\.AUTO_MERGE_APP_PRIVATE_KEY \}\}$/,
 		);
@@ -186,7 +186,7 @@ describe("auto-merge app credential heartbeat", () => {
 	test("every consumer of the app credential names the same variable and secret", () => {
 		for (const file of ["auto-merge.yml", "bundle-size-autoheal.yml", "release.yml"]) {
 			const raw = readFileSync(resolve(REPO_ROOT, ".github/workflows", file), "utf8");
-			expect(raw).toContain("vars.AUTO_MERGE_APP_ID");
+			expect(raw).toContain("vars.AUTO_MERGE_APP_CLIENT_ID");
 			expect(raw).toContain("secrets.AUTO_MERGE_APP_PRIVATE_KEY");
 		}
 	});
