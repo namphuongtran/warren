@@ -14,11 +14,12 @@ For a new project on this server, read [`onboard-project.md`](onboard-project.md
 | Your development checkout | Any other clone. Work in progress there does not reach the server |
 | Server service | `~/Library/LaunchAgents/dev.warren.server.plist` (label `dev.warren.server`) |
 | Queue service | `~/Library/LaunchAgents/dev.warren.queue.plist`, which runs `~/.warren/bin/warren-queue.sh` |
-| Operator scripts | `~/.warren/bin/`: `warren-queue.sh`, `warren-deploy.sh`, `warren-branch-name.py`, and your own `warren-gh-issue.sh` |
+| Nightly trigger | `~/Library/LaunchAgents/dev.warren.nightly.plist`, which runs `~/.warren/bin/warren-nightly.sh` (section 7) |
+| Operator scripts | `~/.warren/bin/`: `warren-queue.sh`, `warren-deploy.sh`, `warren-nightly.sh`, `warren-branch-name.py`, and your own `warren-gh-issue.sh` |
 | Agent images | `~/.warren/agent-images/<name>/`, one directory for each project image |
 | Data (database, operator token) | `~/.warren/data` |
 | Secrets | `~/.warren/env`, mode 0600 |
-| Logs | `~/.warren/logs/server.log`, `queue.log`, and `runs/*.ndjson` |
+| Logs | `~/.warren/logs/server.log`, `queue.log`, `nightly.log`, and `runs/*.ndjson` |
 | Deploy history | `~/.warren/deploy-history.md`, which the deploy script appends to |
 
 The server reads its code only at boot. A merged pull request does not run until you restart
@@ -38,6 +39,7 @@ for f in ~/.warren/server-src/scripts/operator/launchd/*.plist; do
 done
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.warren.server.plist
 launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.warren.queue.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.warren.nightly.plist
 ```
 
 Put the server secrets in `~/.warren/env` before the first boot. [`../credentials.md`](../credentials.md)
@@ -257,3 +259,40 @@ docker tag <name>-agent:pre-<SHA> <name>-agent:latest
 - **Do not edit a running operator script in place.** Bash reads a script while it runs, and
   each lane that waits on the pause runs `warren-gh-issue.sh`. Edit a copy, check it with
   `bash -n`, then move the copy over the old file with `mv`.
+
+## 7. Nightly acceptance trigger
+
+The `Acceptance (nightly)` workflow has a cron at 07:17 UTC. GitHub did not fire that cron on the
+namphuongtran/warren fork, not even a test cron every 5 minutes (namphuongtran/warren#123). The
+`dev.warren.nightly` job dispatches the workflow from this Mac instead.
+
+The job runs `~/.warren/bin/warren-nightly.sh` at 07:17 UTC each day. The script calls
+`gh workflow run acceptance.yml` on the repository of `~/.warren/server-src`. It writes one line
+for each attempt to `~/.warren/logs/nightly.log`.
+
+Install the job:
+
+```bash
+cp ~/.warren/server-src/scripts/operator/warren-nightly.sh ~/.warren/bin/
+sed "s|__HOME__|$HOME|g" ~/.warren/server-src/scripts/operator/launchd/dev.warren.nightly.plist \
+  > ~/Library/LaunchAgents/dev.warren.nightly.plist
+launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/dev.warren.nightly.plist
+```
+
+launchd reads the start time as local time. The template says 14:17, which is 07:17 UTC in UTC+7.
+In another time zone, change `Hour` before you load the job.
+
+Test the job now. You do not have to wait for the next day:
+
+```bash
+launchctl kickstart gui/$(id -u)/dev.warren.nightly
+tail -1 ~/.warren/logs/nightly.log
+gh run list --workflow acceptance.yml --limit 1
+```
+
+Limits:
+
+- **The Mac must be on.** If the Mac sleeps at 07:17 UTC, launchd starts the job when it wakes. If
+  the Mac is off, that day gets no nightly run.
+- **`gh` needs a login that can run workflows on the repository.** The job uses the same `gh`
+  login as your shell.
