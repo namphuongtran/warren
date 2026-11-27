@@ -8,6 +8,7 @@ import {
 	hydrateRunsUsage,
 	hydrateRunUsage,
 } from "../../../runs/index.ts";
+import { readNeedsInput } from "../../../runs/needs-input-view.ts";
 import { currentQuotaHolds } from "../../../runs/quota/hold-view.ts";
 import { currentToolStalls } from "../../../runs/tool-stall-view.ts";
 import { isPublicOnly, pickFields } from "../../projection.ts";
@@ -225,7 +226,9 @@ export function parseRunsPagination(ctx: { url: URL }): { limit: number; offset:
  * `costTotalUsd`. `toolStall` (namphuongtran/warren#83) rides the same
  * operator-only overlay: the call a running run is stuck on, else null.
  * `quotaHold` (namphuongtran/warren#30) does too: when a run held on a spent
- * provider quota window starts, else null.
+ * provider quota window starts, else null. So do `needsInput` and
+ * `answeredByRunId` (namphuongtran/warren#25), derived from a blocked handoff
+ * and its continuations.
  */
 async function projectRunsWithCaps(
 	deps: ServerDeps,
@@ -236,6 +239,7 @@ async function projectRunsWithCaps(
 	const facts = await deps.repos.dispatchContext.getDispatchFactsByRunIds(runs.map((r) => r.id));
 	const stalls = await currentToolStalls(deps.repos, runs);
 	const holds = await currentQuotaHolds(deps.repos, runs);
+	const needsInputFor = await readNeedsInput(deps.repos, runs);
 	return runs.map((run) => {
 		const fact = facts.get(run.id);
 		return {
@@ -244,6 +248,7 @@ async function projectRunsWithCaps(
 			runtimeBackend: fact?.runtimeBackend ?? null,
 			toolStall: stalls.get(run.id) ?? null,
 			quotaHold: holds.get(run.id) ?? null,
+			...needsInputFor(run.id),
 		};
 	});
 }
@@ -302,16 +307,19 @@ export function getRunHandler(deps: ServerDeps): RouteHandler {
 		// too — the Spend panel renders "$X of $Y cap" off it. Operator-only,
 		// same posture as the list overlay in projectRunsWithCaps: a spectator
 		// gets no caps at all, so the cap never reaches the public projection.
-		// namphuongtran/warren#20: the context-window reading stays operator-only too.
+		// namphuongtran/warren#20: the context-window reading stays operator-only too,
+		// and so does the needs-input flag (namphuongtran/warren#25).
 		if (!isPublicOnly(ctx.actor)) {
 			const fact = await deps.repos.dispatchContext.getByRunId(id);
 			const stall = (await currentToolStalls(deps.repos, [run])).get(id) ?? null;
+			const needsInputFor = await readNeedsInput(deps.repos, [run]);
 			return jsonResponse(200, {
 				run: {
 					...projectRun(run, ctx.actor),
 					maxCostUsd: fact?.maxCostUsd ?? null,
 					toolStall: stall,
 					...(await currentContextWindow(deps.repos, id)),
+					...needsInputFor(id),
 				},
 			});
 		}

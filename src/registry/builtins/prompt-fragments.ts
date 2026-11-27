@@ -74,6 +74,8 @@ export const BASE_WORKSPACE_BULLETS = `- The project repo is mounted at the burr
  * builtin. Reap reads the file off the workspace, validates it against
  * `parseRunHandoff` (src/core/wire-handoff.ts), stores it with the run, and
  * renders it into the PR body. The schema below must match that validator.
+ * The stop-and-ask rules (namphuongtran/warren#25) say when a blocked
+ * handoff is worth an operator's answer and when the agent decides alone.
  */
 export const HANDOFF_FRAGMENT = `## Handoff report (required)
 
@@ -85,13 +87,31 @@ Before the run ends, write your handoff report to /workspace/${RUN_HANDOFF_PATH}
   "summary": "What changed and why, in a few sentences.",
   "verification": [{ "command": "a command you ran", "outcome": "what it reported" }],
   "howToTry": ["A step a human can follow to see the change work."],
-  "openQuestions": ["A decision you could not make and need a human for."]
+  "openQuestions": [
+    {
+      "question": "A decision you could not make and need a human for?",
+      "options": ["One option you weighed", "Another option you weighed"],
+      "recommendation": "The option you would pick, and why."
+    }
+  ]
 }
 \`\`\`
 
 - \`status\` and \`summary\` are required. The three lists may be empty.
 - \`status\` is \`done\` when the task is complete, \`partial\` when only some of it landed (say what is left in the summary), and \`blocked\` when you could not proceed (say why in \`openQuestions\`).
-- List only verification commands you actually ran, with their real outcome.`;
+- List only verification commands you actually ran, with their real outcome.
+
+### When to stop and ask
+
+Stop with \`status: "blocked"\` and ask only when you cannot go on safely by yourself:
+
+- The requirements are ambiguous, and each reading leads to different work.
+- The next step is hard to undo: a data migration, a change to a public API or wire format, deleted data, or a rewrite of published history.
+- The work needs changes beyond the scope of the task.
+
+Otherwise, decide. Pick the option that the task and the repository's conventions support best, continue, and record the decision and its reason in your \`summary\`. A question that the code, the docs, or the tests can answer is not an open question.
+
+For each question, list the \`options\` you weighed and give your \`recommendation\` with its reason, so the operator can accept it in one word. The operator answers in a continuation of this run, and its prompt carries the answers.`;
 
 const [UNDERSTANDING, OPTIONS, CHOSEN, RISKS, VERIFICATION] = RUN_APPROACH_HEADINGS;
 

@@ -17,7 +17,9 @@ describe("parseRunHandoff", () => {
 				summary: "Added the retry loop because the API flakes.",
 				verification: [{ command: "bun test src/x.test.ts", outcome: "12 pass" }],
 				howToTry: ["warren run --prompt hi", "open the PR"],
-				openQuestions: ["Should the retry cap be configurable?"],
+				openQuestions: [
+					{ question: "Should the retry cap be configurable?", options: [], recommendation: null },
+				],
 			},
 		});
 	});
@@ -75,10 +77,100 @@ describe("parseRunHandoff", () => {
 	});
 
 	test("flags a non-string list item", () => {
-		const body = JSON.stringify({ status: "done", summary: "x", openQuestions: [42] });
+		const body = JSON.stringify({ status: "done", summary: "x", howToTry: [42] });
 		expect(parseRunHandoff(body)).toEqual({
 			state: "invalid",
-			reason: "openQuestions must be an array of strings",
+			reason: "howToTry must be an array of strings",
+		});
+	});
+
+	test("flags an open-questions value that is not a list", () => {
+		const body = JSON.stringify({ status: "done", summary: "x", openQuestions: "Why?" });
+		expect(parseRunHandoff(body)).toEqual({
+			state: "invalid",
+			reason: "openQuestions must be an array",
+		});
+	});
+
+	// namphuongtran/warren#25: a question carries the options the agent weighed
+	// and the answer it recommends, so the operator can accept it in one word.
+	test("records a question with its options and recommended answer", () => {
+		const body = JSON.stringify({
+			status: "blocked",
+			summary: "The card has no progress slot.",
+			openQuestions: [
+				{
+					question: "Grow a progress slot on the card?",
+					options: ["Add a footer slot", "Move the bar under the card"],
+					recommendation: "Add a footer slot: other lists need it too.",
+				},
+			],
+		});
+		expect(parseRunHandoff(body)).toEqual({
+			state: "recorded",
+			handoff: {
+				status: "blocked",
+				summary: "The card has no progress slot.",
+				verification: [],
+				howToTry: [],
+				openQuestions: [
+					{
+						question: "Grow a progress slot on the card?",
+						options: ["Add a footer slot", "Move the bar under the card"],
+						recommendation: "Add a footer slot: other lists need it too.",
+					},
+				],
+			},
+		});
+	});
+
+	test("reads a bare string as a question with no options or recommendation", () => {
+		const body = JSON.stringify({
+			status: "blocked",
+			summary: "x",
+			openQuestions: ["Keep the column nullable?", { question: "Drop the index?" }],
+		});
+		const record = parseRunHandoff(body);
+		expect(record.state === "recorded" ? record.handoff.openQuestions : record).toEqual([
+			{ question: "Keep the column nullable?", options: [], recommendation: null },
+			{ question: "Drop the index?", options: [], recommendation: null },
+		]);
+	});
+
+	test("reads a blank recommendation as none", () => {
+		const body = JSON.stringify({
+			status: "blocked",
+			summary: "x",
+			openQuestions: [{ question: "Drop the index?", recommendation: "  " }],
+		});
+		const record = parseRunHandoff(body);
+		expect(record.state === "recorded" ? record.handoff.openQuestions : record).toEqual([
+			{ question: "Drop the index?", options: [], recommendation: null },
+		]);
+	});
+
+	test("flags a question with no question text", () => {
+		const body = JSON.stringify({
+			status: "blocked",
+			summary: "x",
+			openQuestions: [{ options: ["a", "b"] }],
+		});
+		expect(parseRunHandoff(body)).toEqual({
+			state: "invalid",
+			reason:
+				"openQuestions[0] must be a non-empty string or an object with a non-empty string question",
+		});
+	});
+
+	test("flags question options that are not strings", () => {
+		const body = JSON.stringify({
+			status: "blocked",
+			summary: "x",
+			openQuestions: [{ question: "Which?", options: [1, 2] }],
+		});
+		expect(parseRunHandoff(body)).toEqual({
+			state: "invalid",
+			reason: "openQuestions[0].options must be an array of strings",
 		});
 	});
 

@@ -60,7 +60,9 @@ describe("PLANNER_BUILTIN", () => {
 		expect(blocked.handoff.status).toBe("blocked");
 		expect(blocked.handoff.openQuestions.length).toBeGreaterThan(0);
 		for (const question of blocked.handoff.openQuestions) {
-			expect(question).toMatch(/\?.*Recommended: .+ Why: .+/);
+			expect(question.question).toMatch(/\?$/);
+			expect(question.options.length).toBeGreaterThan(1);
+			expect(question.recommendation).toMatch(/.+ Why: .+/);
 		}
 		expect(final.handoff.status).toBe("done");
 		expect(final.handoff.openQuestions).toEqual([]);

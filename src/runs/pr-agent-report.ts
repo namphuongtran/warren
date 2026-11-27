@@ -5,6 +5,7 @@
  * crowd out the rest of the body.
  */
 
+import { fencedBlock } from "../core/markdown-fence.ts";
 import { PREVIEW_FRAGMENT_END, PREVIEW_FRAGMENT_START } from "./pr.ts";
 
 /** UTF-8 byte cap on the reported message (8 KiB), split between its start and end. */
@@ -43,22 +44,6 @@ function capMessage(text: string): string {
 }
 
 /**
- * A backtick fence longer than any backtick run in `text`. CommonMark closes a
- * fence only on a run at least as long as the opener, so no fence inside the
- * message can end the section early.
- */
-export function fenceFor(text: string): string {
-	return "`".repeat(Math.max(3, longestBacktickRun(text) + 1));
-}
-
-/** Length of the longest run of backticks in `text` (0 when there is none). */
-export function longestBacktickRun(text: string): number {
-	let longest = 0;
-	for (const run of text.match(/`+/g) ?? []) longest = Math.max(longest, run.length);
-	return longest;
-}
-
-/**
  * `annotatePrPreview` patches the FIRST preview-marker pair in the body, and
  * this section sits above `## Preview`. Re-spell a quoted marker so it can
  * never be mistaken for the real one.
@@ -79,8 +64,7 @@ export function defaultAgentReport(raw: string): string | null {
 	if (text === "") return null;
 	const totalBytes = utf8.encode(text).length;
 	const shown = totalBytes > AGENT_REPORT_MAX_BYTES ? capMessage(text) : text;
-	const fence = fenceFor(shown);
-	const parts = ["## Agent report", "", `${fence}text\n${shown}\n${fence}`];
+	const parts = ["## Agent report", "", fencedBlock(shown, "text")];
 	if (shown !== text) {
 		const kib = (totalBytes / 1024).toFixed(1);
 		parts.push(

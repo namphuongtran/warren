@@ -20,6 +20,7 @@ import {
 	type SQL,
 	sql,
 } from "drizzle-orm";
+import type { RunTriggerKind } from "../../core/wire.ts";
 import type { SqliteDrizzleDb } from "../client.ts";
 import type { RunFailureReason, RunRow, RunState } from "../schema.ts";
 import type { DrizzleAdapter } from "./drizzle-adapter.ts";
@@ -268,6 +269,50 @@ export async function findByRetryOf(
 	const runs = adapter.schema.runs;
 	const row = await adapter.pickOne(db.select().from(runs).where(eq(runs.retryOf, runId)));
 	return row ?? null;
+}
+
+/** A continuation's back-link to the run it continues (namphuongtran/warren#25). */
+export interface RunContinuationLink {
+	readonly id: string;
+	readonly parentRunId: string;
+}
+
+/**
+ * The triggers an operator dispatch carries: `POST /runs` from the UI or an
+ * API caller (`manual`) and `warren run` (`cli`). Automatic continuations,
+ * such as a CI fix on the run's PR, carry their own trigger.
+ */
+const OPERATOR_TRIGGERS = ["manual", "cli"] as const satisfies readonly RunTriggerKind[];
+
+/**
+ * The continuations an operator dispatched from `parentIds`, newest first,
+ * so the first link per parent is its latest one: the answers to a blocked
+ * run (namphuongtran/warren#25). A replicate or a rescue shares the
+ * `parent_run_id` column but is not a continuation (`clone_kind`).
+ */
+export async function listOperatorContinuationsOf(
+	adapter: DrizzleAdapter,
+	parentIds: readonly string[],
+): Promise<RunContinuationLink[]> {
+	if (parentIds.length === 0) return [];
+	const db = adapter.drizzle as SqliteDrizzleDb;
+	const runs = adapter.schema.runs;
+	const rows = await adapter.pickAll(
+		db
+			.select({ id: runs.id, parentRunId: runs.parentRunId })
+			.from(runs)
+			.where(
+				and(
+					inArray(runs.parentRunId, parentIds as string[]),
+					eq(runs.cloneKind, "continue"),
+					inArray(runs.trigger, [...OPERATOR_TRIGGERS]),
+				),
+			)
+			.orderBy(desc(runs.createdAt), desc(runs.id)),
+	);
+	return rows.flatMap((row) =>
+		row.parentRunId === null ? [] : [{ id: row.id, parentRunId: row.parentRunId }],
+	);
 }
 
 /**

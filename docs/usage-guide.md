@@ -213,6 +213,15 @@ admission:
   the next child's prompt carries the previous child's report. The `reviewer` agent adds a
   `review` block with its verdict and findings, which the campaign controller's review policy
   reads.
+- An open question in the handoff report is an object: the `question`, the `options` the agent
+  weighed, and its `recommendation`. A bare string is a question without the other two. A run
+  whose report says `blocked` needs an answer from the operator. For an operator, `GET /runs`
+  and `GET /runs/:id` carry `needsInput: true` on that run until an operator dispatches a
+  continuation of it. Then `answeredByRunId` names the continuation. An automatic
+  continuation, such as a CI fix, does not answer the questions. Warren derives both fields from the stored
+  report and the run links, so the run keeps its state. The run Summary shows each question
+  with its options and recommendation. Its answer form opens Dispatch as a continuation of the
+  run, with the answers in the prompt.
 - The source-editing built-in agents write an approach note to `.warren/approach.md` before
   their first edit: Understanding, Options considered, Chosen approach and why, Risks /
   unknowns, and Verification plan. Git ignores the file. Reap serves it as `approach` on

@@ -12,6 +12,28 @@ Releases **0.9.10 and earlier** live in
 
 ### Added
 
+- **Blocked runs carry questions; answers dispatch a continuation
+  (namphuongtran/warren#25).** A handoff open question is now an object:
+  the `question`, the `options` the agent weighed, and its `recommendation`.
+  A bare string still validates, as a question with neither. Operator
+  `GET /runs` and `GET /runs/:id` responses carry `needsInput` on a run whose
+  handoff is `blocked` until an operator dispatches a continuation of it
+  (trigger `manual` or `cli`; a CI fix does not count), and `answeredByRunId`
+  then names that continuation. Both fields come from the stored handoff and
+  the `parent_run_id` links, so the run lifecycle gains no state. The run
+  Summary shows each question's options and recommendation, fills an answer
+  from the recommendation in one click, lets a blank answer take the
+  recommendation, and links to the continuation that answered the run. The continuation prompt now quotes the blocked run's
+  summary and questions inside fences, as agent output, and lists the
+  operator's answers after them. The PR body's `## Handoff` section nests
+  each question's options and recommendation under it. Every built-in agent's
+  handoff instructions now say when to stop and ask (ambiguous requirements,
+  a step that is hard to undo, scope beyond the task) and when to decide and
+  record the decision. The `planner` writes its questions in the object form.
+  Migration 0064 (sqlite) / 0059 (postgres) rewrites the string questions
+  already stored. SDK consumers that read `handoff.openQuestions` as strings
+  must read `.question` instead.
+
 - **Shortcut flags per run (namphuongtran/warren#37).** Reap now scans the
   run's `base..head` diff, which it reads beside the outcome facts, and the git
   commands the agent ran, for cheap signs of a worked-around gate: new

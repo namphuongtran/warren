@@ -238,8 +238,16 @@ describe("GET /runs projections under WARREN_AUTH=public (warren-946f)", () => {
 		// on each row — fields the stored row itself does not carry. No context
 		// row exists for this run, so both read null, never absent. The same
 		// holds for the stalled tool call (namphuongtran/warren#83) and the
-		// provider quota hold (namphuongtran/warren#30).
-		const overlays = ["maxCostUsd", "runtimeBackend", "toolStall", "quotaHold"];
+		// provider quota hold (namphuongtran/warren#30). The run is not blocked,
+		// so the needs-input pair (namphuongtran/warren#25) reads false and null.
+		const overlays = [
+			"maxCostUsd",
+			"runtimeBackend",
+			"toolStall",
+			"quotaHold",
+			"needsInput",
+			"answeredByRunId",
+		];
 		expect(new Set(Object.keys(list[0] ?? {}))).toEqual(
 			new Set([...Object.keys(stored), ...overlays]),
 		);
@@ -247,6 +255,8 @@ describe("GET /runs projections under WARREN_AUTH=public (warren-946f)", () => {
 		expect(list[0]?.quotaHold).toBeNull();
 		expect(list[0]?.maxCostUsd).toBeNull();
 		expect(list[0]?.runtimeBackend).toBeNull();
+		expect(list[0]?.needsInput).toBe(false);
+		expect(list[0]?.answeredByRunId).toBeNull();
 		expect(body.costTotalUsd).toBe(1.25);
 		expect(body.costPricedCount).toBe(1);
 		const detailBody = await get(`/runs/${runId}`, TOKEN);
@@ -255,13 +265,22 @@ describe("GET /runs projections under WARREN_AUTH=public (warren-946f)", () => {
 		// The detail GET overlays the dispatch-context cap too (warren-b19e,
 		// operator-only, for the Spend panel's "$X of $Y cap"). No context row
 		// here, so it reads null, never absent. The context-window reading
-		// (namphuongtran/warren#20) rides beside it, null with no usage event.
-		const detailOverlays = ["maxCostUsd", "toolStall", "contextTokens", "contextWindowTokens"];
+		// (namphuongtran/warren#20) rides beside it, null with no usage event,
+		// and so does the needs-input pair (namphuongtran/warren#25).
+		const detailOverlays = [
+			"maxCostUsd",
+			"toolStall",
+			"contextTokens",
+			"contextWindowTokens",
+			"needsInput",
+			"answeredByRunId",
+		];
 		expect(new Set(Object.keys(detail))).toEqual(
 			new Set([...Object.keys(stored), ...detailOverlays]),
 		);
 		expect(detail.maxCostUsd).toBeNull();
 		expect(detail.contextTokens).toBeNull();
+		expect(detail.needsInput).toBe(false);
 		expect(detail.sandboxId).toBe("bur_1");
 		expect(detail.renderedAgentJson).toEqual({
 			frontmatter: { provider: "anthropic", model: "opus" },

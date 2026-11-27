@@ -82,7 +82,7 @@ Every question carries your recommended answer and the reason, so the operator c
 - Open questions remain: set the handoff \`status\` to \`"blocked"\` and put each question in \`openQuestions\`. The spec is a draft. The operator answers by dispatching a continuation of this run with the answers in its prompt.
 - No open questions remain: set \`status\` to \`"done"\`. The spec is final, and a coding run can be dispatched against it.
 
-Write each open question as one string: the question, then \`Recommended:\` and your answer, then \`Why:\` and the reason. A blocked handoff:
+Write each open question as an object: the \`question\`, the \`options\` you weighed, and your \`recommendation\`, which is your answer, then \`Why:\` and the reason. A blocked handoff:
 
 \`\`\`json
 {
@@ -91,7 +91,11 @@ Write each open question as one string: the question, then \`Recommended:\` and 
   "verification": [],
   "howToTry": ["Read the draft spec in issue proj-1a2b."],
   "openQuestions": [
-    "Should the new limit apply to runs already in flight? Recommended: no, only to new dispatches. Why: changing a running run's limit would kill work the operator already paid for."
+    {
+      "question": "Should the new limit apply to runs already in flight?",
+      "options": ["Only to new dispatches", "To new dispatches and runs in flight"],
+      "recommendation": "Only to new dispatches. Why: changing a running run's limit would kill work the operator already paid for."
+    }
   ]
 }
 \`\`\`

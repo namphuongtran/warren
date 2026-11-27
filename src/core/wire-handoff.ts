@@ -31,7 +31,9 @@ export function clipRunHandoffBody(body: string): string {
  * How the agent says the work ended:
  * - `done` — the task is complete.
  * - `partial` — some of it landed; the summary says what is left.
- * - `blocked` — the agent could not proceed; `openQuestions` says why.
+ * - `blocked` — the agent could not proceed; `openQuestions` says why. A
+ *   blocked run needs operator input until a continuation answers it
+ *   (namphuongtran/warren#25).
  */
 export const RUN_HANDOFF_STATUSES = ["done", "partial", "blocked"] as const;
 export type RunHandoffStatus = (typeof RUN_HANDOFF_STATUSES)[number];
@@ -54,6 +56,19 @@ export type RunHandoffState = (typeof RUN_HANDOFF_STATES)[number];
 export interface RunHandoffVerification {
 	readonly command: string;
 	readonly outcome: string;
+}
+
+/**
+ * A decision the agent could not make (namphuongtran/warren#25). The agent
+ * may write a bare string, read as a question with no options and no
+ * recommendation. `recommendation` is null when the agent gave none.
+ */
+export interface RunHandoffQuestion {
+	readonly question: string;
+	/** The options the agent weighed. */
+	readonly options: readonly string[];
+	/** The answer the agent recommends, with its reason. */
+	readonly recommendation: string | null;
 }
 
 /**
@@ -99,11 +114,24 @@ export interface RunHandoff {
 	/** Steps a human can follow to try the change. */
 	readonly howToTry: readonly string[];
 	/** Decisions the agent could not make. */
-	readonly openQuestions: readonly string[];
+	readonly openQuestions: readonly RunHandoffQuestion[];
 	/** A reviewer's verdict; absent for every other agent. */
 	readonly review?: RunHandoffReview;
 	/** Adherence to `.warren/approach.md`; absent when the agent wrote no block. */
 	readonly approach?: RunHandoffApproach;
+}
+
+/**
+ * Whether a run waits on an operator's answer (namphuongtran/warren#25), as
+ * the operator overlay on `GET /runs` and `GET /runs/:id` carries it. Derived
+ * on read from a blocked handoff and the run links, never stored, so the run
+ * lifecycle gains no state.
+ */
+export interface RunNeedsInputView {
+	/** The handoff is blocked and no operator continuation answered it yet. */
+	readonly needsInput: boolean;
+	/** The newest operator continuation of a blocked run; null while unanswered or not blocked. */
+	readonly answeredByRunId: string | null;
 }
 
 /** The handoff result stored on the run and served on `GET /runs/:id`. */
@@ -153,6 +181,34 @@ function verificationList(raw: Record<string, unknown>): Field<readonly RunHando
 
 function nonEmptyString(value: unknown): value is string {
 	return typeof value === "string" && value.trim() !== "";
+}
+
+function openQuestion(item: unknown, index: number): Field<RunHandoffQuestion> {
+	if (nonEmptyString(item))
+		return { ok: true, value: { question: item, options: [], recommendation: null } };
+	if (!isRecord(item) || !nonEmptyString(item.question)) {
+		return {
+			ok: false,
+			reason: `openQuestions[${index}] must be a non-empty string or an object with a non-empty string question`,
+		};
+	}
+	const options = stringList(item, "options");
+	if (!options.ok) return { ok: false, reason: `openQuestions[${index}].${options.reason}` };
+	const recommendation = nonEmptyString(item.recommendation) ? item.recommendation : null;
+	return { ok: true, value: { question: item.question, options: options.value, recommendation } };
+}
+
+function openQuestionList(raw: Record<string, unknown>): Field<readonly RunHandoffQuestion[]> {
+	const value = raw.openQuestions;
+	if (value === undefined) return { ok: true, value: [] };
+	if (!Array.isArray(value)) return { ok: false, reason: "openQuestions must be an array" };
+	const questions: RunHandoffQuestion[] = [];
+	for (const [index, item] of value.entries()) {
+		const question = openQuestion(item, index);
+		if (!question.ok) return question;
+		questions.push(question.value);
+	}
+	return { ok: true, value: questions };
 }
 
 function reviewFinding(item: unknown): RunHandoffReviewFinding | null {
@@ -267,7 +323,7 @@ export function parseRunHandoff(body: string | null): RunHandoffRecord {
 	if (!verification.ok) return invalid(verification.reason);
 	const howToTry = stringList(raw, "howToTry");
 	if (!howToTry.ok) return invalid(howToTry.reason);
-	const openQuestions = stringList(raw, "openQuestions");
+	const openQuestions = openQuestionList(raw);
 	if (!openQuestions.ok) return invalid(openQuestions.reason);
 	const review = reviewBlock(raw);
 	if (!review.ok) return invalid(review.reason);

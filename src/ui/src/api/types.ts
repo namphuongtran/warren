@@ -36,6 +36,7 @@ export {
 	type RunApproachRecord,
 	type RunFailureReason,
 	type RunHandoff,
+	type RunHandoffQuestion,
 	type RunHandoffRecord,
 	type RunHandoffStatus,
 	type RunMode,
@@ -65,6 +66,7 @@ import type {
 	RunFailureReason,
 	RunHandoffRecord,
 	RunMode,
+	RunNeedsInputView,
 	RunPrChecks,
 	RunQualityFlags,
 	RunQualityGateOutcome,
@@ -99,7 +101,7 @@ export interface RefreshProjectResponse {
 	ref: string;
 }
 
-export interface RunRow {
+export interface RunRow extends Partial<RunNeedsInputView> {
 	id: string;
 	agentName: string;
 	/**
@@ -131,13 +133,7 @@ export interface RunRow {
 	 * chain indicator and RunDetail links back to the parent.
 	 */
 	parentRunId: string | null;
-	/**
-	 * Chain-kind discriminator (warren-e96f) for a run carrying a
-	 * `parentRunId`: `'continue'` (warren-4b11 — workspace seeded from the
-	 * parent's pushed branch) vs `'replicate'` (warren-e96f — fresh
-	 * re-dispatch of the parent's exact agent/model/project/prompt against
-	 * the project default base). Null for root runs.
-	 */
+	/** Chain kind of a run with a `parentRunId` (warren-e96f); `CLONE_KINDS` documents each. Null for root runs. */
 	cloneKind: CloneKind | null;
 	/** Infra-lost auto-retry back-link (warren-4af7); null for first-attempt runs. */
 	retryOf: string | null;
