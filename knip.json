@@ -1,5 +1,6 @@
 {
 	"$schema": "https://unpkg.com/knip@6/schema.json",
+	"ignoreBinaries": ["kubectl", "pg_dump", "pg_restore", "xcode-select"],
 	"ignore": [
 		".bun/**",
 		"data/**",
@@ -19,8 +20,7 @@
 		},
 		"src/ui": {
 			"entry": ["index.html"],
-			"project": ["src/**/*.{ts,tsx}"],
-			"ignoreDependencies": ["@fontsource-variable/.+"]
+			"project": ["src/**/*.{ts,tsx}"]
 		}
 	}
 }

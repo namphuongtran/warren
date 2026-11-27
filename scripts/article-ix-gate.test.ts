@@ -223,7 +223,7 @@ describe("the gate fails closed", () => {
 		// arm when no auto-merge App is configured.
 		expect(merge?.if).toBe(
 			"steps.protected.outputs.hit == 'false' && steps.baseline.outputs.hit == 'false' && " +
-				"steps.ui_checks.outputs.hit == 'false' && vars.AUTO_MERGE_APP_ID != ''",
+				"steps.ui_checks.outputs.hit == 'false' && vars.AUTO_MERGE_APP_CLIENT_ID != ''",
 		);
 	});
 });

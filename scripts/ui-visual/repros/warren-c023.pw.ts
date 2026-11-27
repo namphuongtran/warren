@@ -39,6 +39,7 @@ const { fixture, cases } = harnessCases();
 
 function leakedCaptions(page: Page): Promise<string[]> {
 	return page.evaluate((leaked) => {
+		// biome-ignore lint/performance/useDomNodeTextContent: the leak is about text the operator sees; textContent would add hidden nodes.
 		const text = document.body.innerText.toUpperCase();
 		return leaked.filter((note) => text.includes(note));
 	}, LEAKED);

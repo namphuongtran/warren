@@ -151,6 +151,7 @@ export async function observe(
 				: [{ selector, scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }];
 		}),
 		rootChildCount: document.querySelector("#root")?.childElementCount ?? 0,
+		// biome-ignore lint/performance/useDomNodeTextContent: smoke checks judge rendered text; textContent would add hidden nodes and script/style source.
 		bodyText: document.body.innerText,
 	}));
 	return { ...dom, consoleErrors: [...consoleErrors] };

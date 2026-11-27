@@ -82,7 +82,7 @@ export function MobileFilterStrip({
 							aria-label="Filter by project"
 							className={cn(
 								responsiveFormControl,
-								"rounded-sm border border-(--color-border) bg-(--color-bg) px-2 font-mono text-(--color-text-2) text-base",
+								"rounded-sm border border-(--color-border) bg-(--color-bg) px-2 font-mono text-base text-(--color-text-2)",
 							)}
 						>
 							<option value="">all projects</option>

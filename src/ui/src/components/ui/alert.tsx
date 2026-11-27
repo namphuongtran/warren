@@ -90,7 +90,7 @@ export const Alert = React.forwardRef<HTMLDivElement, AlertProps>(
 			>
 				{renderIcon}
 				<div className="min-w-0 flex-1 space-y-0.5">
-					{title ? <div className="font-medium leading-tight">{title}</div> : null}
+					{title ? <div className="leading-tight font-medium">{title}</div> : null}
 					{children ? <div className="leading-snug">{children}</div> : null}
 				</div>
 			</div>
