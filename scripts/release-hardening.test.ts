@@ -307,3 +307,79 @@ describe("a failed release resumes from its draft at the tagged commit", () => {
 		expect(checkout?.with?.ref).toBe(needsExpr);
 	});
 });
+
+// namphuongtran/warren#123: a fork does not own the @os-eco npm scope and
+// has no NPM_TOKEN. The publish step must skip with a warning, like the
+// Discord announce, so promote can still run. With a token it must publish.
+function runNpmPublish(token: string): {
+	exitCode: number;
+	output: string;
+	npmCalls: string[];
+	npmrcWritten: boolean;
+} {
+	const script = stepScript("publish", "Publish to npm");
+	const dir = mkdtempSync(join(tmpdir(), "warren-npm-publish-"));
+	try {
+		const bin = join(dir, "bin");
+		const home = join(dir, "home");
+		Bun.spawnSync({ cmd: ["mkdir", "-p", bin, home] });
+		const log = join(dir, "npm-calls");
+		writeFileSync(log, "");
+		// `npm view` fails (version not on the registry yet); `npm publish` succeeds.
+		const npm = join(bin, "npm");
+		writeFileSync(
+			npm,
+			`#!/usr/bin/env bash\necho "$1" >> "${log}"\n[ "$1" = "view" ] && exit 1\nexit 0\n`,
+		);
+		Bun.spawnSync({ cmd: ["chmod", "+x", npm] });
+		const result = Bun.spawnSync({
+			cmd: ["bash", "-c", script],
+			cwd: dir,
+			env: {
+				PATH: `${bin}:${process.env.PATH ?? ""}`,
+				HOME: home,
+				NODE_AUTH_TOKEN: token,
+				VERSION: "9.9.9",
+			},
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		let npmrcWritten = true;
+		try {
+			readFileSync(join(home, ".npmrc"), "utf8");
+		} catch {
+			npmrcWritten = false;
+		}
+		return {
+			exitCode: result.exitCode,
+			output: `${result.stdout.toString()}${result.stderr.toString()}`,
+			npmCalls: readFileSync(log, "utf8").trim().split("\n").filter(Boolean),
+			npmrcWritten,
+		};
+	} finally {
+		rmSync(dir, { recursive: true, force: true });
+	}
+}
+
+describe("npm publish without NPM_TOKEN (namphuongtran/warren#123)", () => {
+	test("skips with a warning and never calls npm when the token is absent", () => {
+		const r = runNpmPublish("");
+		expect(r.exitCode).toBe(0);
+		expect(r.output).toContain("::warning::NPM_TOKEN is not configured");
+		expect(r.npmCalls).toEqual([]);
+		expect(r.npmrcWritten).toBe(false);
+	});
+
+	test("publishes when the token is present and the version is new", () => {
+		const r = runNpmPublish("npm_stub_token");
+		expect(r.exitCode).toBe(0);
+		expect(r.npmCalls).toEqual(["view", "publish"]);
+		expect(r.npmrcWritten).toBe(true);
+	});
+
+	test("promote still waits on deploy and publish", () => {
+		// The skip lives inside the publish step, so publish succeeds and the
+		// promote edge stays as it was: no image, no published release.
+		expect(loadRelease().jobs?.promote?.needs).toEqual(["release", "deploy", "publish"]);
+	});
+});

@@ -45,6 +45,8 @@ type Workflow = {
 	jobs?: Record<
 		string,
 		{
+			if?: string;
+			needs?: unknown;
 			permissions?: Record<string, string>;
 			steps?: Step[];
 			uses?: string;
@@ -58,9 +60,16 @@ function loadWorkflow(name: string): Workflow {
 	return load(raw) as Workflow;
 }
 
+/** The Artifact Registry job: GKE-only images, gated on a GCP project. */
 function buildPushSteps(): Step[] {
 	const wf = loadWorkflow("deploy-gke.yml");
 	return wf.jobs?.["build-push"]?.steps ?? [];
+}
+
+/** The public ghcr.io job: needs only GITHUB_TOKEN, runs on every call. */
+function ghcrSteps(): Step[] {
+	const wf = loadWorkflow("deploy-gke.yml");
+	return wf.jobs?.["ghcr-push"]?.steps ?? [];
 }
 
 /** The `tags:` block of a build-push-action step, one tag per line. */
@@ -86,8 +95,8 @@ describe("ghcr.io control-plane publish (deploy-gke.yml)", () => {
 		expect(version?.required).not.toBe(true);
 	});
 
-	test("build-push holds packages: write and logs into ghcr.io with GITHUB_TOKEN", () => {
-		const job = loadWorkflow("deploy-gke.yml").jobs?.["build-push"];
+	test("ghcr-push holds packages: write and logs into ghcr.io with GITHUB_TOKEN", () => {
+		const job = loadWorkflow("deploy-gke.yml").jobs?.["ghcr-push"];
 		expect(job?.permissions?.packages).toBe("write");
 		const login = (job?.steps ?? []).find(
 			(s) => s.uses?.startsWith("docker/login-action") && s.with?.registry === "ghcr.io",
@@ -104,7 +113,7 @@ describe("ghcr.io control-plane publish (deploy-gke.yml)", () => {
 
 	test("only the control-plane image carries the ghcr.io tag set", () => {
 		const steps = buildPushSteps();
-		expect(tagsOf(steps, GHCR_STEP)).toContain(GHCR_TAGS_EXPR);
+		expect(tagsOf(ghcrSteps(), GHCR_STEP)).toContain(GHCR_TAGS_EXPR);
 		// warren-agent and warren-workspace-init only ever run on GKE; they stay
 		// in the private Artifact Registry.
 		for (const name of ["Build + push warren-agent", "Build + push warren-workspace-init"]) {
@@ -127,7 +136,7 @@ describe("ghcr.io control-plane publish (deploy-gke.yml)", () => {
 // AR push must not depend on a QEMU build).
 describe("multi-arch public image (warren-fe9f)", () => {
 	function platformsOf(stepName: string): string {
-		const step = buildPushSteps().find((s) => s.name === stepName);
+		const step = [...buildPushSteps(), ...ghcrSteps()].find((s) => s.name === stepName);
 		if (step === undefined) throw new Error(`no step named ${stepName}`);
 		const platforms = step.with?.platforms;
 		if (typeof platforms !== "string") throw new Error(`step ${stepName} has no platforms`);
@@ -149,7 +158,7 @@ describe("multi-arch public image (warren-fe9f)", () => {
 	});
 
 	test("QEMU is set up before the arm64 build", () => {
-		const steps = buildPushSteps();
+		const steps = ghcrSteps();
 		const qemu = steps.findIndex((s) => s.uses?.startsWith("docker/setup-qemu-action"));
 		const ghcrBuild = steps.findIndex((s) => s.name === GHCR_STEP);
 		expect(qemu).toBeGreaterThanOrEqual(0);
@@ -157,11 +166,10 @@ describe("multi-arch public image (warren-fe9f)", () => {
 	});
 
 	test("the ghcr.io step publishes no Artifact Registry tag (and vice versa)", () => {
-		const steps = buildPushSteps();
-		for (const tag of tagsOf(steps, GHCR_STEP)) {
+		for (const tag of tagsOf(ghcrSteps(), GHCR_STEP)) {
 			expect(tag).not.toContain("AR_BASE");
 		}
-		for (const tag of tagsOf(steps, AR_CONTROL_STEP)) {
+		for (const tag of tagsOf(buildPushSteps(), AR_CONTROL_STEP)) {
 			expect(tag).not.toContain("ghcr");
 		}
 	});
@@ -174,7 +182,7 @@ describe("multi-arch public image (warren-fe9f)", () => {
  * the workflow actually executes.
  */
 function computeTags(version: string): string[] {
-	const step = buildPushSteps().find((s) => s.id === "ghcr-tags");
+	const step = ghcrSteps().find((s) => s.id === "ghcr-tags");
 	if (step?.run === undefined) throw new Error("no ghcr-tags step with a run script");
 
 	const dir = mkdtempSync(join(tmpdir(), "warren-ghcr-tags-"));
@@ -201,6 +209,36 @@ function computeTags(version: string): string[] {
 		rmSync(dir, { recursive: true, force: true });
 	}
 }
+
+// namphuongtran/warren#123: a repo with no GCP project must still release.
+// The ghcr.io image needs only GITHUB_TOKEN, so it lives in its own job that
+// always runs; the Artifact Registry build and the GKE roll skip without a
+// project. promote waits on the whole deploy call, so a release is never
+// published without the image its notes tell people to pull.
+describe("release without a GCP project (namphuongtran/warren#123)", () => {
+	const jobs = () => loadWorkflow("deploy-gke.yml").jobs ?? {};
+
+	test("ghcr-push runs on every call and never touches GCP", () => {
+		const job = jobs()["ghcr-push"];
+		expect(job).toBeDefined();
+		expect(job?.if).toBeUndefined();
+		expect(job?.permissions?.["id-token"]).toBeUndefined();
+		const gcp = ghcrSteps().filter((s) => s.uses?.startsWith("google-github-actions/"));
+		expect(gcp).toEqual([]);
+	});
+
+	test("the Artifact Registry build skips when no GCP project is configured", () => {
+		const job = jobs()["build-push"];
+		expect(job?.if).toBe("vars.GCP_PROJECT_ID != ''");
+		// The public push moved out, so this job no longer needs packages: write.
+		expect(job?.permissions?.packages).toBeUndefined();
+		expect(job?.permissions?.["id-token"]).toBe("write");
+	});
+
+	test("the GKE roll waits for both builds, so it skips with the AR build", () => {
+		expect(jobs().deploy?.needs).toEqual(["build-push", "ghcr-push"]);
+	});
+});
 
 describe("ghcr.io tag computation", () => {
 	test("a versionless build publishes only the SHA and latest", () => {

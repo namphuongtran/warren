@@ -285,6 +285,30 @@ The job skips with a warning when the secret is absent, so a fork without
 a Discord server still releases. A webhook that Discord rejects fails the
 job.
 
+## 8. Releasing without GCP or npm (optional credentials)
+
+A release tag goes through `.github/workflows/release.yml` in this order:
+draft release, container images, npm publish, then `promote`, which makes
+the draft public. Two of those steps need credentials that a fork may not
+have. Each one skips when its credential is absent:
+
+| Step | Credential | Without it |
+|---|---|---|
+| GKE build and roll (`deploy-gke.yml` `build-push` and `deploy`) | `vars.GCP_PROJECT_ID` and the WIF secrets ([RUNBOOK-K8S §1.6](RUNBOOK-K8S.md#16-automated-cicd-github-actions)) | Both jobs skip. |
+| Public image (`deploy-gke.yml` `ghcr-push`) | none, it uses the job's `GITHUB_TOKEN` | Always runs. |
+| npm publish (`publish`) | `secrets.NPM_TOKEN` | The publish step skips with a warning. |
+
+`promote` still waits for the public image, so a published release never
+names a `docker pull` tag that does not exist.
+
+The npm package is `@os-eco/warren-cli`. Set `NPM_TOKEN` only on a repo
+whose npm account owns that scope. On a fork, leave it unset, or npm
+rejects the publish and the release stays a draft.
+
+```bash
+gh secret set NPM_TOKEN --repo owner/repo
+```
+
 ## Quick setup script
 
 For a new repo, run all the API calls at once:

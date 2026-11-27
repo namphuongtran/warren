@@ -300,6 +300,14 @@ The job tags each image with the full commit SHA **and** `latest`.
 It pushes to the same `<region>-docker.pkg.dev/<project>/<repo>` Artifact Registry that `cloudbuild.yaml` targets.
 The layer cache is GHA-scoped per image.
 
+**Public image** (the `ghcr-push` job).
+A separate job builds the control-plane image for `linux/amd64` and `linux/arm64` and pushes it to `ghcr.io/<owner>/warren` (warren-26be, warren-fe9f).
+It needs only the job's `GITHUB_TOKEN`, so it runs on every call.
+
+**Without GCP.** When `GCP_PROJECT_ID` is unset, `build-push` skips, and `deploy` skips with it.
+`ghcr-push` still runs, so a repo with no cloud project still releases a pullable image (namphuongtran/warren#123).
+A project id with missing WIF secrets still fails at the auth step.
+
 **Deploy** (the `deploy` job).
 The job runs only when a caller opts in via the `deploy` input.
 `release.yml` sets that input after it publishes a release, or a manual dispatch ticks it.
@@ -333,7 +341,7 @@ A repo admin must configure:
 |---|---|---|
 | secret | `GCP_WORKLOAD_IDENTITY_PROVIDER` | full WIF provider resource (`projects/<num>/locations/global/workloadIdentityPools/<pool>/providers/<provider>`) |
 | secret | `GCP_SERVICE_ACCOUNT` | deployer SA email; needs `roles/artifactregistry.writer` + `roles/container.developer` and a WIF binding to this repo |
-| var | `GCP_PROJECT_ID` | GCP project (for example `warren-502318`) — **required** |
+| var | `GCP_PROJECT_ID` | GCP project (for example `warren-502318`) — **required** for the GKE build and roll; when unset, both skip and only the public ghcr.io image is pushed |
 | var | `GCP_REGION` | Artifact Registry / cluster region (default `us-west1`) |
 | var | `GCP_AR_REPO` | Artifact Registry repo name (default `warren`) |
 | var | `GKE_CLUSTER` | Autopilot cluster name (default `warren`) |

@@ -14,6 +14,12 @@ name: GKE Build & Deploy
 # plane goes public; warren-agent and warren-workspace-init only ever run
 # on GKE and stay in the private Artifact Registry.
 #
+# The ghcr.io push is its own job (`ghcr-push`) and needs only the job's
+# GITHUB_TOKEN, so it runs on every call. The Artifact Registry build and the
+# GKE roll need GCP and skip when `vars.GCP_PROJECT_ID` is unset, so a fork
+# with no cloud project still publishes the image its release notes name
+# (namphuongtran/warren#123).
+#
 # Auth is GCP Workload Identity Federation — no long-lived JSON keys. A repo
 # admin configures the OIDC provider + service account as secrets and the
 # project/region/cluster as repo variables (see docs/RUNBOOK-K8S.md §1.6).
@@ -80,29 +86,19 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build-push:
+  # The public control-plane image (warren-26be). No GCP credential is
+  # involved, so this job runs on every call, with or without a cloud
+  # project. release.yml promotes the draft release only after this job
+  # succeeds, because the release notes name its `docker pull` tag.
+  ghcr-push:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write # required for Workload Identity Federation
       packages: write # required to push the control-plane image to ghcr.io
     steps:
       - uses: actions/checkout@v7.0.1
         with:
           ref: ${{ env.TARGET_SHA }}
-
-      - id: auth
-        uses: google-github-actions/auth@v3
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
-          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
-          token_format: access_token
-
-      - uses: docker/login-action@v4.8.0
-        with:
-          registry: ${{ env.REGISTRY_HOST }}
-          username: oauth2accesstoken
-          password: ${{ steps.auth.outputs.access_token }}
 
       # ghcr.io needs no provisioned secret — the job's own GITHUB_TOKEN,
       # scoped by `permissions: packages: write` above, is the credential.
@@ -145,34 +141,12 @@ jobs:
             echo "GHCR_TAGS_EOF"
           } >> "$GITHUB_OUTPUT"
 
-      # Autopilot schedules amd64; a single-arch arm64 image CrashLoops with
-      # `exec format error`. A multi-arch MANIFEST would still be safe on GKE
-      # (each node pulls the layer set for its own arch), but the
-      # GKE-internal Artifact Registry images deliberately stay amd64-only:
-      # no arm64 node ever pulls them, and skipping the QEMU arm64 build
-      # keeps the deploy-critical AR push fast and immune to emulation
-      # flakes. Only the PUBLIC ghcr.io image is multi-arch (warren-fe9f,
-      # next step). All four AR builds run on native amd64 with GHA layer
-      # cache (per-image scope), tagged by the full commit SHA and `latest`.
-      - name: Build + push warren (control plane, Artifact Registry)
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: |
-            ${{ env.AR_BASE }}/warren:${{ env.TARGET_SHA }}
-            ${{ env.AR_BASE }}/warren:latest
-          cache-from: type=gha,scope=warren-control
-          cache-to: type=gha,mode=max,scope=warren-control
-
       # The public self-hoster image is multi-arch (warren-fe9f): amd64 +
       # arm64 in one manifest list, so `docker pull` on Apple Silicon gets
       # a native arm64 image instead of amd64-under-emulation — where
-      # CLONE_NEWUSER breaks and every run dies. The amd64 half reuses the
-      # layer cache the Artifact Registry build above just wrote; only the
-      # arm64 half builds fresh under QEMU, and only on this release path.
+      # CLONE_NEWUSER breaks and every run dies. The amd64 half can reuse the
+      # layer cache the Artifact Registry build writes when GCP is
+      # configured; the arm64 half builds under QEMU, and only on this path.
       # PR CI (ci.yml docker-build) stays amd64-only for speed: a broken
       # arm64 build here fails before the `promote` job flips the draft
       # release public (warren-89f2), so it blocks promotion, not
@@ -190,6 +164,57 @@ jobs:
             type=gha,scope=warren-control
             type=gha,scope=warren-control-multiarch
           cache-to: type=gha,mode=max,scope=warren-control-multiarch
+
+  # The private Artifact Registry images for GKE. Skips when no GCP project
+  # is configured; GCP_PROJECT_ID is the variable AR_BASE cannot do without.
+  # A project id with missing WIF secrets still fails loudly at auth.
+  build-push:
+    if: vars.GCP_PROJECT_ID != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # required for Workload Identity Federation
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          ref: ${{ env.TARGET_SHA }}
+
+      - id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+          token_format: access_token
+
+      - uses: docker/login-action@v4.8.0
+        with:
+          registry: ${{ env.REGISTRY_HOST }}
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+
+      - uses: docker/setup-buildx-action@v4
+
+      # Autopilot schedules amd64; a single-arch arm64 image CrashLoops with
+      # `exec format error`. A multi-arch MANIFEST would still be safe on GKE
+      # (each node pulls the layer set for its own arch), but the
+      # GKE-internal Artifact Registry images deliberately stay amd64-only:
+      # no arm64 node ever pulls them, and skipping the QEMU arm64 build
+      # keeps the deploy-critical AR push fast and immune to emulation
+      # flakes. Only the PUBLIC ghcr.io image is multi-arch (warren-fe9f,
+      # the ghcr-push job). All AR builds run on native amd64 with GHA layer
+      # cache (per-image scope), tagged by the full commit SHA and `latest`.
+      - name: Build + push warren (control plane, Artifact Registry)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.AR_BASE }}/warren:${{ env.TARGET_SHA }}
+            ${{ env.AR_BASE }}/warren:latest
+          cache-from: type=gha,scope=warren-control
+          cache-to: type=gha,mode=max,scope=warren-control
 
       - name: Build + push warren-agent
         uses: docker/build-push-action@v7
@@ -256,7 +281,10 @@ jobs:
           cache-to: type=gha,mode=max,scope=warren-ext-campaign-controller
 
   deploy:
-    needs: build-push
+    # ghcr-push stays a dependency so a broken public image still blocks the
+    # cluster roll, as it did when both builds shared one job. With no GCP
+    # project build-push skips, and this job skips with it.
+    needs: [build-push, ghcr-push]
     # Roll GKE forward only when the caller opts in. `inputs.deploy` is set by
     # both entrypoints — release.yml passes true via workflow_call, a manual
     # dispatch ticks the checkbox — so a build-only dispatch leaves the
