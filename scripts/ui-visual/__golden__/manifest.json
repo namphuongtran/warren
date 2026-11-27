@@ -1,13 +1,13 @@
 {
 	"schema": 1,
 	"generator": ".github/workflows/ui-visual.yml",
-	"playwright": "1.64.0",
-	"image": "mcr.microsoft.com/playwright:v1.64.0-noble",
-	"digest": "sha256:06a9939e57531807f8d5fd76ce44b53165ffb7d7501d87ab10e285c20b1e971f",
-	"sha": "7dc967ceac367de19c84ec388469c2ff85b7b2d9",
+	"playwright": "1.65.1",
+	"image": "mcr.microsoft.com/playwright:v1.65.1-noble",
+	"digest": "sha256:1507cbfc550a63a6b7396791ca4f00df17beb56342d2447b3f106c306f525579",
+	"sha": "738f6d040f79e306d4e275c05c22a2eb6083cea2",
 	"run": {
-		"id": "45720993408",
-		"url": "https://github.com/namphuongtran/warren/actions/runs/45720993408"
+		"id": "45994948350",
+		"url": "https://github.com/namphuongtran/warren/actions/runs/45994948350"
 	},
 	"files": {
 		"agents-desktop-dark.png": {
@@ -149,26 +149,26 @@
 			"height": 900
 		},
 		"plan-run-detail-phone-light.png": {
-			"sha256": "2651b19db08e8debc5dea0ea044d6d02ec61ae43f3e34e87e8c3876b49038491",
-			"bytes": 70297,
+			"sha256": "698dcd918dfdc67c67e618b20ce0fe1cd8da67c9aae17c9a5b451727883aa11d",
+			"bytes": 70299,
 			"width": 393,
 			"height": 1408
 		},
 		"plan-runs-desktop-dark.png": {
-			"sha256": "057ff0f422df90afdcdc32729ff62b0aacb8a3cd73d25635ee215175f8fb574c",
-			"bytes": 49781,
+			"sha256": "40f786861edda136ea8c4e2b4319611be683db66bad23828104f16d04a0ef591",
+			"bytes": 49783,
 			"width": 1440,
 			"height": 900
 		},
 		"plan-runs-desktop-light.png": {
-			"sha256": "ff76c62589ab70a3560d1c8f7ff62803fb2d868b751940813c1cdced6c136b42",
-			"bytes": 49713,
+			"sha256": "3a92069e9fde71706710017b810962ec01379eee77bbd2cca10447f1b5201285",
+			"bytes": 49707,
 			"width": 1440,
 			"height": 900
 		},
 		"plan-runs-phone-light.png": {
-			"sha256": "a7b717dfa9c0cf871a08ba67ad15ff9690827391c097ea9772a8807f380cd9b8",
-			"bytes": 25518,
+			"sha256": "1c01453ea708125be24f9680fd98bc727f4476ff701c3de3d21a24eaa7f696e8",
+			"bytes": 25508,
 			"width": 393,
 			"height": 852
 		},
@@ -179,8 +179,8 @@
 			"height": 900
 		},
 		"project-detail-desktop-light.png": {
-			"sha256": "cfc20f0b1a45ec26ba2beb9b45e79f591e432d48ad2eae48c6d3b58cde4e4d56",
-			"bytes": 84235,
+			"sha256": "ed9150a49f751fb3898520cd84b26af922abae3776c7f866cdd1bd5f9e480f1a",
+			"bytes": 84284,
 			"width": 1440,
 			"height": 900
 		},
@@ -209,14 +209,14 @@
 			"height": 852
 		},
 		"run-detail-desktop-dark.png": {
-			"sha256": "414dbb285312f77aed44887e383e7177aff22576fd3aafb6758f16bc2d24a598",
-			"bytes": 107955,
+			"sha256": "71c174f3387d2700eb35332df81fdbf127475c7ba06bf9612d7a0be251dd47e2",
+			"bytes": 107961,
 			"width": 1440,
 			"height": 900
 		},
 		"run-detail-desktop-light.png": {
-			"sha256": "1b4c873be31f74c73f6587ccb2429d31fb32faa75b3d4b39c1d9853308b08f4c",
-			"bytes": 107935,
+			"sha256": "53c9edbb335235fac45ad7bfc233bbef28a15f4d341c32ab3ef485c50d9a7cfb",
+			"bytes": 107926,
 			"width": 1440,
 			"height": 900
 		},
@@ -275,20 +275,20 @@
 			"height": 900
 		},
 		"telemetry-behavior-phone-light.png": {
-			"sha256": "a7b79cff7433cf585950c16bf0f957acc36d0a551ea04b38d823b3016d4af789",
-			"bytes": 35905,
+			"sha256": "cb88e420af1565fa7440ae9b0483f6f1a4ad1479cbf972a759cc02d8d42afff5",
+			"bytes": 35900,
 			"width": 393,
 			"height": 852
 		},
 		"telemetry-economics-desktop-dark.png": {
-			"sha256": "688f989d2676aca393422ed11295556ec3c9add76e596a7b5c9ec89a99e61ae2",
-			"bytes": 193232,
+			"sha256": "301fecd651da423adad2b91cc1550acddb75320db928a2a13417dcaed0033e76",
+			"bytes": 193229,
 			"width": 1440,
 			"height": 2758
 		},
 		"telemetry-economics-desktop-light.png": {
-			"sha256": "c8a56012883abe939924077fcfeee96854c2af301178f27a8151f29cbc3e3960",
-			"bytes": 193649,
+			"sha256": "c9bf60b04f1798b2c5089794e253463dd42e515f731285fc18fb869fb96fc034",
+			"bytes": 193657,
 			"width": 1440,
 			"height": 2758
 		},
@@ -311,8 +311,8 @@
 			"height": 1079
 		},
 		"telemetry-judge-phone-light.png": {
-			"sha256": "d0ac0c0e98c77f0c4bd3b7f0963844e224ff19c6ffddca3973019719ff4d0953",
-			"bytes": 64195,
+			"sha256": "af7a358531eb7b1d82fb232b9322b1268730297904ec12ba78954ce80ffacf57",
+			"bytes": 64194,
 			"width": 393,
 			"height": 1179
 		},
@@ -323,8 +323,8 @@
 			"height": 900
 		},
 		"telemetry-loop-desktop-light.png": {
-			"sha256": "c1f45c366c2577b7e78f748d191fddff6cf02651ff58c55d05de8be20d393c2d",
-			"bytes": 69429,
+			"sha256": "8b1ad1cbce59a7d1495ed086949008ff0026d1e023e20f5766291ea7c4a703f7",
+			"bytes": 69408,
 			"width": 1440,
 			"height": 900
 		},
