@@ -147,6 +147,11 @@ jobs:
   # The same job also publishes the public control-plane image, so the
   # released semver rides along (warren-26be): it is what turns into the
   # `ghcr.io/<owner>/warren:vX.Y.Z` and `:X.Y` tags self-hosters pin to.
+  #
+  # Without a GCP project (`vars.GCP_PROJECT_ID` unset) the called workflow
+  # skips the Artifact Registry build and the GKE roll but still pushes the
+  # ghcr.io image, so this job succeeds and the release can be promoted with
+  # a `docker pull` tag that exists (namphuongtran/warren#123).
   deploy:
     needs: release
     if: needs.release.outputs.release == 'true'
@@ -171,6 +176,11 @@ jobs:
   # already on the registry, so a retried run is safe. The package name in
   # the probe is spelled out in full because a wrong name fails open
   # (mx-be6bc5).
+  #
+  # With no NPM_TOKEN the publish step skips with a warning, the same
+  # contract as the Discord announce below: a fork that does not own the
+  # @os-eco npm scope still releases (namphuongtran/warren#123). The build
+  # and the package-ui check still run, so the tarball is proven either way.
   publish:
     needs: [release, deploy]
     if: needs.release.outputs.release == 'true'
@@ -197,7 +207,6 @@ jobs:
       # @os-eco/warren-cli && warren serve` serves the web app, not just
       # the JSON API. check:package-ui then packs the tarball and fails
       # hard unless dist/index.html and its assets ride inside — so a
-      # hard unless dist/index.html and its assets ride inside — so a
       # publish that somehow skipped the build cannot ship. build:ui
       # installs the UI workspace with --frozen-lockfile itself.
       - run: bun run build:ui
@@ -209,6 +218,10 @@ jobs:
           VERSION: ${{ needs.release.outputs.version }}
         run: |
           set -euo pipefail
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            echo "::warning::NPM_TOKEN is not configured; skipping the npm publish of @os-eco/warren-cli@${VERSION} (docs/project-setup.md §8)."
+            exit 0
+          fi
           echo "//registry.npmjs.org/:_authToken=${NODE_AUTH_TOKEN}" > ~/.npmrc
           if npm view "@os-eco/warren-cli@${VERSION}" version >/dev/null 2>&1; then
             echo "@os-eco/warren-cli@${VERSION} is already published; skipping."
