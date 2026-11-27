@@ -42,9 +42,9 @@ export const EmptyState = React.forwardRef<HTMLDivElement, EmptyStateProps>(
 			{Icon ? (
 				<Icon aria-hidden="true" className="h-8 w-8 text-(--color-muted-foreground) opacity-70" />
 			) : null}
-			<div className="font-medium text-(--color-fg) text-sm">{title}</div>
+			<div className="text-sm font-medium text-(--color-fg)">{title}</div>
 			{description ? (
-				<div className="max-w-prose text-(--color-muted-foreground) text-sm">{description}</div>
+				<div className="max-w-prose text-sm text-(--color-muted-foreground)">{description}</div>
 			) : null}
 			{children}
 			{action ? <div className="mt-2">{action}</div> : null}

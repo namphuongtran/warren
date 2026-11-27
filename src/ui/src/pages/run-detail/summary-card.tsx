@@ -23,12 +23,12 @@ export function SummaryCard({
 			aria-label={title}
 			className="flex shrink-0 flex-col overflow-clip rounded-(--radius-md) border border-(--color-border) bg-(--color-surface)"
 		>
-			<header className="flex h-10 shrink-0 items-center gap-2 border-(--color-border) border-b px-3">
-				<h2 className="font-semibold text-(--color-text) text-xs">{title}</h2>
+			<header className="flex h-10 shrink-0 items-center gap-2 border-b border-(--color-border) px-3">
+				<h2 className="text-xs font-semibold text-(--color-text)">{title}</h2>
 				<span className="flex-1" />
 				{trailing}
 			</header>
-			<div className="flex flex-col gap-3 p-3 text-(--color-text-2) text-xs">{children}</div>
+			<div className="flex flex-col gap-3 p-3 text-xs text-(--color-text-2)">{children}</div>
 		</section>
 	);
 }
@@ -61,7 +61,7 @@ export function ToneChip({ tone, children }: { tone: SummaryTone; children: Reac
 export function SummaryBlock({ label, children }: { label: string; children: ReactNode }) {
 	return (
 		<div className="flex flex-col gap-1">
-			<h3 className="font-medium text-(--color-text-3) text-xs">{label}</h3>
+			<h3 className="text-xs font-medium text-(--color-text-3)">{label}</h3>
 			{children}
 		</div>
 	);
@@ -83,8 +83,8 @@ export function ExternalLink({
 			target="_blank"
 			rel="noreferrer noopener"
 			className={cn(
-				"w-fit text-(--color-primary) text-xs underline-offset-2 hover:underline",
-				mono ? "break-all font-mono" : "font-medium",
+				"w-fit text-xs text-(--color-primary) underline-offset-2 hover:underline",
+				mono ? "font-mono break-all" : "font-medium",
 			)}
 		>
 			{children} ↗
@@ -94,13 +94,13 @@ export function ExternalLink({
 
 /** The muted line a section shows when it has nothing to report. */
 export function SummaryEmpty({ children }: { children: ReactNode }) {
-	return <p className="text-(--color-text-3) text-xs">{children}</p>;
+	return <p className="text-xs text-(--color-text-3)">{children}</p>;
 }
 
 /** Agent-written free text: escaped by React, whitespace kept, long words wrapped. */
 export function AgentText({ children }: { children: string }) {
 	return (
-		<p className="whitespace-pre-wrap break-words text-(--color-text) text-xs leading-relaxed">
+		<p className="text-xs leading-relaxed break-words whitespace-pre-wrap text-(--color-text)">
 			{children}
 		</p>
 	);

@@ -53,7 +53,7 @@ export function BlockedQuestions({ run, handoff }: { run: RunRow; handoff: RunHa
 						<li key={i} className="flex flex-col gap-1.5">
 							<Label
 								htmlFor={fieldId}
-								className="whitespace-pre-wrap break-words font-normal text-(--color-text) text-xs leading-relaxed"
+								className="text-xs leading-relaxed font-normal break-words whitespace-pre-wrap text-(--color-text)"
 							>
 								{`${i + 1}. ${question}`}
 							</Label>
@@ -73,7 +73,7 @@ export function BlockedQuestions({ run, handoff }: { run: RunRow; handoff: RunHa
 				<Button size="sm" onClick={continueWithAnswers} disabled={answeredCount === 0}>
 					Continue with answers
 				</Button>
-				<span className="text-(--color-text-3) text-xs">
+				<span className="text-xs text-(--color-text-3)">
 					Opens Dispatch with the answers in a follow-up prompt. Nothing runs until you dispatch.
 				</span>
 			</div>

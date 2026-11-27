@@ -11,13 +11,13 @@
 # FAKE_TRACKER_STATE_FILE, FAKE_TRACKER_BEARER.
 
 # ---- deps stage: resolve node_modules from the package's OWN lockfile ----
-FROM oven/bun:1.2 AS deps
+FROM oven/bun:1.4 AS deps
 WORKDIR /app
 COPY package.json bun.lock ./
 RUN bun install --frozen-lockfile --production
 
 # ---- runtime stage ----
-FROM oven/bun:1.2-slim
+FROM oven/bun:1.4-slim
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
