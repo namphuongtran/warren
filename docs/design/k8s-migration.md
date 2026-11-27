@@ -162,8 +162,8 @@ Operational rules:
 - **A bare poll consumes.** It claims every unread row at once and flips it to `delivered`. Any reader other than the pod, such as an operator curl, steals the message before the pod polls.
 - **Use `?peek=1` to inspect.** `GET /runs/:id/inbox?peek=1` (warren-3305) lists the unread queue without claiming. The pod never peeks, so claiming stays exactly-once.
 - **`steer.sent` vs `steer.delivered`.** `steerRun` emits `steer.sent` when warren accepts the message. The poll emits one `steer.delivered` per claimed message (warren-3305). Delivered means the harness took the message, not that the agent acted on it. A steer with `steer.sent` but no `steer.delivered` is the observable non-delivery signature.
-- **Declare the harness capability, never assume it.** `frontmatter.steering` (see `STEERING_CAPABILITIES` in `src/core/wire.ts`) records what the agent runtime consumes. `"mid-run"` means a live stdin channel. No builtin has one today.
-- **All nine builtins are `"spawn-only"`.** The harness folds the message into the prompt at spawn and never reads mid-run. `"none"` rejects every steer. `POST /runs/:id/steer` returns 409 when the declared harness cannot consume the steer. Agents that predate the flag stay fail-open.
+- **Declare the harness capability, never assume it.** `frontmatter.steering` (see `STEERING_CAPABILITIES` in `src/core/wire.ts`) records what the agent runtime consumes. `"mid-run"` means a live stdin channel. The `claude-code` builtin has one (namphuongtran/warren#150). The pod claims inbox rows only while the adapter's steering gate is open (`createSteeringGate`), so a held message stays unread and `?peek=1` shows it.
+- **The other eight builtins are `"spawn-only"`.** The harness folds the message into the prompt at spawn and never reads mid-run. `"none"` rejects every steer. `POST /runs/:id/steer` returns 409 when the declared harness cannot consume the steer. Agents that predate the flag stay fail-open.
 
 ---
 

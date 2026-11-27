@@ -111,7 +111,7 @@ export const BUGWATCH_BUILTIN: AgentDefinition = {
 		runtime: "pi",
 		// warren-3305: this harness consumes steering only at spawn
 		// (encodeInboxMessage folds pending inbox rows into the prompt);
-		// no builtin runtime reads steering mid-run, so a steer against
+		// pi does not read steering mid-run, so a steer against
 		// a running run must fail 409 rather than record a dead
 		// steer.sent. Flip to "mid-run" only when the runtime gains a
 		// proven live steering channel.

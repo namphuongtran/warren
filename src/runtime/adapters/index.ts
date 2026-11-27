@@ -32,6 +32,7 @@ import type {
 	ContextObservation,
 	QuotaExhaustedSignal,
 	QuotaObservation,
+	SteeringGate,
 } from "./types.ts";
 
 // Phase-2 harness surface (warren-7933) — additive re-exports so the k8s
@@ -53,6 +54,7 @@ export type {
 	QuotaExhaustedSignal,
 	QuotaObservation,
 	SpawnCommand,
+	SteeringGate,
 	SteeringMessage,
 } from "./types.ts";
 
@@ -161,6 +163,16 @@ export function isContextOnlyEvent(event: EventEnvelopeInput): boolean {
 	return (
 		firstAnswer((adapter) => (adapter.isContextOnlyEvent?.(event) === true ? true : null)) === true
 	);
+}
+
+const ALWAYS_OPEN_GATE: SteeringGate = { observe: () => {}, isOpen: () => true };
+
+/**
+ * A fresh steering gate for one run of `adapter` (namphuongtran/warren#150).
+ * An adapter that declares no gate gets one that is always open.
+ */
+export function newSteeringGate(adapter: AgentRuntimeAdapter): SteeringGate {
+	return adapter.createSteeringGate?.() ?? ALWAYS_OPEN_GATE;
 }
 
 /** The first adapter's non-null answer, in {@link KNOWN_RUNTIME_IDS} order. */

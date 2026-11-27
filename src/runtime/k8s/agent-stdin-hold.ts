@@ -10,20 +10,23 @@
  *   • auto-reply to any intervening request envelope the runtime emits
  *     (`autoRespondToEvent`) so an interactive prompt can't hang the batch run;
  *   • deliver mid-run steering messages to the live stdin
- *     (`encodeSteeringMessage`) by polling the inbox while the run is in flight;
+ *     (`encodeSteeringMessage`) by polling the inbox while the run is in flight,
+ *     and only while the runtime's steering gate is open (`createSteeringGate`,
+ *     namphuongtran/warren#150);
  *   • guard against a hung run with an idle watchdog that drops stdin and
  *     force-kills so a stalled inference can't pin the pod forever.
  *
- * A batch runtime (claude-code `--print`) declares none of these seams,
- * so `createStdinHoldController({ active: false, … })` returns a no-op and the
+ * A batch runtime (codex `exec`) declares none of these seams, so
+ * `createStdinHoldController({ active: false, … })` returns a no-op and the
  * entrypoint keeps its write-and-close-at-spawn behavior unchanged.
  */
 
 import type { AcceptedRuntimeId } from "../../core/wire.ts";
-import type {
-	AdapterRuntimeEvent,
-	AgentRuntimeAdapter,
-	SteeringMessage,
+import {
+	type AdapterRuntimeEvent,
+	type AgentRuntimeAdapter,
+	newSteeringGate,
+	type SteeringMessage,
 } from "../adapters/index.ts";
 import type { AgentEntrypointEnv } from "./agent-entrypoint.ts";
 import {
@@ -80,6 +83,7 @@ export function createStdinHoldController(args: StdinHoldControllerArgs): StdinH
 
 	let stdinClosed = false;
 	const isStdinClosed = (): boolean => stdinClosed;
+	const gate = newSteeringGate(runtime);
 	const closeStdinOnce = async (): Promise<void> => {
 		if (stdinClosed || proc.closeStdin === undefined) return;
 		stdinClosed = true;
@@ -113,6 +117,7 @@ export function createStdinHoldController(args: StdinHoldControllerArgs): StdinH
 					log,
 					writeStdin: proc.writeStdin,
 					isStdinClosed,
+					canSteer: () => gate.isOpen(),
 					onWrite: () => watchdog.arm(),
 					signal: midRunAbort.signal,
 				}).catch(() => {
@@ -126,6 +131,7 @@ export function createStdinHoldController(args: StdinHoldControllerArgs): StdinH
 			if (!stdinClosed) watchdog.arm();
 		},
 		onEvents: async (events) => {
+			for (const ev of events) gate.observe(ev);
 			await autoRespondToEvents(runtime, proc, events, isStdinClosed);
 			if (!stdinClosed && firstEventMatches(runtime.shouldCloseStdinOnEvent, events)) {
 				await closeStdinOnce();
@@ -233,6 +239,8 @@ interface MidRunSteeringLoopArgs {
 	log: (m: string) => void;
 	writeStdin: (chunk: string) => Promise<void>;
 	isStdinClosed: () => boolean;
+	/** The runtime's steering gate, checked before each claim and each write. */
+	canSteer: () => boolean;
 	/** Reset the idle watchdog after a successful steering write. */
 	onWrite: () => void;
 	signal: AbortSignal;
@@ -245,44 +253,58 @@ interface MidRunSteeringLoopArgs {
  * write/encode/drain failures are swallowed so a mid-run nudge never fails an
  * otherwise successful run. Stops on abort or once stdin has been closed (the
  * runtime is finishing). Mirrors burrow's `runMidRunSteeringLoop`. (warren-7a43)
+ *
+ * The drain marks what it returns delivered, so the loop claims only while the
+ * steering gate is open (namphuongtran/warren#150). The gate can close during
+ * the claim's round trip, so claimed messages wait in `held`, each written
+ * only while the gate is open, and nothing new is claimed until `held` is
+ * empty. Messages still held when the run ends are logged: they were claimed
+ * but never written.
  */
 async function runMidRunSteeringLoop(args: MidRunSteeringLoopArgs): Promise<void> {
-	const { env, http, runtime, log, writeStdin, isStdinClosed, onWrite, signal } = args;
+	const { env, http, runtime, log, writeStdin, isStdinClosed, canSteer, onWrite, signal } = args;
 	const encode = runtime.encodeSteeringMessage;
 	if (encode === undefined) return;
 	const stopped = (): boolean => signal.aborted || isStdinClosed();
+	const held: SteeringMessage[] = [];
 	while (!stopped()) {
 		await sleepUntil(env.inboxPollIntervalMs, signal);
 		if (stopped()) break;
-		const messages = await drainInbox(env, http, log);
-		const outcome = await deliverSteeringBatch({ messages, encode, writeStdin, onWrite, stopped });
-		if (outcome === "sink-closed") return;
+		if (!canSteer()) continue;
+		if (held.length === 0) held.push(...(await drainInbox(env, http, log)));
+		const outcome = await deliverHeld({ held, encode, writeStdin, onWrite, stopped, canSteer });
+		if (outcome === "sink-closed") break;
+	}
+	if (held.length > 0) {
+		log(`agent-entrypoint: ${held.length} claimed steering message(s) never reached the agent`);
 	}
 }
 
-interface DeliverSteeringBatchArgs {
-	messages: SteeringMessage[];
+interface DeliverHeldArgs {
+	/** Claimed messages not yet written; each leaves once its write lands. */
+	held: SteeringMessage[];
 	encode: (message: SteeringMessage) => { stdin: string } | undefined;
 	writeStdin: (chunk: string) => Promise<void>;
 	onWrite: () => void;
 	stopped: () => boolean;
+	canSteer: () => boolean;
 }
 
-/** Encode + write one drained batch to the held stdin; report a dead sink. */
-async function deliverSteeringBatch(
-	args: DeliverSteeringBatchArgs,
-): Promise<"delivered" | "sink-closed"> {
-	const { messages, encode, writeStdin, onWrite, stopped } = args;
-	for (const message of messages) {
-		if (stopped()) break;
+/** Write held messages in order while the gate stays open; report a dead sink. */
+async function deliverHeld(args: DeliverHeldArgs): Promise<"open" | "sink-closed"> {
+	const { held, encode, writeStdin, onWrite, stopped, canSteer } = args;
+	for (let message = held[0]; message !== undefined; message = held[0]) {
+		if (stopped() || !canSteer()) break;
 		const encoded = encode(message);
-		if (encoded === undefined) continue;
-		try {
-			await writeStdin(encoded.stdin);
-			onWrite();
-		} catch {
-			return "sink-closed";
+		if (encoded !== undefined) {
+			try {
+				await writeStdin(encoded.stdin);
+				onWrite();
+			} catch {
+				return "sink-closed";
+			}
 		}
+		held.shift();
 	}
-	return "delivered";
+	return "open";
 }

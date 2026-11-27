@@ -132,9 +132,9 @@ export interface SpawnCommand {
 	 * the write side. The caller drains stdout, then invokes
 	 * `SpawnResult.closeStdin()` once it has observed whatever signal
 	 * indicates the child is done consuming input. Runtimes whose CLI exits
-	 * the instant stdin closes mid-inference must set this; runtimes that
-	 * rely on stdin EOF to flush their final output (e.g. claude-code
-	 * `--print`) must not. Default false (write+end at spawn time).
+	 * the instant stdin closes mid-inference (pi) or reads more input while it
+	 * runs (claude-code) set this; runtimes that read their prompt to EOF
+	 * (codex) must not. Default false (write+end at spawn time).
 	 */
 	holdStdin?: boolean;
 }

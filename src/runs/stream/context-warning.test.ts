@@ -196,7 +196,7 @@ describe("bridgeRunStream — context-window warning (namphuongtran/warren#20)",
 		]);
 	});
 
-	test("does not steer a spawn-only harness such as claude-code", async () => {
+	test("does not steer a spawn-only harness", async () => {
 		await seed({ frontmatter: { steering: "spawn-only" } });
 		await bridge([assistantUsage(1, 175_000)]);
 

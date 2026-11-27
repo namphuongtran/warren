@@ -14,9 +14,11 @@
 # Invocation shape (from src/runtime/adapters/claude-code.ts):
 #   argv: claude --print --input-format stream-json --output-format
 #         stream-json --verbose --dangerously-skip-permissions
-#   stdin: the prompt as a stream-json user turn (stdin is NOT held —
-#          the adapter declares no shouldCloseStdinOnEvent), so a plain
-#          `cat` reads the full payload and returns.
+#   stdin: the prompt as ONE newline-terminated stream-json user message.
+#          stdin is held open until the `result` line (the adapter declares
+#          shouldCloseStdinOnEvent, namphuongtran/warren#150), so the shim
+#          reads that one line; reading to EOF would wait on warren, which
+#          waits on `result`.
 #
 # Emits the same terminal `result` envelope as claude-code-agent.sh so
 # warren's bridge extractClaudeUsage + terminal detection behave
@@ -43,7 +45,7 @@
 
 set -euo pipefail
 
-_stdin="$(cat || true)"
+IFS= read -r _stdin || true
 echo "claude-path-shim: started run" >&2
 
 # Extract the first user-turn text out of the stream-json stdin payload.

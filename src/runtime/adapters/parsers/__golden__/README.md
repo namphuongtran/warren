@@ -267,3 +267,67 @@ done > windows-raw.jsonl
 When a new Claude model ships, capture its `result` line the same way, add
 it to the windows fixture, and add its window to
 `../../claude-context-windows.ts`.
+
+## Mid-run steering captures (namphuongtran/warren#150)
+
+`claude-code-v2.1.332-steer-*.jsonl` and `claude-code-v2.1.332-spawn-*.jsonl`
+feed the steering capture test (`../../claude-code-steering.capture.test.ts`).
+They are real captures from claude-code 2.1.332 (2026-11-27), trimmed the same
+way as the files above: no `rate_limit_event` lines, no `system` lines other
+than `init`, fixed ids, and long prose and tool output cut short.
+
+Each run held stdin open, wrote a steering message at a chosen moment, and
+added `--replay-user-messages`, which warren does not pass. The replayed user
+line (`isReplay: true`) shows where the CLI took each message in. The steer
+asks the agent to reply `PINEAPPLE` instead of `DONE`, so the `result` text
+shows which turn acted on it.
+
+| File | Steer written | What the CLI did |
+|------|---------------|------------------|
+| `claude-code-v2.1.332-steer-mid-tool.jsonl` | 2 s into a `sleep 12` Bash call | Took it in after the tool result and added it to the same turn's next request. One `result`: `PINEAPPLE`. |
+| `claude-code-v2.1.332-steer-final-request.jsonl` | During the turn's only request (no tools) | Finished the turn (`result` 1), then ran the steer as a second turn (`result` 2: `PINEAPPLE`). |
+| `claude-code-v2.1.332-steer-subagent.jsonl` | During a sub-agent's Bash call | Held it until the parent's Agent tool result, then added it to the parent's next request (`parent_tool_use_id: null`). One `result`. |
+| `claude-code-v2.1.332-spawn-two-lines.jsonl` | With the prompt, as a second stdin line | Ran each line as its own turn: two `result` lines. |
+| `claude-code-v2.1.332-spawn-one-message.jsonl` | With the prompt, as a second text block of one message | One turn, one `result`: `PINEAPPLE`. |
+
+Facts the probes showed that the fixtures cannot hold:
+
+- The CLI flushes each `result` with stdin still open, then waits for another
+  turn. It stayed alive 8 s after `result` until stdin closed, then exited 0.
+- A message the CLI read before EOF still runs after EOF: writing a steer and
+  closing stdin right after `result` produced a second turn and exit 0.
+- An unterminated line is not read: a prompt without a trailing newline got no
+  `init` line until stdin closed.
+- `priority: "now"` on the user message aborts the running turn
+  (`error_during_execution`, `is_error: true`); `priority: "next"` behaves
+  like no priority. Warren sends none.
+
+The driver spawned the CLI in an empty scratch directory with warren's argv
+and env (`ENABLE_CLAUDEAI_MCP_SERVERS=false`,
+`CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1`), plus
+`--model haiku --setting-sources project --strict-mcp-config --replay-user-messages`:
+
+```ts
+const userLine = (text: string) =>
+  `${JSON.stringify({ type: "user", message: { role: "user", content: [{ type: "text", text }] } })}\n`;
+const proc = Bun.spawn(["claude", "--print", "--input-format", "stream-json",
+  "--output-format", "stream-json", "--verbose", "--dangerously-skip-permissions",
+  "--model", "haiku", "--setting-sources", "project", "--strict-mcp-config",
+  "--replay-user-messages"], { stdin: "pipe", stdout: "pipe" });
+proc.stdin.write(userLine(PROMPT));
+proc.stdin.flush();
+// For each stdout line: at the scenario's moment (2 s after the first tool_use
+// line, or right after the init line), write
+//   userLine("[STEERING] (priority: high) Change of plan: in your final reply,
+//             say the single word PINEAPPLE instead of DONE.")
+// and close stdin 12 s after the last `result` line.
+```
+
+Prompts: mid-tool `Use the Bash tool to run the shell command \`sleep 12\`.
+When it finishes, reply with the single word DONE and nothing else.`;
+final-request `Write a 250-word story about a fox who finds a lantern. After
+the story, on its own line, write the single word DONE.`; sub-agent `Use the
+Agent tool to launch a general-purpose subagent whose only job is to run the
+shell command \`sleep 15\` with Bash and report back. When the subagent
+finishes, reply with the single word DONE and nothing else.`; both spawn
+captures `Reply with the single word DONE.`

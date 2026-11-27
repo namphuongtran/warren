@@ -267,9 +267,10 @@ curl -X POST "$WARREN_BASE_URL/runs/run_xyz/steer" \
 
 `priority` accepts `low`, `normal`, `high`, `urgent`.
 
-The `pi` harness receives a steer immediately while it runs. The `claude-code` harness runs in
-`--print` mode, so a steer message does **not** reach the running process. Warren only
-merges that message into the prompt at the next spawn.
+A running `claude-code` run reads a steer at its next tool result: warren writes the message
+while the agent has a tool call running. A steer that arrives after the agent's last tool call
+stays unread. The `pi` and `codex` built-ins read steering only at spawn. Steer one of their runs
+while it is still queued; steering a running one returns 409.
 
 ### 5.3 Read the result
 

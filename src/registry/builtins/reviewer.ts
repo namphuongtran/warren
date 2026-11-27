@@ -142,7 +142,7 @@ export const REVIEWER_BUILTIN: AgentDefinition = {
 		// pi is the multi-provider harness, so the controller's provider/model
 		// override can put a different vendor behind the same definition.
 		runtime: "pi",
-		// warren-3305: no builtin runtime reads steering mid-run.
+		// warren-3305: pi does not read steering mid-run.
 		steering: "spawn-only",
 		// Opus tier (model-tiers.ts): the verdict gates a merge, and the
 		// default builders run on the sonnet tier, so the default reviewer is
