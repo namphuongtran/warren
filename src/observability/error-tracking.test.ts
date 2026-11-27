@@ -1,5 +1,47 @@
 import { describe, expect, test } from "bun:test";
-import { initErrorTracking, NOOP_ERROR_TRACKER, scrubSentryEvent } from "./error-tracking.ts";
+import {
+	initErrorTracking,
+	NOOP_ERROR_TRACKER,
+	scrubSentryEvent,
+	withoutChannelIntegrations,
+} from "./error-tracking.ts";
+
+describe("withoutChannelIntegrations", () => {
+	test("drops the framework error integrations and keeps the rest", () => {
+		const names = ["Express", "Http", "Hono", "OnUncaughtException", "Koa", "BunServer"];
+		const kept = withoutChannelIntegrations(names.map((name) => ({ name })));
+		expect(kept.map((i) => i.name)).toEqual(["Http", "OnUncaughtException", "BunServer"]);
+	});
+});
+
+// Real Sentry init runs in a child process: it installs process-wide
+// uncaught-exception handlers that must not leak into the test runner.
+describe("initErrorTracking with a DSN", () => {
+	test("boots without a Sentry console warning and keeps crash capture", async () => {
+		const modulePath = `${import.meta.dir}/error-tracking.ts`;
+		const script = [
+			`const { initErrorTracking } = await import(${JSON.stringify(modulePath)});`,
+			`const { tracker } = await initErrorTracking({ SENTRY_DSN: "http://k@127.0.0.1:9/1" });`,
+			`const Sentry = await import("@sentry/bun");`,
+			`const names = Sentry.getClient()?.getOptions().integrations.map((i) => i.name) ?? [];`,
+			"console.log(JSON.stringify({ enabled: tracker.enabled, names }));",
+			"process.exit(0);",
+		].join("\n");
+		const proc = Bun.spawn(["bun", "-e", script], { stdout: "pipe", stderr: "pipe" });
+		const [stdout, stderr, code] = await Promise.all([
+			new Response(proc.stdout).text(),
+			new Response(proc.stderr).text(),
+			proc.exited,
+		]);
+		expect(stderr).not.toContain("[Sentry]");
+		expect(code).toBe(0);
+		const out = JSON.parse(stdout.trim()) as { enabled: boolean; names: string[] };
+		expect(out.enabled).toBe(true);
+		expect(out.names).toContain("OnUncaughtException");
+		expect(out.names).toContain("OnUnhandledRejection");
+		expect(out.names).not.toContain("Express");
+	});
+});
 
 describe("initErrorTracking", () => {
 	test("returns the no-op tracker when SENTRY_DSN is unset", async () => {
