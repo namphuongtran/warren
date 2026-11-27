@@ -224,15 +224,44 @@ function runBunTest(emitJUnit: boolean): {
 	// Bun writes both progress and the coverage table to stderr. Capture both
 	// streams as strings and tee them through so the user still sees live
 	// output, then parse from the buffered copy.
-	const result = spawnSync("bun", args, { cwd: REPO_ROOT, encoding: "utf8" });
+	return captureSync("bun", args, REPO_ROOT);
+}
+
+/**
+ * Capture ceiling per stream. spawnSync's default is 1 MiB, and on GitHub
+ * Actions bun prints one line per passing test: the suite's stderr crossed it
+ * (namphuongtran/warren#151), spawnSync killed bun mid-run, and the gate
+ * failed with a clipped log and no junit.xml or lcov.info.
+ */
+const CAPTURE_MAX_BUFFER_BYTES = 256 * 1024 * 1024;
+
+/**
+ * Run `command` and buffer both streams. Any spawn error, including a stream
+ * past {@link CAPTURE_MAX_BUFFER_BYTES} (`ENOBUFS`), fails the result and is
+ * named on stderr, so a capture problem never reads as a test failure or a pass.
+ */
+export function captureSync(
+	command: string,
+	args: readonly string[],
+	cwd: string,
+): { exitCode: number; stdout: string; stderr: string; combined: string } {
+	const result = spawnSync(command, [...args], {
+		cwd,
+		encoding: "utf8",
+		maxBuffer: CAPTURE_MAX_BUFFER_BYTES,
+	});
 	const stdout = result.stdout ?? "";
-	const stderr = result.stderr ?? "";
+	let stderr = result.stderr ?? "";
 	// Do NOT write these buffers to the streams in-line here and then call
 	// process.exit(...) on the result later: process.exit does not wait for
 	// stream flushes, so a multi-MB buffer gets clipped and CI logs lose the
 	// failing tail (warren-66a7). The caller replays the output with awaited
 	// writes, then avoids process.exit entirely by setting process.exitCode.
-	const exitCode = result.status ?? (result.signal ? 1 : 0);
+	let exitCode = result.status ?? (result.signal ? 1 : 0);
+	if (result.error !== undefined) {
+		stderr += `\ncheck-coverage: could not capture \`${command}\`: ${result.error.message}\n`;
+		if (exitCode === 0) exitCode = 1;
+	}
 	return { exitCode, stdout, stderr, combined: `${stdout}\n${stderr}` };
 }
 

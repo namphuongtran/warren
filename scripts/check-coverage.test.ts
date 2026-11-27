@@ -6,6 +6,7 @@ import { join, resolve } from "node:path";
 import {
 	type CoverageBudgets,
 	type CoverageTotals,
+	captureSync,
 	checkBudgets,
 	installExtensionDeps,
 	loadBudgets,
@@ -73,6 +74,27 @@ describe("checkBudgets", () => {
 		const totals: CoverageTotals = { functions: 10, lines: 20 };
 		const failures = checkBudgets(totals, budgets);
 		expect(failures.map((f) => f.metric).sort()).toEqual(["functions", "lines"]);
+	});
+});
+
+describe("captureSync", () => {
+	test("keeps a child's stderr past the 1 MiB spawnSync default, as bun test writes on CI", () => {
+		// On GitHub Actions bun prints one line per passing test, so the suite's
+		// stderr outgrew the default capture, and the gate killed bun mid-run.
+		const bytes = 3 * 1024 * 1024;
+		const script = `await Bun.write(Bun.stderr, "x".repeat(${bytes}));`;
+
+		const result = captureSync("bun", ["-e", script], tmpdir());
+
+		expect(result.exitCode).toBe(0);
+		expect(result.stderr.length).toBe(bytes);
+	});
+
+	test("fails when the child cannot be captured", () => {
+		const result = captureSync("warren-no-such-binary", [], tmpdir());
+
+		expect(result.exitCode).not.toBe(0);
+		expect(result.stderr).toContain("warren-no-such-binary");
 	});
 });
 
