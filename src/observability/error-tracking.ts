@@ -39,6 +39,22 @@ export const NOOP_ERROR_TRACKER: ErrorTracker = {
 	flush: async () => {},
 };
 
+/**
+ * Sentry's default framework error integrations. Each subscribes to a
+ * diagnostics channel that only a `--preload @sentry/bun/import` hook
+ * injects, so on a plain `bun` boot Sentry warns that they cannot capture.
+ * Warren serves over `Bun.serve` and uses none of these frameworks, so
+ * dropping them loses nothing and keeps the boot log clean. Uncaught
+ * exceptions and unhandled rejections are separate integrations and stay.
+ */
+const CHANNEL_INTEGRATIONS = new Set(["Express", "Fastify", "Hapi", "Hono", "Koa", "Nitro"]);
+
+export function withoutChannelIntegrations<T extends { readonly name: string }>(
+	defaults: readonly T[],
+): T[] {
+	return defaults.filter((integration) => !CHANNEL_INTEGRATIONS.has(integration.name));
+}
+
 const REDACTED = "[Redacted]";
 const SECRET_FIELD_SET = new Set<string>(SECRET_FIELDS.map((f) => f.toLowerCase()));
 
@@ -59,8 +75,10 @@ export async function initErrorTracking(env: EnvLike): Promise<InitErrorTracking
 	Sentry.init({
 		dsn,
 		environment,
-		// Errors-only in V1; tracing/profiling deferred to a later phase.
-		tracesSampleRate: 0,
+		// Errors-only in V1; tracing/profiling deferred to a later phase. No
+		// `tracesSampleRate`: Sentry reads any defined value, 0 included, as
+		// "spans on" and installs its channel-based tracing integrations.
+		integrations: withoutChannelIntegrations,
 		...(release !== undefined && release !== "" ? { release } : {}),
 		beforeSend: (event) => {
 			scrubSentryEvent(event as unknown as Record<string, unknown>);
