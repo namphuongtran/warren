@@ -59,13 +59,12 @@ export const CLAUDE_CODE_BUILTIN: AgentDefinition = {
 		// (warren-16f8); pin it explicitly so this built-in keeps
 		// dispatching onto the claude-code burrow runtime.
 		runtime: "claude-code",
-		// warren-3305: this harness consumes steering only at spawn
-		// (encodeInboxMessage folds pending inbox rows into the prompt);
-		// no builtin runtime reads steering mid-run, so a steer against
-		// a running run must fail 409 rather than record a dead
-		// steer.sent. Flip to "mid-run" only when the runtime gains a
-		// proven live steering channel.
-		steering: "spawn-only",
+		// namphuongtran/warren#150: claude-code reads a steer from its held
+		// stdin while the run is in flight, so a running run accepts one.
+		// The adapter writes it only while a tool call is outstanding, when it
+		// is certain to join the running turn. Captures of CLI 2.1.332 pin this
+		// (`src/runtime/adapters/claude-code-steering.capture.test.ts`).
+		steering: "mid-run",
 		// Sonnet tier (model-tiers.ts): decomposed/scoped coding work;
 		// operators raise to Opus per-run when a raw prompt needs it.
 		...MODEL_TIERS.sonnet,

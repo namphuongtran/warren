@@ -7,7 +7,7 @@
  * `./parsers/jsonl-codex.ts`. `codex exec` reads stdin once and has no input
  * channel during the turn, so the adapter declares no
  * `shouldCloseStdinOnEvent` and no `encodeSteeringMessage`: steering is
- * spawn-only, the same as claude-code.
+ * spawn-only.
  *
  * Sandbox: warren's sandbox (bwrap, sandbox-exec, the Docker container, or the
  * K8s pod) is the security boundary. Codex's own sandbox (Landlock + seccomp

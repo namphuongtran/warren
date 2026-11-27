@@ -8,7 +8,7 @@
  * `WARREN_BUDGET_WARNING_FRACTION`), the bridge emits one `budget.warning`
  * system event and, when the harness consumes steering mid-run
  * (`frontmatter.steering: "mid-run"`), sends the agent one steering message
- * asking it to wrap up. Spawn-only harnesses (claude-code) get the event only.
+ * asking it to wrap up. A spawn-only harness gets the event only.
  *
  * Emission lives beside the hard-cap emission in `./budget.ts`; this file
  * holds the pure config, the threshold math, and the run-row resolution.

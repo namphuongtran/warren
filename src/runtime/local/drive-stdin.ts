@@ -7,7 +7,11 @@
  */
 
 import type { SpawnResult } from "../../sandbox/types.ts";
-import type { AdapterRuntimeEvent, AgentRuntimeAdapter } from "../adapters/index.ts";
+import {
+	type AdapterRuntimeEvent,
+	type AgentRuntimeAdapter,
+	newSteeringGate,
+} from "../adapters/index.ts";
 import { MID_RUN_INBOX_POLL_MS } from "./drive.ts";
 import type { LocalRunRecord, LocalRunStore } from "./run-store.ts";
 
@@ -20,6 +24,10 @@ export interface StdinController {
 	closeIfDangling(): Promise<void>;
 	/** Read-only latch for the mid-run steering loop. */
 	isClosed(): boolean;
+	/** Show the adapter's steering gate each parsed event (namphuongtran/warren#150). */
+	observe(events: AdapterRuntimeEvent[]): void;
+	/** True when the adapter's gate lets a mid-run steer through now; no gate means yes. */
+	canSteer(): boolean;
 }
 
 export function createStdinController(
@@ -28,6 +36,7 @@ export function createStdinController(
 	active: boolean,
 ): StdinController {
 	let closed = false;
+	const gate = newSteeringGate(runtime);
 	const close = async (): Promise<void> => {
 		if (closed) return;
 		closed = true;
@@ -35,6 +44,10 @@ export function createStdinController(
 	};
 	return {
 		isClosed: () => closed,
+		observe(events) {
+			for (const ev of events) gate.observe(ev);
+		},
+		canSteer: () => gate.isOpen(),
 		async autoRespond(events) {
 			const hook = runtime.autoRespondToEvent;
 			if (!active || hook === undefined || proc.writeStdin === undefined) return;
@@ -124,7 +137,8 @@ export function startMidRunSteering(
 /**
  * One steering tick: deliver every pending row. Resolves `false` when the
  * loop must stop (abort, stdin closed, or a dead sink); `true` to keep
- * polling. Rows the encoder declines or a failed write leaves stay `unread`.
+ * polling. Rows the encoder declines, a closed steering gate holds, or a
+ * failed write leaves stay `unread`.
  */
 async function deliverPending(
 	store: LocalRunStore,
@@ -137,6 +151,7 @@ async function deliverPending(
 ): Promise<boolean> {
 	for (const row of store.listPending(record)) {
 		if (signal.aborted || stdin.isClosed()) return false;
+		if (!stdin.canSteer()) return true; // held — a later tick delivers it
 		const encoded = encode(row);
 		if (encoded === undefined) continue; // declined — stays unread
 		try {

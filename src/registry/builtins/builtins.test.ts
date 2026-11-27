@@ -168,13 +168,14 @@ describe("BUILTIN_AGENTS", () => {
 		}
 	});
 
-	// warren-3305: no builtin runtime consumes steering mid-run (pi reads
-	// stdin only at a turn boundary and warren closes stdin at agent_end), so
-	// every builtin must declare spawn-only — the flag drives the 409 that
-	// replaced the silent steer.sent no-op.
-	test("each builtin declares steering: 'spawn-only' (warren-3305)", () => {
+	// The flag drives the 409 that replaced the silent steer.sent no-op
+	// (warren-3305). Only claude-code reads a steer mid-run
+	// (namphuongtran/warren#150). pi reads stdin only at a turn boundary, and
+	// warren closes it at agent_end. codex reads its prompt to EOF.
+	test("declares steering: 'mid-run' on the claude-code builtin and 'spawn-only' on the rest", () => {
 		for (const builtin of BUILTIN_AGENTS) {
-			expect(builtin.frontmatter.steering).toBe("spawn-only");
+			const expected = builtin.name === "claude-code" ? "mid-run" : "spawn-only";
+			expect([builtin.name, builtin.frontmatter.steering]).toEqual([builtin.name, expected]);
 		}
 	});
 

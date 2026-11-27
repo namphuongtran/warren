@@ -163,7 +163,7 @@ export const PLANNER_BUILTIN: AgentDefinition = {
 		// namphuongtran/warren#35: the harness-level half of the write scope
 		// (see the module comment). pi maps this onto --exclude-tools.
 		pi: { excludeTools: ["edit"] },
-		// warren-3305: no builtin runtime reads steering mid-run.
+		// warren-3305: pi does not read steering mid-run.
 		steering: "spawn-only",
 		// Opus tier (model-tiers.ts): the spec caps the quality of every
 		// downstream step.

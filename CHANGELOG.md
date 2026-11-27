@@ -215,7 +215,28 @@ Releases **0.9.10 and earlier** live in
   callers (triggers, retries) get the refusal as an error; holding their
   runs until the reset is Phase 2.
 
+- **claude-code reads steering mid-run (namphuongtran/warren#150).** Warren
+  now keeps a claude-code run's stdin open and closes it at the turn's
+  `result`. `POST /runs/:id/steer` accepts a running claude-code run, and the
+  budget and context warnings send it their wrap-up steer. Captures of the
+  real CLI (2.1.332) show that it reads a message from stdin while the turn
+  runs and adds it to the turn's next model request. A message the CLI reads
+  during the agent's final request runs as a separate turn after `result`,
+  and reap has already started by then. So warren writes a steer only while a
+  tool call is outstanding (not WebFetch or WebSearch, which can hand their
+  result to a later turn). A steer that arrives after the agent's last tool
+  call stays unread. The adapter declares this through a new optional
+  `createSteeringGate` hook, which the local, Docker, and K8s runtimes
+  honor; the K8s pod claims inbox rows only while the gate is open. The
+  built-in `claude-code` agent declares `steering: mid-run`.
+
 ### Changed
+
+- **Both images pin claude-code 2.1.332 (namphuongtran/warren#150).** The
+  server image (`Dockerfile`), which the local runtime spawns from, was on
+  2.1.150. The agent image (`deploy/docker/Dockerfile.agent`), which the
+  Docker and K8s runtimes spawn from, was on 2.1.330. 2.1.332 is the version
+  the mid-run steering captures were taken on.
 
 - **`planner` is now a spec agent (namphuongtran/warren#35).** The built-in
   `planner` prompt no longer reads a Plot intent, writes Plot attachments, or
@@ -251,6 +272,13 @@ Releases **0.9.10 and earlier** live in
   rateLimitType, resetsAt }` (`resetsAt` in unix seconds). Pushed work still
   pushes. The recognizer is an adapter hook (`detectQuotaExhausted`); pi and
   codex do not declare one yet.
+
+- **A steer sent to a queued claude-code run now reaches the agent
+  (namphuongtran/warren#150).** The adapter wrote the prompt and each pending
+  message as separate stdin lines. The CLI runs each line as its own turn,
+  and reap finalized the run at the first turn's `result`, so the steer's
+  turn was killed. The prompt and pending messages now go as one user
+  message, which the CLI runs as one turn.
 
 ## [0.19.3] — 2026-10-07
 

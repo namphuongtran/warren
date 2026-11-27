@@ -33,7 +33,7 @@ sh -c '<auth shim>' codex exec --json --skip-git-repo-check \
 ```
 
 - `codex exec --json` prints one `ThreadEvent` per line. `-` reads the prompt from stdin. Pending steering folds in after the prompt.
-- `codex exec` reads stdin once and has no input channel during a turn. The adapter declares no `shouldCloseStdinOnEvent` and no `encodeSteeringMessage`, and the built-in declares `steering: "spawn-only"`. Steering therefore applies at spawn only, as with claude-code.
+- `codex exec` reads stdin once and has no input channel during a turn. The adapter declares no `shouldCloseStdinOnEvent` and no `encodeSteeringMessage`, and the built-in declares `steering: "spawn-only"`. Steering therefore applies at spawn only.
 - `--model` is passed only when the provider is empty or `openai`. Any other provider is reported through `ignoredModelSelection`, so dispatch records a warning event instead of dropping the selection silently.
 - `--skip-git-repo-check` keeps Codex from refusing the per-run private git dir layout (warren-3c1e).
 

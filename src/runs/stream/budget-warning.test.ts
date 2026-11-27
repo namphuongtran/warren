@@ -112,7 +112,7 @@ describe("bridgeRunStream — budget warning (namphuongtran/warren#9)", () => {
 		]);
 	});
 
-	test("does not steer a spawn-only harness such as claude-code", async () => {
+	test("does not steer a spawn-only harness", async () => {
 		await seed({ frontmatter: { steering: "spawn-only", maxCostUsd: 10 } });
 		await bridge([turnEnd(1, 9)]);
 
