@@ -49,6 +49,14 @@ Warren enforces the resolved cap during the run. A malformed agent cap fails ope
 
 Before the cap trips, warren warns. Once observed cost reaches 80% of the cap, the run log gets one `budget.warning` event. Set `WARREN_BUDGET_WARNING_FRACTION` to a value between 0 and 1 to move the threshold, or to `0` to turn the warning off. When the agent declares `steering: mid-run`, warren also sends it one steering message asking it to finish, commit, and write its final message. A spawn-only harness such as claude-code cannot read a steer mid-run, so it gets the event only. The hard cap still cancels the run once cost passes the cap.
 
+## Context window
+
+A long run can fill its model's context window and lose work in the middle of its report. Warren reads how full the window is from the usage the harness reports on each turn: the `turn_end` event of pi, and the usage of each `assistant` line of claude-code. The harness adapter supplies the window size for the model. Claude models get 200k tokens, and 1M on claude-code when the run's model carries the `[1m]` suffix. A model that the adapter does not know gets no reading. On K8s the pod parses the claude-code stream, so its readings need an agent image from this release or later. The local and Docker runtimes parse on the host.
+
+Once the conversation fills 80% of the window, the run log gets one `context.warning` event with the tokens, the window, and the threshold. Set `WARREN_CONTEXT_WARNING_FRACTION` to a value between 0 and 1 to move the threshold, or to `0` to turn the warning off. A malformed value logs and uses the default. When the agent declares `steering: mid-run`, warren also sends it one steering message: write the handoff and the report now, then continue or stop. The message goes through the audited steering path, so it records a `steer.sent` event. A spawn-only harness such as claude-code gets the event only. The warning fires once per run, also after a warren restart.
+
+The run page shows the newest reading in the Spend panel, as a share of the window beside the cost. `GET /runs/:id` carries it as the operator-only `contextTokens` and `contextWindowTokens` fields. Spectators do not get them.
+
 ## Run events
 
 `GET /runs/:id/events` returns the persisted NDJSON stream. A request follows a non-terminal run by default. Use `?follow=0` for replay, `?since=<seq>` for cursor paging, or `?limit=N` for a bounded read.

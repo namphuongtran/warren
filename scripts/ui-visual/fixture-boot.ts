@@ -28,7 +28,7 @@
  *   projects.withSeeds      prj_fx0000000001  warren-acceptance/sample (hasSeeds, .seeds/ clone)
  *   projects.withoutSeeds   prj_fx0000000002  warren-acceptance/docs-site
  *   runs.queued             run_fx0000000101
- *   runs.running            run_fx0000000102  41 events (stdout/stderr/system, tool_use/
+ *   runs.running            run_fx0000000102  42 events (stdout/stderr/system, tool_use/
  *                                             tool_result/text/thinking/steer.sent)
  *   runs.succeeded          run_fx0000000103  no PR (report-only run)
  *   runs.failed             run_fx0000000104  failureReason = failedRunReason ("timed_out")

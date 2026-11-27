@@ -116,7 +116,7 @@ const EVENT_SPACING_S = 9;
 /**
  * The running run's transcript: init + one text/tool_use/tool_result trio
  * per scripted step, interleaved stderr lines, a thinking block, and a
- * mid-run operator steer. 41 events for the 11-step script.
+ * mid-run operator steer, and the last line's usage. 42 events for the 11-step script.
  */
 export function runningRunEvents(runId: string, startedMs: number): AppendEventInput[] {
 	const out: AppendEventInput[] = [];
@@ -163,6 +163,21 @@ export function runningRunEvents(runId: string, startedMs: number): AppendEventI
 	});
 	push("stderr", "stderr", { line: "npm warn deprecated inflight@1.0.6: not supported" });
 	push("text", "stdout", { text: "Pushing is warren's job — handing the branch back for reap." });
+	// namphuongtran/warren#20: the last assistant line's usage, which the Spend
+	// panel's context row reads (62% of the 200k window).
+	push("telemetry", "system", {
+		type: "assistant_usage",
+		message: {
+			id: "msg_fx0000000042",
+			model: "claude-sonnet-4-5",
+			usage: {
+				input_tokens: 6,
+				cache_creation_input_tokens: 2_400,
+				cache_read_input_tokens: 121_000,
+				output_tokens: 180,
+			},
+		},
+	});
 	return out;
 }
 

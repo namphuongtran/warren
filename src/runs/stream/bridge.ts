@@ -25,13 +25,13 @@ import {
 	persistObservedUsage,
 } from "./budget.ts";
 import {
+	bridgeWarningSteer,
 	budgetWarningFractionFromEnv,
 	newBudgetWarning,
 	resolveBridgeBudgetPolicy,
-	type SteerRunFn,
-	warningSteer,
 } from "./budget-warning.ts";
-import { isPerDeltaNoiseEvent } from "./delta-noise.ts";
+import { bridgeContextWatch } from "./context-warning.ts";
+import { isPerDeltaNoiseEvent, newRepeatTelemetryFilter } from "./delta-noise.ts";
 import { bridgeDurationWatch, resolveDurationWatch } from "./duration-watch.ts";
 import { recordObservedModel } from "./observed-model.ts";
 import { recordProviderQuota } from "./provider-quota.ts";
@@ -116,13 +116,10 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 		(input.source === undefined
 			? (reason: string) => provider.cancel(handle, reason)
 			: async () => {});
-	// namphuongtran/warren#9: the budget-warning steer goes through `steerRun`
-	// (audit event + capability gate); inert under a test `source` override.
-	const steerAtWarning: SteerRunFn =
-		input.budgetWarningSteer ??
-		(input.source === undefined
-			? warningSteer({ runId, repos, broker, provider })
-			: async () => {});
+	// namphuongtran/warren#9 / #20: the budget and context warnings steer through
+	// `steerRun` (audit event + capability gate); inert under a test `source`.
+	const steerAtWarning = bridgeWarningSteer(input, provider);
+	const contextWatch = await bridgeContextWatch(input, budgetPolicy.steering, steerAtWarning);
 
 	// warren-6596: run-state poller. Covers runtimes that don't emit a
 	// recognised in-stream terminal envelope (raw-text declarative agents). The
@@ -187,6 +184,7 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 	// resumed bridge seeds both from the persisted events up to the cursor.
 	const { piUsage, claudeUsage } = await seedResumeUsage(repos, runId, resumeSeq, input.logger);
 	const appendGuard = newAppendGuard();
+	const isRepeatTelemetry = newRepeatTelemetryFilter(); // #20: claude-code's repeated usage lines
 	const capInput: EnforceBudgetCapInput = {
 		runId,
 		sandboxRunId,
@@ -273,7 +271,7 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 				break;
 			}
 			if (durationWatch.expiredAt(event)) break;
-			if (isPerDeltaNoiseEvent(event)) {
+			if (isPerDeltaNoiseEvent(event) || isRepeatTelemetry(event)) {
 				dropped += 1;
 				continue;
 			}
@@ -319,9 +317,10 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 
 			accumulatePiUsage(piUsage, event);
 			extractClaudeUsage(claudeUsage, event);
-			// namphuongtran/warren#7 / #30: the model the harness ran, and the provider's usage window.
+			// namphuongtran/warren#7 / #30 / #20: the model run, the usage window, the context window.
 			await recordObservedModel(repos, runId, event, input.logger);
 			await recordProviderQuota(input, row);
+			await contextWatch.observe(event);
 
 			// warren-a63d: enforce the spend cap as cumulative cost crosses it. On
 			// exceed the helper persists usage + emits `budget.exceeded` + cancels

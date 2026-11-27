@@ -78,6 +78,20 @@ export function formatTokens(n: number): string {
 	return String(n);
 }
 
+/**
+ * The Spend panel's context line (namphuongtran/warren#20): how full the
+ * model's context window was at the run's newest usage reading, from the
+ * detail GET's operator overlay. Null when there is no reading, or for a
+ * spectator, who gets no overlay.
+ */
+export function formatContextUse(r: RunRow): string | null {
+	const used = r.contextTokens ?? null;
+	const windowTokens = r.contextWindowTokens ?? null;
+	if (used === null || windowTokens === null || windowTokens <= 0) return null;
+	const percent = Math.round((used * 100) / windowTokens);
+	return `${percent}% · ${formatTokens(used)} of ${formatTokens(windowTokens)}`;
+}
+
 export function formatTokenBreakdown(r: RunRow): string | null {
 	const parts: string[] = [];
 	if (r.tokensInput !== null) parts.push(`${formatTokens(r.tokensInput)} in`);

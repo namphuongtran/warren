@@ -186,7 +186,7 @@ src/runs/
 │   cost-cap.ts  duration-limit.ts                           supervision
 ├── cost-analytics.ts  usage-aggregate.ts  usage-hydrate.ts
 │   tool-calls-backfill.ts  ops-stats.ts  ops-overview.ts
-│   events-query.ts                                          read side
+│   events-query.ts  context-window-view.ts                  read side
 └── cancel.ts  steer.ts  inbox.ts  events.ts  lifecycle-bus.ts
     seed.ts  branch.ts  target-branch.ts  ...                lifecycle
 ```

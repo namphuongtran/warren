@@ -35,6 +35,13 @@ test("Spend panel renders the '$X of $Y cap' denominator only when the overlay s
 	expect(src.includes("% OF CAP")).toBe(true);
 });
 
+test("renders context use in the Spend panel beside cost (namphuongtran/warren#20)", async () => {
+	const src = await Bun.file(new URL("./side-panels.tsx", import.meta.url)).text();
+	expect(src.includes('<MetaRow label="context">{formatContextUse(run) ?? DASH}</MetaRow>')).toBe(
+		true,
+	);
+});
+
 test("Runtime panel surfaces the salvage rescue ref, bundle, hint, and dispatch button (#1241)", async () => {
 	const src = await Bun.file(new URL("./side-panels.tsx", import.meta.url)).text();
 	expect(src.includes("<RescueRows run={run} />")).toBe(true);

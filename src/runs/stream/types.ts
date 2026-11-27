@@ -210,11 +210,11 @@ export interface BridgeRunStreamInput {
 	 */
 	readonly cancelBurrowRun?: (reason: string) => Promise<void>;
 	/**
-	 * Override the steering seam used at the budget warning
-	 * (namphuongtran/warren#9, tests). Production defaults to `steerRun`;
+	 * Override the steering seam used at the budget and context warnings
+	 * (namphuongtran/warren#9, #20, tests). Production defaults to `steerRun`;
 	 * the bridge only calls it when the agent declares `steering: "mid-run"`.
 	 */
-	readonly budgetWarningSteer?: SteerRunFn;
+	readonly warningSteer?: SteerRunFn;
 	/**
 	 * TurnMonitor override (warren-1f85 / warren-74a7, #1242, tests). Default:
 	 * built from the `WARREN_TURN_*` env knobs plus the resolved spend cap. A

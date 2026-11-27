@@ -27,6 +27,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { CLAUDE_CONTEXT_ENVELOPE_TYPES, observeClaudeContext } from "./claude-code-context.ts";
 import { detectClaudeQuotaExhausted, observeClaudeQuota } from "./claude-code-quota.ts";
 import { mulchClaudeHooks, readMulchArm } from "./mulch-arm.ts";
 import { parseJsonlClaude } from "./parsers/jsonl-claude.ts";
@@ -140,6 +141,9 @@ export const claudeCodeAdapter: AgentRuntimeAdapter = {
 	detectQuotaExhausted: detectClaudeQuotaExhausted,
 	// Every `rate_limit_event` feeds the per-credential quota state (namphuongtran/warren#30).
 	observeQuota: observeClaudeQuota,
+	// Each `assistant` line's usage, kept by the parser (namphuongtran/warren#20).
+	observeContext: observeClaudeContext,
+	contextEnvelopeTypes: CLAUDE_CONTEXT_ENVELOPE_TYPES,
 	// The Anthropic file-writing tools (namphuongtran/warren#36).
 	fileEditToolNames: ["Write", "Edit", "MultiEdit", "NotebookEdit"],
 	// The CLI emits `tool_progress` every 30 s while a tool runs, and nothing

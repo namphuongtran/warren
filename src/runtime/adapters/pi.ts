@@ -30,6 +30,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { parsePiEvents } from "./parsers/pi.ts";
 import { buildPiArgv, PI_SESSION_DIR } from "./pi-argv.ts";
+import { observePiContext, PI_CONTEXT_ENVELOPE_TYPES } from "./pi-context.ts";
 import { readNewestPiSessionId } from "./pi-session.ts";
 import {
 	encodeExtensionUiDecline,
@@ -85,6 +86,9 @@ export const piAdapter: AgentRuntimeAdapter = {
 	// Empty by evidence: pi's RPC stream carries no "still running" envelope
 	// warren has observed (namphuongtran/warren#83).
 	keepAliveEnvelopeTypes: [],
+	// Each `turn_end` names the model and the request's tokens (namphuongtran/warren#20).
+	observeContext: observePiContext,
+	contextEnvelopeTypes: PI_CONTEXT_ENVELOPE_TYPES,
 
 	buildSpawnCommand(ctx: AdapterSpawnContext): SpawnCommand {
 		return {

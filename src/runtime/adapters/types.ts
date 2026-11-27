@@ -223,6 +223,32 @@ export interface AgentRuntimeAdapter {
 	 * `null` for any event that is not such a report.
 	 */
 	observeQuota?(event: EventEnvelopeInput): QuotaObservation | null;
+
+	/**
+	 * Live check (namphuongtran/warren#20): how full is the model's context
+	 * window after this event? The bridge feeds every persisted event through
+	 * it to raise `context.warning`. `runModel` is the model the run is known to
+	 * run (`runs.model`, or the harness's own init envelope), for a harness whose
+	 * usage reading names a bare model id. Returns `null` for an event that is
+	 * not a usage reading, and when the adapter does not know the model's window.
+	 */
+	observeContext?(event: EventEnvelopeInput, runModel?: string | null): ContextObservation | null;
+	/**
+	 * Payload `type` values whose events {@link observeContext} reads. The run
+	 * detail reads the newest one to show context use beside cost. Optional so a
+	 * test double need not declare it; absent means no context reading.
+	 */
+	readonly contextEnvelopeTypes?: readonly string[];
+}
+
+/** One context-window reading, read off a harness event by {@link AgentRuntimeAdapter.observeContext}. */
+export interface ContextObservation {
+	/** Tokens the conversation holds after this turn: its prompt (input + cache) plus its output. */
+	readonly tokensUsed: number;
+	/** The model's context window in tokens, from the adapter's own model table. */
+	readonly windowTokens: number;
+	/** The model the window was looked up for. */
+	readonly model: string;
 }
 
 /** One usage-window report, read off a harness event by {@link AgentRuntimeAdapter.observeQuota}. */
