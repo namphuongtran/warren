@@ -15,6 +15,8 @@
  *   - `assistant` text  → `text`
  *   - `assistant` thinking → `thinking` (empty-text blocks dropped — burrow-5d64)
  *   - `assistant` tool_use → `tool_use` (one per content block)
+ *   - `assistant` message.usage → one `telemetry` `assistant_usage` (system
+ *     stream) after the blocks (namphuongtran/warren#20)
  *   - `user` tool_result → `tool_result`
  *   - `system` → `state_change`
  *   - `result` → `state_change`
@@ -36,8 +38,11 @@ interface ClaudeContentBlock {
 }
 
 interface ClaudeMessage {
+	id?: string;
 	role?: string;
+	model?: string;
 	content?: ClaudeContentBlock[];
+	usage?: unknown;
 }
 
 interface ClaudeEnvelope {
@@ -74,12 +79,7 @@ export function parseJsonlClaude(line: string): RuntimeEvent[] {
 	if (systemEvent !== null) return [systemEvent];
 
 	if (env.type === "assistant" && env.message?.content) {
-		const events: RuntimeEvent[] = [];
-		for (const block of env.message.content) {
-			const ev = mapAssistantBlock(block, env);
-			if (ev !== null) events.push(ev);
-		}
-		return events;
+		return mapAssistantEnvelope(env, env.message.content);
 	}
 
 	if (env.type === "user" && env.message?.content) {
@@ -111,6 +111,45 @@ function mapSystemEnvelope(env: ClaudeEnvelope): RuntimeEvent | null {
 		return { kind: "telemetry", stream: "system", payload: env };
 	}
 	return null;
+}
+
+/** One event per content block, then the line's usage reading when it has one. */
+function mapAssistantEnvelope(
+	env: ClaudeEnvelope,
+	content: readonly ClaudeContentBlock[],
+): RuntimeEvent[] {
+	const events: RuntimeEvent[] = [];
+	for (const block of content) {
+		const ev = mapAssistantBlock(block, env);
+		if (ev !== null) events.push(ev);
+	}
+	const usage = mapAssistantUsage(env);
+	if (usage !== null) events.push(usage);
+	return events;
+}
+
+/**
+ * The request usage an `assistant` line carries, as one `assistant_usage`
+ * telemetry event (namphuongtran/warren#20). The block mapping above drops it,
+ * and it is the only mid-run reading of how full the context window is. The
+ * event exists only to carry that reading: the bridge reads it and never
+ * persists it. The payload keeps claude's own `message.{id,model,usage}` field
+ * names and drops the content the block events already carry. A sub-agent's
+ * line (non-null `parent_tool_use_id`) measures the sub-agent's context, so it
+ * emits none.
+ */
+function mapAssistantUsage(env: ClaudeEnvelope): RuntimeEvent | null {
+	const message = env.message;
+	if (message?.usage === undefined || message.usage === null) return null;
+	if (typeof env.parent_tool_use_id === "string") return null;
+	return {
+		kind: "telemetry",
+		stream: "system",
+		payload: {
+			type: "assistant_usage",
+			message: { id: message.id, model: message.model, usage: message.usage },
+		},
+	};
 }
 
 function mapAssistantBlock(

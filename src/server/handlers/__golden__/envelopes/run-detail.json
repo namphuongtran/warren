@@ -65,7 +65,9 @@
 			"handoff": null,
 			"approach": null,
 			"maxCostUsd": null,
-			"toolStall": null
+			"toolStall": null,
+			"contextTokens": null,
+			"contextWindowTokens": null
 		}
 	}
 }

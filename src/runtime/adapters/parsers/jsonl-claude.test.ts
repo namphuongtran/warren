@@ -114,6 +114,54 @@ describe("parseJsonlClaude", () => {
 		expect(Array.isArray(events[0]?.payload)).toBe(false);
 	});
 
+	test("emits one usage telemetry event after an assistant line's blocks (namphuongtran/warren#20)", () => {
+		const usage = {
+			input_tokens: 4,
+			cache_creation_input_tokens: 1_200,
+			cache_read_input_tokens: 150_000,
+			output_tokens: 90,
+			service_tier: "standard",
+		};
+		const line = JSON.stringify({
+			type: "assistant",
+			message: {
+				id: "msg_01",
+				type: "message",
+				role: "assistant",
+				model: "claude-sonnet-5-5",
+				content: [{ type: "tool_use", id: "tu1", name: "Bash", input: { command: "ls" } }],
+				stop_reason: null,
+				usage,
+			},
+			parent_tool_use_id: null,
+			session_id: "s1",
+		});
+		const events = parseJsonlClaude(line);
+		expect(events.map((e) => e.kind)).toEqual(["tool_use", "telemetry"]);
+		expect(events[1]).toEqual({
+			kind: "telemetry",
+			stream: "system",
+			payload: {
+				type: "assistant_usage",
+				message: { id: "msg_01", model: "claude-sonnet-5-5", usage },
+			},
+		});
+	});
+
+	test("emits no usage event for a sub-agent's line, which measures another context", () => {
+		const line = JSON.stringify({
+			type: "assistant",
+			message: {
+				role: "assistant",
+				model: "claude-haiku-4-5",
+				content: [{ type: "text", text: "searching" }],
+				usage: { input_tokens: 9_000, output_tokens: 3 },
+			},
+			parent_tool_use_id: "toolu_task",
+		});
+		expect(parseJsonlClaude(line).map((e) => e.kind)).toEqual(["text"]);
+	});
+
 	test("empty-text thinking-only assistant message yields zero events", () => {
 		const line = JSON.stringify({
 			type: "assistant",

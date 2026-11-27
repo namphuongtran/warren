@@ -66,7 +66,13 @@ event). It first emits one `budget.warning` event at a fraction of the
 cap (default 80%, `WARREN_BUDGET_WARNING_FRACTION`), and steers a
 `steering: mid-run` harness to wrap up (namphuongtran/warren#9). A
 malformed / non-positive value fails OPEN (no cap) so a budget typo
-never silently cancels every run. `config.yaml` and legacy
+never silently cancels every run. The context window gets the same
+warning shape with no config key (namphuongtran/warren#20): one
+`context.warning` event once the conversation fills a fraction of the
+model's window (default 80%, `WARREN_CONTEXT_WARNING_FRACTION`, `0`
+turns it off), plus one wrap-up steer for a `steering: mid-run` harness.
+The harness adapter reads the usage and looks up the window size; see
+[docs/operations.md](../operations.md#context-window). `config.yaml` and legacy
 `defaults.json` share the same
 schema — `{ defaultRole?, defaultBranch?, defaultPrompt?, defaultProvider?,
 defaultModel?, runBranchPrefix?, agentImage?, preview?, maxCostUsd?, maxDurationMinutes?,

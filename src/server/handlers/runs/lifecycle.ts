@@ -1,5 +1,6 @@
 import { ValidationError } from "../../../core/errors.ts";
 import { readProviderFrontmatter } from "../../../registry/index.ts";
+import { currentContextWindow } from "../../../runs/context-window-view.ts";
 import type { RunRow } from "../../../runs/index.ts";
 import {
 	buildCostAnalytics,
@@ -301,6 +302,7 @@ export function getRunHandler(deps: ServerDeps): RouteHandler {
 		// too — the Spend panel renders "$X of $Y cap" off it. Operator-only,
 		// same posture as the list overlay in projectRunsWithCaps: a spectator
 		// gets no caps at all, so the cap never reaches the public projection.
+		// namphuongtran/warren#20: the context-window reading stays operator-only too.
 		if (!isPublicOnly(ctx.actor)) {
 			const fact = await deps.repos.dispatchContext.getByRunId(id);
 			const stall = (await currentToolStalls(deps.repos, [run])).get(id) ?? null;
@@ -309,6 +311,7 @@ export function getRunHandler(deps: ServerDeps): RouteHandler {
 					...projectRun(run, ctx.actor),
 					maxCostUsd: fact?.maxCostUsd ?? null,
 					toolStall: stall,
+					...(await currentContextWindow(deps.repos, id)),
 				},
 			});
 		}

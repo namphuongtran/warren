@@ -5,6 +5,7 @@ import {
 	extractReapSummary,
 	findFirstText,
 	findToolUseName,
+	formatContextUse,
 	formatCostUsd,
 	formatTokenBreakdown,
 	formatTokens,
@@ -65,6 +66,25 @@ describe("formatTokenBreakdown", () => {
 				tokensCacheWrite: null,
 			} as unknown as RunRow),
 		).toBe(null);
+	});
+});
+
+describe("formatContextUse (namphuongtran/warren#20)", () => {
+	test("shows the share of the window the conversation holds, then both counts", () => {
+		const run = { contextTokens: 165_000, contextWindowTokens: 200_000 } as RunRow;
+		expect(formatContextUse(run)).toBe("83% · 165.0k of 200.0k");
+	});
+
+	test("reads a 1M window in millions", () => {
+		const run = { contextTokens: 400_000, contextWindowTokens: 1_000_000 } as RunRow;
+		expect(formatContextUse(run)).toBe("40% · 400.0k of 1.0M");
+	});
+
+	test("returns null with no reading, or for a spectator who gets no overlay", () => {
+		expect(formatContextUse({ contextTokens: null, contextWindowTokens: null } as RunRow)).toBe(
+			null,
+		);
+		expect(formatContextUse({} as RunRow)).toBe(null);
 	});
 });
 

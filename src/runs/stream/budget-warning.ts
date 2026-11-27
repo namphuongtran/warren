@@ -12,6 +12,10 @@
  *
  * Emission lives beside the hard-cap emission in `./budget.ts`; this file
  * holds the pure config, the threshold math, and the run-row resolution.
+ * The context-window warning (`./context-warning.ts`, #20) shares two pieces
+ * from here, so both warnings read their knob and steer the same way: the
+ * fraction parser (`warningFractionFromEnv`) and the steer seam
+ * (`bridgeWarningSteer`).
  */
 
 import { RUN_HANDOFF_PATH, type SteeringCapability } from "../../core/wire.ts";
@@ -20,7 +24,7 @@ import type { RuntimeProvider } from "../../runtime/contract.ts";
 import { resolveCostCapUsd } from "../cost-cap.ts";
 import type { RunEventBroker } from "../events.ts";
 import { steeringCapabilityOf, steerRun } from "../steer.ts";
-import type { BridgeLogger } from "./types.ts";
+import type { BridgeLogger, BridgeRunStreamInput } from "./types.ts";
 
 export const BUDGET_WARNING_FRACTION_ENV = "WARREN_BUDGET_WARNING_FRACTION";
 export const DEFAULT_BUDGET_WARNING_FRACTION = 0.8;
@@ -40,25 +44,35 @@ export interface BudgetWarning {
 }
 
 /**
- * Resolve the warning fraction from env: unset → 0.8, `0` disables the
- * warning (null), a value in (0, 1) is used as-is. Anything else logs and
- * falls back to 0.8: a typo in an advisory knob must never break the bridge
- * and, with it, hard-cap enforcement (the cost-cap fail-open rule).
+ * Resolve a warning fraction from the env var `name`: unset → 0.8, `0`
+ * disables the warning (null), a value in (0, 1) is used as-is. Anything else
+ * logs and falls back to 0.8: a typo in an advisory knob must never break the
+ * bridge and, with it, hard-cap enforcement (the cost-cap fail-open rule).
+ * The context warning (namphuongtran/warren#20) reads its knob the same way.
  */
-export function budgetWarningFractionFromEnv(
+export function warningFractionFromEnv(
 	env: Readonly<Record<string, string | undefined>>,
+	name: string,
 	logger?: BridgeLogger,
 ): number | null {
-	const raw = env[BUDGET_WARNING_FRACTION_ENV];
+	const raw = env[name];
 	if (raw === undefined || raw.trim() === "") return DEFAULT_BUDGET_WARNING_FRACTION;
 	const parsed = Number(raw.trim());
 	if (parsed === 0) return null;
 	if (Number.isFinite(parsed) && parsed > 0 && parsed < 1) return parsed;
 	logger?.warn?.(
-		{ [BUDGET_WARNING_FRACTION_ENV]: raw },
-		"budget warning fraction must be 0 (off) or between 0 and 1; using the 0.8 default",
+		{ [name]: raw },
+		`${name} must be 0 (off) or between 0 and 1; using the 0.8 default`,
 	);
 	return DEFAULT_BUDGET_WARNING_FRACTION;
+}
+
+/** The budget warning's fraction, from `WARREN_BUDGET_WARNING_FRACTION`. */
+export function budgetWarningFractionFromEnv(
+	env: Readonly<Record<string, string | undefined>>,
+	logger?: BridgeLogger,
+): number | null {
+	return warningFractionFromEnv(env, BUDGET_WARNING_FRACTION_ENV, logger);
 }
 
 /** USD cost at which the warning fires. */
@@ -76,7 +90,7 @@ export function isNearBudget(costUsd: number, capUsd: number | null, fraction: n
  * Production steer seam: `steerRun` re-checks the run state and steering
  * capability, sends through the provider inbox, and records `steer.sent`.
  */
-export function warningSteer(input: {
+export function steerThroughSteerRun(input: {
 	readonly runId: string;
 	readonly repos: Repos;
 	readonly broker: RunEventBroker;
@@ -93,6 +107,25 @@ export function warningSteer(input: {
 			runtimeProvider: input.provider,
 		});
 	};
+}
+
+/**
+ * The bridge's warning steer (budget and context warnings): the test
+ * override when given, `steerRun` against the provider in production, and a
+ * no-op under a test `source` override so a source-only test never steers.
+ */
+export function bridgeWarningSteer(
+	input: Pick<BridgeRunStreamInput, "runId" | "repos" | "broker" | "source" | "warningSteer">,
+	provider: RuntimeProvider,
+): SteerRunFn {
+	if (input.warningSteer !== undefined) return input.warningSteer;
+	if (input.source !== undefined) return async () => {};
+	return steerThroughSteerRun({
+		runId: input.runId,
+		repos: input.repos,
+		broker: input.broker,
+		provider,
+	});
 }
 
 /** The steering message a mid-run harness receives at the warning. */

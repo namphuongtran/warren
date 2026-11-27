@@ -45,6 +45,9 @@ export const TABLE_NAMES = {
 	// namphuongtran/warren#30: runtime state, one row per (provider, credential
 	// fingerprint) — the newest usage-window report. Never holds the secret.
 	providerQuota: "provider_quota",
+	// namphuongtran/warren#20: runtime state, one row per run — the newest
+	// context-window reading. PK is run_id; cascade on runs delete.
+	runContext: "run_context",
 } as const;
 
 /**

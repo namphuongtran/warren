@@ -254,11 +254,14 @@ describe("GET /runs projections under WARREN_AUTH=public (warren-946f)", () => {
 		const detail = detailBody.run as Record<string, unknown>;
 		// The detail GET overlays the dispatch-context cap too (warren-b19e,
 		// operator-only, for the Spend panel's "$X of $Y cap"). No context row
-		// here, so it reads null, never absent.
+		// here, so it reads null, never absent. The context-window reading
+		// (namphuongtran/warren#20) rides beside it, null with no usage event.
+		const detailOverlays = ["maxCostUsd", "toolStall", "contextTokens", "contextWindowTokens"];
 		expect(new Set(Object.keys(detail))).toEqual(
-			new Set([...Object.keys(stored), "maxCostUsd", "toolStall"]),
+			new Set([...Object.keys(stored), ...detailOverlays]),
 		);
 		expect(detail.maxCostUsd).toBeNull();
+		expect(detail.contextTokens).toBeNull();
 		expect(detail.sandboxId).toBe("bur_1");
 		expect(detail.renderedAgentJson).toEqual({
 			frontmatter: { provider: "anthropic", model: "opus" },

@@ -27,7 +27,12 @@ import { KNOWN_RUNTIME_IDS, type RuntimeId } from "../../core/wire.ts";
 import { claudeCodeAdapter } from "./claude-code.ts";
 import { codexAdapter } from "./codex.ts";
 import { piAdapter } from "./pi.ts";
-import type { AgentRuntimeAdapter, QuotaExhaustedSignal, QuotaObservation } from "./types.ts";
+import type {
+	AgentRuntimeAdapter,
+	ContextObservation,
+	QuotaExhaustedSignal,
+	QuotaObservation,
+} from "./types.ts";
 
 // Phase-2 harness surface (warren-7933) — additive re-exports so the k8s
 // in-pod rewiring (warren-0efe) can consume the lifted types from the
@@ -42,6 +47,7 @@ export type {
 	AdapterSpawnContext,
 	AgentFrontmatter,
 	AgentRuntimeAdapter,
+	ContextObservation,
 	IgnoredModelSelection,
 	PiFrontmatterOptions,
 	QuotaExhaustedSignal,
@@ -133,6 +139,28 @@ export function detectQuotaExhausted(
  */
 export function observeQuota(event: EventEnvelopeInput): QuotaObservation | null {
 	return firstAnswer((adapter) => adapter.observeQuota?.(event));
+}
+
+/**
+ * Ask every adapter how full the context window is after `event`
+ * (namphuongtran/warren#20). A union read, like {@link observeQuota}: each
+ * adapter recognizes only its own usage envelope.
+ */
+export function observeContext(
+	event: EventEnvelopeInput,
+	runModel?: string | null,
+): ContextObservation | null {
+	return firstAnswer((adapter) => adapter.observeContext?.(event, runModel));
+}
+
+/**
+ * True when some adapter says `event` exists only to carry a context reading
+ * (namphuongtran/warren#20). The bridge reads such an event and drops it.
+ */
+export function isContextOnlyEvent(event: EventEnvelopeInput): boolean {
+	return (
+		firstAnswer((adapter) => (adapter.isContextOnlyEvent?.(event) === true ? true : null)) === true
+	);
 }
 
 /** The first adapter's non-null answer, in {@link KNOWN_RUNTIME_IDS} order. */

@@ -420,6 +420,15 @@ export async function seedFixtureDb(input: SeedFixtureInput): Promise<SeedResult
 			repos,
 			runningRunEvents(RUN_IDS.running, minutesAgo(8).getTime()),
 		);
+		// namphuongtran/warren#20: the running run's newest context reading, which the
+		// Spend panel shows as "62% · 123.6k of 200.0k". The bridge keeps it out of events.
+		await repos.runContext.record({
+			runId: RUN_IDS.running,
+			tokensUsed: 123_586,
+			windowTokens: 200_000,
+			model: "claude-sonnet-4-5",
+			observedAt: minutesAgo(1).toISOString(),
+		});
 		const planRun = await seedPlanRun(repos, seedsProject.id);
 		const history = await seedHistory(repos, [seedsProject.id, plainProject.id]);
 		await seedListGateOutcomes(repos, history.ids);

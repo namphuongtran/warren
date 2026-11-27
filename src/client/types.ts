@@ -221,6 +221,8 @@ export interface RunRow {
 	/** The tool call a running run is stuck on (namphuongtran/warren#83); operator-only. */
 	toolStall?: RunToolStallView | null;
 	quotaHold?: QuotaHoldView | null; // namphuongtran/warren#30 quota hold; operator list overlay
+	contextTokens?: number | null; // namphuongtran/warren#20 newest context reading; operator detail overlay
+	contextWindowTokens?: number | null; // that reading's window, from the harness adapter
 	/** Per-run USD spend cap (warren-f8a2 list / warren-b19e detail GET): operator-only
 	 * overlay from the dispatch-context row; absent for spectators, null when no row. */
 	maxCostUsd?: number | null;

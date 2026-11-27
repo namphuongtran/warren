@@ -234,3 +234,36 @@ echo 'List the files, add notes.md, commit it, then say done.' \
 |------|--------|
 | `codex-v0.171.0-tools.jsonl` | thread/turn lifecycle · reasoning · shell start/complete · todo_list · file_change · MCP call · web_search · a non-fatal error item · agent_message · `turn.completed` usage |
 | `codex-v0.171.0-auth-failure.jsonl` | a reconnect `error` notice then `turn.failed` with a 401 |
+
+# claude-code `stream-json` captures (namphuongtran/warren#20)
+
+`claude-code-v2.1.332-*.jsonl` feed the context-window reader test
+(`../../claude-code-context.capture.test.ts`). They are real captures from
+claude-code 2.1.332 (2026-11-27), trimmed to the fields the parser reads.
+The trim drops the account-specific and path fields: the init line's tool,
+plugin, and MCP lists, `cwd`, `rate_limit_event` lines, `uuid`,
+`request_id`, and cost. It replaces the session, message, and tool-use ids
+with fixed values. Usage counts and `contextWindow` values are kept
+verbatim.
+
+| File | Covers |
+|------|--------|
+| `claude-code-v2.1.332-tool-use.jsonl` | One request that wrote a text line and a tool_use line, both carrying the same `message.id` and `usage`, then a tool result and a second request. This pins the usage repetition that the bridge relies on. |
+| `claude-code-v2.1.332-context-windows.jsonl` | The init and `result` lines of eight short runs. Each `result` line names the CLI's own `contextWindow` per model. The test holds `claudeContextWindowTokens` to those values. |
+
+Each run used a scratch directory, no project settings, and no MCP servers:
+
+```bash
+claude -p "First say the single word checking, then run the shell command: echo hi. Then reply done." \
+  --output-format stream-json --verbose --model haiku --allowedTools Bash --max-turns 4 \
+  --setting-sources project --strict-mcp-config > haiku.jsonl
+for m in sonnet opus 'sonnet[1m]' claude-sonnet-4-5 claude-opus-4-5 claude-haiku-4-5 \
+  'claude-sonnet-4-5[1m]'; do
+  claude -p "Reply with the single word ok." --output-format stream-json --verbose \
+    --model "$m" --max-turns 1 --setting-sources project --strict-mcp-config
+done > windows-raw.jsonl
+```
+
+When a new Claude model ships, capture its `result` line the same way, add
+it to the windows fixture, and add its window to
+`../../claude-context-windows.ts`.

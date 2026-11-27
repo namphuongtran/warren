@@ -5,7 +5,7 @@ import { CostBasisNote } from "@/components/cost-basis-note.tsx";
 import { OperatorOnly } from "@/components/operator-only.tsx";
 import { formatTimestamp, relativeTime } from "@/lib/utils.ts";
 import type { DispatchRouteState } from "@/pages/dispatch/dispatch-draft.ts";
-import { formatCostUsd, formatTokens } from "@/pages/run-detail-format.ts";
+import { formatContextUse, formatCostUsd, formatTokens } from "@/pages/run-detail-format.ts";
 import { shortSha } from "@/pages/runs/runs-format.ts";
 import { formatRunElapsed, readRescueFacts } from "./run-detail-format.ts";
 
@@ -197,6 +197,7 @@ export function SpendPanel({ run }: { run: RunRow }) {
 			<MetaRow label="cache write">
 				{run.tokensCacheWrite !== null ? formatTokens(run.tokensCacheWrite) : DASH}
 			</MetaRow>
+			<MetaRow label="context">{formatContextUse(run) ?? DASH}</MetaRow>
 		</PanelShell>
 	);
 }

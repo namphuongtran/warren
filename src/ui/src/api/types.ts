@@ -190,12 +190,12 @@ export interface RunRow {
 	runtimeBackend?: string | null; // warren-a0f4: local|docker|k8s frozen at dispatch; operator-only overlay beside maxCostUsd
 	toolStall?: RunToolStallView | null; // namphuongtran/warren#83: stalled tool call; operator-only
 	quotaHold?: QuotaHoldView | null; // namphuongtran/warren#30: held on a spent provider quota; list, operator-only
-	/** Input/output tokens consumed/produced (warren-a7dc); see `costUsd` for nullability. */
+	contextTokens?: number | null; // namphuongtran/warren#20: newest context reading; detail GET, operator-only
+	contextWindowTokens?: number | null; // that reading's model window, from the harness adapter
+	/** Input/output and cache-read/cache-write tokens (warren-a7dc); see `costUsd` for nullability. */
 	tokensInput: number | null;
 	tokensOutput: number | null;
-	/** Cache-read tokens (warren-a7dc); see `costUsd` for nullability. */
 	tokensCacheRead: number | null;
-	/** Cache-write tokens (warren-a7dc); see `costUsd` for nullability. */
 	tokensCacheWrite: number | null;
 	/**
 	 * Per-run preview environment columns (R-19 / docs/design/preview-environments.md). All null on

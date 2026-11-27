@@ -56,7 +56,7 @@ describe("bridgeRunStream — budget warning (namphuongtran/warren#9)", () => {
 			cancelBurrowRun: async (reason) => {
 				cancels.push(reason);
 			},
-			budgetWarningSteer: async (body) => {
+			warningSteer: async (body) => {
 				steers.push(body);
 			},
 			source: source(events),
