@@ -215,6 +215,7 @@ const TABLE_KEYS: AnyTable[] = [
 	"toolCalls",
 	"dispatchContext",
 	"providerQuota",
+	"runContext",
 ];
 
 describe("schema dialect parity (sqlite ↔ postgres)", () => {

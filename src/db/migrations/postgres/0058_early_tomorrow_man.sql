@@ -6,5 +6,5 @@ CREATE TABLE "run_context" (
 	"observed_at" text NOT NULL
 );
 --> statement-breakpoint
-ALTER TABLE "run_context" ADD CONSTRAINT "run_context_run_id_runs_id_fk" FOREIGN KEY ("run_id") REFERENCES "public"."runs"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "run_context" ADD CONSTRAINT "run_context_run_id_runs_id_fk" FOREIGN KEY ("run_id") REFERENCES "runs"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "run_context" ENABLE ROW LEVEL SECURITY;
