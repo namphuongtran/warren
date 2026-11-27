@@ -14,6 +14,12 @@ import { FIXTURE_NOW_ISO, FIXTURE_NOW_MS, FIXTURE_TOKEN, seedFixtureDb } from ".
 /** Spec budget (warren-010b): seed + boot to a healthy server in under 10s. */
 const BOOT_BUDGET_MS = 10_000;
 const MINUTE_MS = 60_000;
+/**
+ * Hook timeout above the boot budget. Bun's 5s hook default sat under the 10s
+ * spec budget, so a slow CI runner failed the hook before the budget assertion
+ * could judge the boot.
+ */
+const HOOK_TIMEOUT_MS = 30_000;
 
 let fixture: FixtureBootHandle;
 let bootMs = 0;
@@ -43,11 +49,11 @@ beforeAll(async () => {
 	// API only: the test must not depend on a `bun run build:ui` artifact.
 	fixture = await bootFixture({ uiDistDir: null });
 	bootMs = performance.now() - started;
-});
+}, HOOK_TIMEOUT_MS);
 
 afterAll(async () => {
 	await fixture?.stop();
-});
+}, HOOK_TIMEOUT_MS);
 
 describe("bootFixture", () => {
 	test("boots within the budget and reports the fixed token and frozen clock", () => {
