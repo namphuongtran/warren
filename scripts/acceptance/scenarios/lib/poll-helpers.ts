@@ -132,7 +132,7 @@ export async function waitForSeqAbove<T extends SequencedEvent>(
 	threshold: number,
 	timeoutMs: number,
 ): Promise<readonly T[]> {
-	const maxSeq = (events: readonly T[]) => events.reduce((m, e) => (e.seq > m ? e.seq : m), 0);
+	const maxSeq = (events: readonly T[]) => events.reduce((m, e) => Math.max(e.seq, m), 0);
 	return pollAcceptance({
 		label: "events",
 		id: runId,

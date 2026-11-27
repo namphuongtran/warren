@@ -79,7 +79,7 @@ function FilterSelect({
 			value={value}
 			onChange={(e) => onChange(e.target.value)}
 			className={cn(
-				"h-[27px] rounded-(--radius-sm) border border-(--color-border) bg-(--color-bg) px-2 text-(--color-text-2) text-[10px] leading-3",
+				"h-[27px] rounded-(--radius-sm) border border-(--color-border) bg-(--color-bg) px-2 text-[10px] leading-3 text-(--color-text-2)",
 				value !== "all" && "border-(--color-border-strong)",
 			)}
 		>
@@ -115,7 +115,7 @@ function ActiveFilterChip({
 			active={false}
 			aria-label={`Remove filter ${label}`}
 			onClick={() => setFilters((f) => ({ ...f, [field]: "all" }))}
-			className="shrink-0 rounded-(--radius-sm) border-(--color-border) bg-(--color-bg) px-[9px] py-1 font-mono text-(--color-primary) text-[10px] leading-3"
+			className="shrink-0 rounded-(--radius-sm) border-(--color-border) bg-(--color-bg) px-[9px] py-1 font-mono text-[10px] leading-3 text-(--color-primary)"
 		>
 			{label} ×
 		</FilterPill>
@@ -148,14 +148,14 @@ export function RunsFilterBar({
 			    (warren-6419). Artboard: gap 6, overflow clip. */}
 			<div className="md:hidden">
 				<div
-					className="flex items-center gap-1.5 overflow-x-auto pb-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+					className="flex [scrollbar-width:none] items-center gap-1.5 overflow-x-auto pb-3 [&::-webkit-scrollbar]:hidden"
 					data-testid="runs-mobile-filter-strip"
 				>
 					<FilterPill
 						active={!anyFilterActive}
 						aria-label="Clear all filters"
 						onClick={() => setFilters(NO_FILTERS)}
-						className="shrink-0 rounded-(--radius-sm) border-(--color-border-strong) bg-(--color-surface-raised) px-[9px] py-1 font-medium text-(--color-text) text-[10px] leading-3"
+						className="shrink-0 rounded-(--radius-sm) border-(--color-border-strong) bg-(--color-surface-raised) px-[9px] py-1 text-[10px] leading-3 font-medium text-(--color-text)"
 					>
 						All
 					</FilterPill>
@@ -198,7 +198,7 @@ export function RunsFilterBar({
 						active={disclosureOpen}
 						aria-expanded={disclosureOpen}
 						onClick={() => setDisclosureOpen((o) => !o)}
-						className="shrink-0 rounded-(--radius-sm) border-(--color-border) bg-(--color-bg) px-[9px] py-1 font-mono text-(--color-text-3) text-[10px] leading-3"
+						className="shrink-0 rounded-(--radius-sm) border-(--color-border) bg-(--color-bg) px-[9px] py-1 font-mono text-[10px] leading-3 text-(--color-text-3)"
 					>
 						＋ Filter
 					</FilterPill>
@@ -246,7 +246,7 @@ export function RunsFilterBar({
 							type="button"
 							onClick={() => setFilters(NO_FILTERS)}
 							className={cn(
-								"flex h-[25px] items-center px-2 font-medium text-[10px] leading-3",
+								"flex h-[25px] items-center px-2 text-[10px] leading-3 font-medium",
 								anyFilterActive
 									? "text-(--color-text-2) hover:text-(--color-text)"
 									: "text-(--color-text-3) opacity-60",
@@ -262,7 +262,7 @@ export function RunsFilterBar({
 							placeholder="Filter by run ID or seed"
 							value={filters.search}
 							onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
-							className="h-[27px] w-[220px] shrink-0 rounded-(--radius-sm) border border-(--color-border-strong) bg-(--color-bg) px-[9px] text-(--color-text-2) text-[10px] leading-3 placeholder:text-(--color-text-3)"
+							className="h-[27px] w-[220px] shrink-0 rounded-(--radius-sm) border border-(--color-border-strong) bg-(--color-bg) px-[9px] text-[10px] leading-3 text-(--color-text-2) placeholder:text-(--color-text-3)"
 						/>
 					</div>
 				)}
@@ -308,7 +308,7 @@ export function RunsFilterBar({
 					type="button"
 					onClick={() => setFilters(NO_FILTERS)}
 					className={cn(
-						"flex h-[25px] items-center px-2 font-medium text-[10px] leading-3",
+						"flex h-[25px] items-center px-2 text-[10px] leading-3 font-medium",
 						anyFilterActive
 							? "text-(--color-text-2) hover:text-(--color-text)"
 							: "text-(--color-text-3) opacity-60",
@@ -324,7 +324,7 @@ export function RunsFilterBar({
 					placeholder="Filter by run ID or seed"
 					value={filters.search}
 					onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
-					className="h-[27px] w-[220px] shrink-0 rounded-(--radius-sm) border border-(--color-border-strong) bg-(--color-bg) px-[9px] text-(--color-text-2) text-[10px] leading-3 placeholder:text-(--color-text-3)"
+					className="h-[27px] w-[220px] shrink-0 rounded-(--radius-sm) border border-(--color-border-strong) bg-(--color-bg) px-[9px] text-[10px] leading-3 text-(--color-text-2) placeholder:text-(--color-text-3)"
 				/>
 			</div>
 		</>

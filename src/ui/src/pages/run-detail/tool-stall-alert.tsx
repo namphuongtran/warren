@@ -19,7 +19,7 @@ export function ToolStallAlert({ stall }: { stall: RunToolStallView | null | und
 				call is hung.
 			</p>
 			{stall.command !== null ? (
-				<code className="mt-1 block break-all font-mono text-xs">{stall.command}</code>
+				<code className="mt-1 block font-mono text-xs break-all">{stall.command}</code>
 			) : null}
 		</Alert>
 	);

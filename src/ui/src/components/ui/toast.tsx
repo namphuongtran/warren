@@ -107,7 +107,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 							<Icon aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-(--color-fg)" />
 							<div className="min-w-0 flex-1 space-y-0.5">
 								{it.title ? (
-									<ToastPrimitive.Title className="font-medium leading-tight">
+									<ToastPrimitive.Title className="leading-tight font-medium">
 										{it.title}
 									</ToastPrimitive.Title>
 								) : null}
@@ -119,7 +119,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 							</div>
 							<ToastPrimitive.Close
 								aria-label="Close"
-								className="absolute top-2 right-2 rounded-sm opacity-60 transition-opacity hover:opacity-100 focus:outline-none focus:ring-(--color-ring) focus:ring-2"
+								className="absolute top-2 right-2 rounded-sm opacity-60 transition-opacity hover:opacity-100 focus:ring-2 focus:ring-(--color-ring) focus:outline-none"
 							>
 								<X className="h-3.5 w-3.5" />
 							</ToastPrimitive.Close>

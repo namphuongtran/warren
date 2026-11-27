@@ -49,7 +49,7 @@ function Legend({ color, label }: { color: string; label: string }) {
 	return (
 		<span className="flex items-center gap-1.5">
 			<span className={cn("h-2 w-2 shrink-0 rounded-[1px]", color)} aria-hidden />
-			<span className="font-mono text-(--color-text-2) text-[11px] leading-[14px]">{label}</span>
+			<span className="font-mono text-[11px] leading-[14px] text-(--color-text-2)">{label}</span>
 		</span>
 	);
 }
@@ -164,8 +164,8 @@ function OutcomesChart({ totals, series }: OutcomesData) {
 				))}
 			</div>
 			<div className="flex w-full items-center justify-between">
-				<span className="font-mono text-(--color-text-3) text-[10px] leading-3">{axis(first)}</span>
-				<span className="font-mono text-(--color-text-3) text-[10px] leading-3">{axis(last)}</span>
+				<span className="font-mono text-[10px] leading-3 text-(--color-text-3)">{axis(first)}</span>
+				<span className="font-mono text-[10px] leading-3 text-(--color-text-3)">{axis(last)}</span>
 			</div>
 			<div className="flex flex-wrap items-center gap-4">
 				<Legend
@@ -203,11 +203,11 @@ function OutcomesPanel() {
 			className="flex-1"
 		>
 			{runs.isError ? (
-				<p className="text-(--color-danger) text-sm">
+				<p className="text-sm text-(--color-danger)">
 					Failed to load run analytics. {(runs.error as Error | null)?.message ?? ""}
 				</p>
 			) : (totals?.runs ?? 0) === 0 && !runs.isLoading ? (
-				<p className="text-(--color-text-3) text-[12px] leading-4">No runs ended in this window.</p>
+				<p className="text-[12px] leading-4 text-(--color-text-3)">No runs ended in this window.</p>
 			) : (
 				<OutcomesChart totals={totals} series={series} />
 			)}

@@ -36,7 +36,7 @@ function EvidenceLinks({ runId, assignment }: { runId: string; assignment: Judge
 				<Link
 					key={`${range.fromSeq}-${range.toSeq}`}
 					to={evidenceHref(runId, range)}
-					className="font-mono text-(--color-primary) text-xs underline-offset-2 hover:underline"
+					className="font-mono text-xs text-(--color-primary) underline-offset-2 hover:underline"
 				>
 					{range.fromSeq === range.toSeq
 						? `event ${range.fromSeq}`
@@ -65,7 +65,7 @@ function VerdictClasses({ runId, row }: { runId: string; row: JudgeStoreRow }) {
 						<span className="text-(--color-text-3)">{a.confidence} confidence</span>
 					</span>
 					{a.note !== undefined ? (
-						<span className="whitespace-pre-wrap break-words">{a.note}</span>
+						<span className="break-words whitespace-pre-wrap">{a.note}</span>
 					) : null}
 					<EvidenceLinks runId={runId} assignment={a} />
 				</li>

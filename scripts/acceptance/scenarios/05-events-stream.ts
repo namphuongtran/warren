@@ -214,7 +214,7 @@ async function waitForReplayAtLeast(
 	timeoutMs: number,
 ): Promise<readonly EventEnvelope[]> {
 	const maxSeq = (events: readonly EventEnvelope[]) =>
-		events.reduce((m, e) => (e.seq > m ? e.seq : m), 0);
+		events.reduce((m, e) => Math.max(e.seq, m), 0);
 	return pollAcceptance({
 		label: "non-follow replay",
 		id: runId,

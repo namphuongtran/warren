@@ -106,7 +106,7 @@ custom property (an `as CSSProperties` cast is fine).
 Put the data-driven value in a variable and let the class read it:
 
 ```tsx
-<div className="h-(--bar-h)" style={{ "--bar-h": `${h}px` }} />
+<div className="h-(--bar-h)" style={{ "--bar-h": `${h}px` }} />;
 ```
 
 The plugin flags `style={{ height: h }}`, mixed objects, and spreads.

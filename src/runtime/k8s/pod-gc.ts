@@ -229,7 +229,8 @@ function terminalAgeMs(pod: V1Pod, nowMs: number): number {
 	const anchor = latestFinishedAt(pod) ?? pod.metadata?.creationTimestamp;
 	if (anchor === undefined) return 0;
 	const ms = nowMs - toMs(anchor);
-	return ms > 0 ? ms : 0;
+	// An unparseable anchor yields NaN; treat it as un-ageable (0), never GC'd.
+	return Number.isFinite(ms) ? Math.max(ms, 0) : 0;
 }
 
 /** The latest `terminated.finishedAt` across the pod's init + main containers. */
