@@ -88,10 +88,13 @@ on:
   schedule:
     # 07:17 UTC daily — off the top of the hour so we don't collide with
     # every other project's midnight-cron rush on shared runners.
+    #
+    # GitHub never fired this schedule on the namphuongtran/warren fork, not
+    # even a 5-minute probe (namphuongtran/warren#123). There the operator's
+    # launchd job dev.warren.nightly dispatches this workflow at the same time
+    # (docs/self-host/macos-launchd.md section 7). The cron stays for repos
+    # where GitHub does fire it.
     - cron: "17 7 * * *"
-    # TEMPORARY probe for namphuongtran/warren#123 item 7: proves the fork
-    # fires scheduled runs at all. Removed once one scheduled run appears.
-    - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
 # Only one nightly run at a time; if a manual dispatch stacks on top of
