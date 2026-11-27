@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Template: replace __HOME__ with your home directory, then copy to ~/Library/LaunchAgents/.
+     docs/self-host/macos-launchd.md section 7 says how.
+     launchd reads StartCalendarInterval in local time. 14:17 is 07:17 UTC in UTC+7.
+     Change Hour to 7 plus your own UTC offset. -->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>dev.warren.nightly</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>/bin/bash</string>
+		<string>__HOME__/.warren/bin/warren-nightly.sh</string>
+	</array>
+	<key>WorkingDirectory</key>
+	<string>__HOME__/.warren/server-src</string>
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PATH</key>
+		<string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+		<key>HOME</key>
+		<string>__HOME__</string>
+	</dict>
+	<key>StartCalendarInterval</key>
+	<dict>
+		<key>Hour</key>
+		<integer>14</integer>
+		<key>Minute</key>
+		<integer>17</integer>
+	</dict>
+	<key>StandardOutPath</key>
+	<string>__HOME__/.warren/logs/nightly.stdout.log</string>
+	<key>StandardErrorPath</key>
+	<string>__HOME__/.warren/logs/nightly.stdout.log</string>
+</dict>
+</plist>

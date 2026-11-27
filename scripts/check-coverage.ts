@@ -34,7 +34,6 @@
  *   bun run scripts/check-coverage.ts --parse FILE  # offline: parse a captured log
  */
 
-import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import {
@@ -44,6 +43,7 @@ import {
 	ensureInstalled,
 	type RunCommand,
 } from "./check-extensions.ts";
+import { streamCommand } from "./stream-command.ts";
 
 const REPO_ROOT = resolve(import.meta.dir, "..");
 const BUDGETS_PATH = resolve(REPO_ROOT, "scripts/coverage-budgets.json");
@@ -203,12 +203,9 @@ export function installExtensionDeps(
 	return failures;
 }
 
-function runBunTest(emitJUnit: boolean): {
-	exitCode: number;
-	stdout: string;
-	stderr: string;
-	combined: string;
-} {
+async function runBunTest(
+	emitJUnit: boolean,
+): Promise<{ exitCode: number; totals: CoverageTotals | undefined }> {
 	mkdirSync(COVERAGE_DIR, { recursive: true });
 	const args = [
 		"test",
@@ -221,54 +218,29 @@ function runBunTest(emitJUnit: boolean): {
 		mkdirSync(JUNIT_DIR, { recursive: true });
 		args.push("--reporter=junit", `--reporter-outfile=${JUNIT_PATH}`);
 	}
-	// Bun writes both progress and the coverage table to stderr. Capture both
-	// streams as strings and tee them through so the user still sees live
-	// output, then parse from the buffered copy.
-	return captureSync("bun", args, REPO_ROOT);
-}
-
-/**
- * Capture ceiling per stream. spawnSync's default is 1 MiB, and on GitHub
- * Actions bun prints one line per passing test: the suite's stderr crossed it
- * (namphuongtran/warren#151), spawnSync killed bun mid-run, and the gate
- * failed with a clipped log and no junit.xml or lcov.info.
- */
-const CAPTURE_MAX_BUFFER_BYTES = 256 * 1024 * 1024;
-
-/**
- * Run `command` and buffer both streams. Any spawn error, including a stream
- * past {@link CAPTURE_MAX_BUFFER_BYTES} (`ENOBUFS`), fails the result and is
- * named on stderr, so a capture problem never reads as a test failure or a pass.
- */
-export function captureSync(
-	command: string,
-	args: readonly string[],
-	cwd: string,
-): { exitCode: number; stdout: string; stderr: string; combined: string } {
-	const result = spawnSync(command, [...args], {
-		cwd,
-		encoding: "utf8",
-		maxBuffer: CAPTURE_MAX_BUFFER_BYTES,
+	// Bun writes both progress and the coverage table to stderr. Both streams
+	// pass straight through as they arrive, and each line is scanned for the
+	// "All files" row, so no copy of the log is kept and its size has no
+	// ceiling (namphuongtran/warren#151: a 1 MiB capture buffer killed bun).
+	let totals: CoverageTotals | undefined;
+	const { exitCode, failure } = await streamCommand(["bun", ...args], {
+		cwd: REPO_ROOT,
+		sinks: {
+			stdout: (chunk) => writeAndFlush(process.stdout, chunk),
+			stderr: (chunk) => writeAndFlush(process.stderr, chunk),
+		},
+		onLine: (line) => {
+			totals ??= parseAllFilesRow(line);
+		},
 	});
-	const stdout = result.stdout ?? "";
-	let stderr = result.stderr ?? "";
-	// Do NOT write these buffers to the streams in-line here and then call
-	// process.exit(...) on the result later: process.exit does not wait for
-	// stream flushes, so a multi-MB buffer gets clipped and CI logs lose the
-	// failing tail (warren-66a7). The caller replays the output with awaited
-	// writes, then avoids process.exit entirely by setting process.exitCode.
-	let exitCode = result.status ?? (result.signal ? 1 : 0);
-	if (result.error !== undefined) {
-		stderr += `\ncheck-coverage: could not capture \`${command}\`: ${result.error.message}\n`;
-		if (exitCode === 0) exitCode = 1;
-	}
-	return { exitCode, stdout, stderr, combined: `${stdout}\n${stderr}` };
+	if (failure !== null) console.error(`check-coverage: ${failure}`);
+	return { exitCode, totals };
 }
 
 /**
  * Write `chunk` to `stream` and resolve only once the write completes.
  * Awaiting the callback (instead of fire-and-forget + process.exit) is what
- * keeps the tail of a large buffered test log from being dropped.
+ * keeps the tail of a large test log from being dropped (warren-66a7).
  */
 function writeAndFlush(stream: NodeJS.WriteStream, chunk: string): Promise<void> {
 	return new Promise((resolvePromise, reject) => {
@@ -303,12 +275,7 @@ async function main(): Promise<void> {
 		return;
 	}
 
-	const { exitCode, stdout, stderr, combined } = runBunTest(emitJUnit);
-	// Replay the captured test output with awaited writes so nothing is left
-	// in a stream buffer when the process decides its exit code.
-	if (stdout) await writeAndFlush(process.stdout, stdout);
-	if (stderr) await writeAndFlush(process.stderr, stderr);
-	const totals = parseAllFilesRow(combined);
+	const { exitCode, totals } = await runBunTest(emitJUnit);
 	// Set the exit code and let the loop drain naturally — never process.exit
 	// right after large writes (warren-66a7).
 	process.exitCode = reportResult(totals, budgets, exitCode);
