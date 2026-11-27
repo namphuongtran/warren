@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { RuntimeId } from "../../core/wire.ts";
+import { claudeCodeAdapter } from "../adapters/claude-code.ts";
 import type {
 	AdapterRuntimeEvent,
 	AgentRuntimeAdapter,
@@ -8,6 +9,7 @@ import type {
 } from "../adapters/index.ts";
 import { type AgentEnvSource, parseAgentEntrypointEnv, runAgent } from "./agent-entrypoint.ts";
 import type { AgentInboxHttp, AgentProc, AgentSpawn } from "./agent-io.ts";
+import { createStdinHoldController } from "./agent-stdin-hold.ts";
 
 /* -------------------------------------------------------------------------- */
 /* Fixtures                                                                    */
@@ -348,5 +350,96 @@ describe("runAgent · stdin-hold seam", () => {
 		expect(
 			lines.some((l) => (JSON.parse(l) as { kind: string }).kind === "stdin_hold_timeout"),
 		).toBe(true);
+	});
+});
+
+describe("createStdinHoldController · steering gate (namphuongtran/warren#150)", () => {
+	const claudeEvents = (line: Record<string, unknown>): AdapterRuntimeEvent[] =>
+		claudeCodeAdapter.parseEvents?.(JSON.stringify(line)) ?? [];
+	const toolUse = (id: string) =>
+		claudeEvents({
+			type: "assistant",
+			message: { content: [{ type: "tool_use", id, name: "Bash", input: {} }] },
+			parent_tool_use_id: null,
+		});
+	const toolResult = (id: string) =>
+		claudeEvents({
+			type: "user",
+			message: { content: [{ type: "tool_result", tool_use_id: id, content: "ok" }] },
+			parent_tool_use_id: null,
+		});
+	const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 40));
+	const steer = { id: "m1", runId: null, body: "wrap up", priority: "high", fromActor: "op" };
+
+	/** A claude-code stdin hold whose inbox returns `steer` on the first claim. */
+	function gatedHold(onClaim: () => Promise<void> = async () => {}) {
+		// `claimsAtWrite[i]`: how many claims had happened when write i landed.
+		const seen = { claims: 0, writes: [] as string[], claimsAtWrite: [] as number[] };
+		const http: AgentInboxHttp = {
+			get: async () => {
+				seen.claims += 1;
+				await onClaim();
+				return { status: 200, body: { messages: seen.claims === 1 ? [steer] : [] } };
+			},
+		};
+		const controller = createStdinHoldController({
+			active: true,
+			env: parseAgentEntrypointEnv(
+				baseEnv({ WARREN_AGENT_RUNTIME: "claude-code", WARREN_INBOX_POLL_INTERVAL_MS: "5" }),
+			),
+			runtime: claudeCodeAdapter,
+			proc: {
+				stdout: streamOf(""),
+				stderr: streamOf(""),
+				exited: new Promise<number>(() => {}),
+				closeStdin: async (): Promise<void> => {},
+				writeStdin: async (chunk: string): Promise<void> => {
+					seen.writes.push(chunk);
+					seen.claimsAtWrite.push(seen.claims);
+				},
+			},
+			http,
+			out: silent,
+			log: silent,
+		});
+		return { controller, seen };
+	}
+
+	test("leaves the inbox unclaimed until a tool call opens claude-code's gate", async () => {
+		// The poll endpoint marks what it returns delivered, so a gate that held
+		// a claimed message would lose it. The gate must hold the claim itself.
+		const { controller, seen } = gatedHold();
+		controller.start();
+		await settle();
+		expect(seen.claims).toBe(0);
+
+		await controller.onEvents(toolUse("t1"));
+		await settle();
+		expect(seen.claims).toBeGreaterThan(0);
+		expect(seen.writes).toHaveLength(1);
+		expect(seen.writes[0]).toContain("[STEERING] (priority: high) wrap up");
+		await controller.stop();
+	});
+
+	test("holds a claimed steer when the gate closes during the claim, until it opens again", async () => {
+		let hold!: ReturnType<typeof gatedHold>;
+		// The tool call finishes while the claim's HTTP round trip is in flight.
+		hold = gatedHold(async () => {
+			if (hold.seen.claims === 1) await hold.controller.onEvents(toolResult("t1"));
+		});
+		const { controller, seen } = hold;
+		controller.start();
+		await controller.onEvents(toolUse("t1"));
+		await settle();
+		expect(seen.claims).toBe(1);
+		expect(seen.writes).toEqual([]);
+
+		await controller.onEvents(toolUse("t2"));
+		await settle();
+		expect(seen.writes).toHaveLength(1);
+		expect(seen.writes[0]).toContain("wrap up");
+		// A held steer is written before anything new is claimed.
+		expect(seen.claimsAtWrite).toEqual([1]);
+		await controller.stop();
 	});
 });

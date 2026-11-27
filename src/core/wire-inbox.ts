@@ -35,14 +35,16 @@ export type InboxState = (typeof INBOX_STATES)[number];
  *
  *   - `"mid-run"`    — the harness consumes steering while a run is in
  *     flight (a live stdin channel the agent reads between/within turns).
- *     No builtin runtime qualifies today: pi's rpc read loop only consumes
- *     stdin at a turn boundary and warren closes stdin at pi's terminal
+ *     The claude-code builtin is here (namphuongtran/warren#150): its CLI
+ *     reads a held stdin during the turn and adds the message to the turn's
+ *     next model request. pi is not: its rpc read loop only consumes stdin
+ *     at a turn boundary and warren closes stdin at pi's terminal
  *     `agent_end`, so a mid-turn write is never read (the warren-3305 live
- *     incident). Reserved for a future pi `steer`/`follow_up` rpc command.
+ *     incident).
  *   - `"spawn-only"` — steering is only consumed when drained BEFORE the
  *     agent process spawns (the runtime's `encodeInboxMessage` folds pending
- *     messages into the prompt). All nine builtins are here: pi and claude-code
- *     both fold at spawn and neither consumes mid-run. `POST
+ *     messages into the prompt). The other eight builtins are here: pi and
+ *     codex fold at spawn and neither consumes mid-run. `POST
  *     /runs/:id/steer` against a running run with this capability fails 409
  *     instead of silently recording `steer.sent` for a message no one reads.
  *   - `"none"`       — the harness has no steering channel at all; every

@@ -6,7 +6,7 @@
  * Claude Code's `--input-format stream-json` reads one user/system JSON
  * envelope per line from stdin and emits matching `--output-format
  * stream-json` lines on stdout. The adapter renders the prompt + any
- * pending steering messages as a single multi-line stdin blob, then the
+ * pending steering messages as one user message on one line, then the
  * parser in `./parsers/jsonl-claude.ts` turns each output line into
  * structured events.
  *
@@ -19,16 +19,20 @@
  * pushes, so a broad `git add -A` would publish them. Host credentials, when
  * forwarded at all, go to the run's private $HOME (`../local/drive-prepare.ts`).
  *
- * claude-code `--print` relies on stdin EOF to flush its final output, so
- * this adapter deliberately declares NO `shouldCloseStdinOnEvent` and NO
- * `encodeSteeringMessage` — pending messages flow through
- * `pendingMessages` at the next spawn (burrow SPEC §13.2).
+ * Stdin stays open for the whole run (namphuongtran/warren#150). The CLI
+ * flushes each turn's `result` without EOF, then waits for another turn, so
+ * `shouldCloseStdinOnEvent` closes stdin at `result`. While the turn runs, the
+ * CLI reads more user messages from stdin, so `encodeSteeringMessage` delivers
+ * a steer mid-run, and `createSteeringGate` (`./claude-code-steering.ts`)
+ * holds it until it is certain to join the running turn. Real CLI 2.1.332
+ * captures pin each fact (`./claude-code-steering.capture.test.ts`).
  */
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { isClaudeContextOnlyEvent, observeClaudeContext } from "./claude-code-context.ts";
 import { detectClaudeQuotaExhausted, observeClaudeQuota } from "./claude-code-quota.ts";
+import { createClaudeSteeringGate, isClaudeResult } from "./claude-code-steering.ts";
 import { mulchClaudeHooks, readMulchArm } from "./mulch-arm.ts";
 import { parseJsonlClaude } from "./parsers/jsonl-claude.ts";
 import type {
@@ -196,8 +200,23 @@ export const claudeCodeAdapter: AgentRuntimeAdapter = {
 	ignoredModelSelection: claudeIgnoredModelSelection,
 
 	encodeInboxMessage(messages: readonly SteeringMessage[]): { stdin: string } {
-		return { stdin: messages.map(claudeUserTurnFromMessage).join("\n") };
+		return { stdin: claudeUserLine(messages.map(steeringText)) };
 	},
+
+	// Mid-run steering (namphuongtran/warren#150). The CLI reads stdin while the
+	// turn runs and adds a queued message to the turn's next request.
+	encodeSteeringMessage(message: SteeringMessage): { stdin: string } {
+		return { stdin: claudeUserLine([steeringText(message)]) };
+	},
+
+	// With stdin held, the CLI emits `result` at the end of the turn and then
+	// waits for another one. Closing stdin there ends the session; any input the
+	// CLI already read still runs first.
+	shouldCloseStdinOnEvent(event: AdapterRuntimeEvent): boolean {
+		return isClaudeResult(event);
+	},
+
+	createSteeringGate: createClaudeSteeringGate,
 
 	async prepareWorkspace(ctx: AdapterPrepareContext): Promise<void> {
 		const claudeDir = join(ctx.workspacePath, ".claude");
@@ -242,24 +261,27 @@ function ensureBurrowTmpdir(workspacePath: string): void {
 }
 
 /**
- * Encode the run's prompt followed by any pending steering messages as a
- * single stdin blob (one JSON envelope per line). Exported for unit tests.
+ * Encode the run's prompt and any pending steering messages as ONE user
+ * message, a text block each, on one newline-terminated line. Exported for
+ * unit tests.
+ *
+ * One message, because the CLI runs each stdin line as its own turn and reap
+ * finalizes the run at the first turn's `result`: a steer on a second line ran
+ * as a second turn that reap killed. The newline, because stdin stays open:
+ * the CLI reads nothing until a line ends, and no EOF ends it for them.
+ * Both are pinned in `./parsers/__golden__/README.md`.
  */
 export function encodeClaudeStdin(prompt: string, messages: readonly SteeringMessage[]): string {
-	const lines: string[] = [];
-	if (prompt.length > 0) lines.push(claudeUserTurn(prompt));
-	for (const m of messages) lines.push(claudeUserTurnFromMessage(m));
-	return lines.join("\n");
+	const texts = messages.map(steeringText);
+	if (prompt.length > 0) texts.unshift(prompt);
+	return claudeUserLine(texts);
 }
 
-function claudeUserTurn(text: string): string {
-	return JSON.stringify({
-		type: "user",
-		message: { role: "user", content: [{ type: "text", text }] },
-	});
+function claudeUserLine(texts: readonly string[]): string {
+	const content = texts.map((text) => ({ type: "text", text }));
+	return `${JSON.stringify({ type: "user", message: { role: "user", content } })}\n`;
 }
 
-function claudeUserTurnFromMessage(message: SteeringMessage): string {
-	const tag = `[STEERING] (priority: ${message.priority}) `;
-	return claudeUserTurn(`${tag}${message.body}`);
+function steeringText(message: SteeringMessage): string {
+	return `[STEERING] (priority: ${message.priority}) ${message.body}`;
 }

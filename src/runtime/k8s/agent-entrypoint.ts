@@ -16,10 +16,10 @@
  *
  * Lifecycle (the contract the agent image wires around, design §5.1):
  *
- *   1. DRAIN the steering inbox once over `GET /runs/:id/inbox`. A batch runtime
- *      (claude-code) closes stdin at spawn, so pending steering rides as the
- *      turn's `pendingMessages`, folded into the prompt by the adapter's own
- *      encoder. A stdin-held runtime (pi — one that declares
+ *   1. DRAIN the steering inbox once over `GET /runs/:id/inbox`. Pending
+ *      steering rides as the turn's `pendingMessages`, folded into the prompt by
+ *      the adapter's own encoder. A batch runtime (codex) closes stdin at spawn.
+ *      A stdin-held runtime (pi, claude-code — one that declares
  *      `shouldCloseStdinOnEvent`) instead KEEPS stdin open past the prompt and,
  *      if it also declares `encodeSteeringMessage`, receives later inbox messages
  *      mid-run via a poll loop that writes them to the live stdin (warren-7a43,
@@ -269,11 +269,11 @@ export async function runAgent(
 		return { exitCode: 1, phase: "failed", cancelledViaSignal: false };
 	}
 
-	// A runtime that declares `shouldCloseStdinOnEvent` (pi) exits the instant
-	// stdin closes mid-inference — so it MUST keep stdin open until its terminal
-	// event lands (mirrors burrow `dispatch.ts` `useStdinHold`). Batch runtimes
-	// (claude-code `--print`) leave the seam undefined and keep the
-	// write-and-close-at-spawn behavior. (warren-7a43)
+	// A runtime that declares `shouldCloseStdinOnEvent` keeps stdin open until
+	// its terminal event lands: pi exits the instant stdin closes mid-inference,
+	// and claude-code reads mid-run steering from it (mirrors burrow
+	// `dispatch.ts` `useStdinHold`). Batch runtimes (codex) leave the seam
+	// undefined and keep the write-and-close-at-spawn behavior. (warren-7a43)
 	const useStdinHold = typeof runtime.shouldCloseStdinOnEvent === "function";
 	const baseCommand = runtime.buildSpawnCommand(ctx);
 

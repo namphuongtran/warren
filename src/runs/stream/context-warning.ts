@@ -11,7 +11,7 @@
  * emits one `context.warning` system event. When the harness consumes steering
  * mid-run (`frontmatter.steering: "mid-run"`), it also sends one wrap-up steer
  * through `steerRun`, so the steer gets the capability gate and the
- * `steer.sent` audit event. Spawn-only harnesses (claude-code) get the event
+ * `steer.sent` audit event. A spawn-only harness gets the event
  * only.
  *
  * A reading is not an event of its own. claude-code's parser emits one

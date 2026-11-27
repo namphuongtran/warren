@@ -104,7 +104,7 @@ ENV BUN_INSTALL=/usr/local
 RUN bun install -g \
     @os-eco/seeds-cli@0.5.13 \
     @os-eco/mulch-cli@0.10.7 \
-    @anthropic-ai/claude-code@2.1.150 \
+    @anthropic-ai/claude-code@2.1.332 \
     @earendil-works/pi-coding-agent@0.84.2 \
     @openai/codex@0.171.0 \
     pnpm@11.1.2

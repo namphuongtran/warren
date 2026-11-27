@@ -18,6 +18,7 @@ import {
 	encodeClaudeStdin,
 } from "./claude-code.ts";
 import { forwardClaudeHostCredentials } from "./claude-credentials.ts";
+import { parseJsonlClaude } from "./parsers/jsonl-claude.ts";
 import type { AdapterSpawnContext, SteeringMessage } from "./types.ts";
 
 function fakeMessage(extra: Partial<SteeringMessage> = {}): SteeringMessage {
@@ -53,21 +54,33 @@ describe("claudeCodeAdapter.buildSpawnCommand", () => {
 			"--verbose",
 			"--dangerously-skip-permissions",
 		]);
-		expect(typeof cmd?.stdin).toBe("string");
-		const lines = (cmd?.stdin ?? "").split("\n");
-		expect(lines).toHaveLength(2);
-		expect(JSON.parse(lines[0] ?? "")).toMatchObject({
-			type: "user",
-			message: { role: "user", content: [{ type: "text", text: "fix the bug" }] },
-		});
-		expect(lines[1]).toContain("[STEERING]");
-		expect(lines[1]).toContain("priority: high");
+		// One user message, so the CLI runs one turn: it runs each stdin line as its
+		// own turn, and reap finalizes at the first turn's `result`. The trailing
+		// newline ends the line on a held-open stdin, where no EOF arrives.
+		expect(cmd?.stdin).toBe(
+			`${JSON.stringify({
+				type: "user",
+				message: {
+					role: "user",
+					content: [
+						{ type: "text", text: "fix the bug" },
+						{ type: "text", text: "[STEERING] (priority: high) stop and write tests first" },
+					],
+				},
+			})}\n`,
+		);
 	});
 
-	test("encodeClaudeStdin omits the prompt line when prompt is empty", () => {
-		const blob = encodeClaudeStdin("", [fakeMessage()]);
-		expect(blob.split("\n")).toHaveLength(1);
-		expect(blob).toContain("[STEERING]");
+	test("encodeClaudeStdin leaves the prompt block out when the prompt is empty", () => {
+		expect(encodeClaudeStdin("", [fakeMessage({ body: "b", priority: "low" })])).toBe(
+			`${JSON.stringify({
+				type: "user",
+				message: {
+					role: "user",
+					content: [{ type: "text", text: "[STEERING] (priority: low) b" }],
+				},
+			})}\n`,
+		);
 	});
 
 	test("emits per-run TMPDIR pointing at .sandbox-tmp under the in-sandbox workspace (burrow-8452)", () => {
@@ -164,16 +177,23 @@ describe("claudeCodeBurrowTmpdir", () => {
 });
 
 describe("claudeCodeAdapter.encodeInboxMessage", () => {
-	test("emits one user-text envelope per message tagged with priority", () => {
+	test("emits one user message with a priority-tagged text block per message", () => {
 		const out = claudeCodeAdapter.encodeInboxMessage?.([
 			fakeMessage({ body: "first", priority: "urgent" }),
 			fakeMessage({ body: "second", priority: "low" }),
 		]);
-		const lines = out?.stdin.split("\n") ?? [];
-		expect(lines).toHaveLength(2);
-		const parsed = lines.map((l) => JSON.parse(l));
-		expect(parsed[0]?.message.content[0].text).toContain("priority: urgent");
-		expect(parsed[1]?.message.content[0].text).toContain("priority: low");
+		expect(out?.stdin).toBe(
+			`${JSON.stringify({
+				type: "user",
+				message: {
+					role: "user",
+					content: [
+						{ type: "text", text: "[STEERING] (priority: urgent) first" },
+						{ type: "text", text: "[STEERING] (priority: low) second" },
+					],
+				},
+			})}\n`,
+		);
 	});
 });
 
@@ -190,13 +210,44 @@ describe("claudeCodeAdapter.parseEvents", () => {
 });
 
 describe("claudeCodeAdapter stdin-hold surface", () => {
-	test("declares no shouldCloseStdinOnEvent — claude-code --print needs stdin EOF to flush", () => {
-		// Burrow's runtime contract: runtimes that rely on stdin EOF to
-		// flush their final output MUST NOT declare the stdin-hold
-		// predicate. Pin the absence so a future edit can't silently flip
-		// claude-code onto the pi-style hold and truncate every run.
-		expect(claudeCodeAdapter.shouldCloseStdinOnEvent).toBeUndefined();
-		expect(claudeCodeAdapter.encodeSteeringMessage).toBeUndefined();
+	const closes = (line: Record<string, unknown>): boolean[] =>
+		parseJsonlClaude(JSON.stringify(line)).map(
+			(ev) => claudeCodeAdapter.shouldCloseStdinOnEvent?.(ev) ?? false,
+		);
+
+	test("closes stdin on every result line, an error result included", () => {
+		// With stdin held, the CLI waits for another turn after `result`.
+		expect(closes({ type: "result", subtype: "success", is_error: false })).toEqual([true]);
+		expect(closes({ type: "result", subtype: "error_during_execution", is_error: true })).toEqual([
+			true,
+		]);
+	});
+
+	test("keeps stdin open on init, assistant, and tool result lines", () => {
+		expect(closes({ type: "system", subtype: "init" })).toEqual([false]);
+		expect(
+			closes({
+				type: "assistant",
+				message: { content: [{ type: "tool_use", id: "t1", name: "Bash", input: {} }] },
+			}),
+		).toEqual([false]);
+		expect(
+			closes({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t1" }] } }),
+		).toEqual([false]);
+	});
+
+	test("encodes a mid-run steer as one newline-terminated user message", () => {
+		expect(
+			claudeCodeAdapter.encodeSteeringMessage?.(fakeMessage({ body: "wrap up", priority: "high" })),
+		).toEqual({
+			stdin: `${JSON.stringify({
+				type: "user",
+				message: {
+					role: "user",
+					content: [{ type: "text", text: "[STEERING] (priority: high) wrap up" }],
+				},
+			})}\n`,
+		});
 	});
 });
 

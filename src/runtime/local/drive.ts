@@ -21,8 +21,8 @@
  *      (warren-70bb / burrow `src/proxy/server.ts`), set `proxyAddress` on
  *      the profile, and overlay HTTP(S)_PROXY onto the agent env. open/none
  *      skip this path entirely so default behavior stays byte-identical.
- *   4. Spawn through `runSandboxed`. Batch runtimes (claude-code) close
- *      stdin at spawn; stdin-held runtimes (pi — declares
+ *   4. Spawn through `runSandboxed`. Batch runtimes (codex) close stdin at
+ *      spawn; stdin-held runtimes (pi, claude-code — declare
  *      `shouldCloseStdinOnEvent`) keep it open until the terminal event
  *      lands, with mid-run steering delivered over the live stdin
  *      (`encodeSteeringMessage`) and the auto-reply hook
@@ -259,6 +259,7 @@ async function pumpToExit(
 				store.appendEvent(record, { kind: ev.kind, stream: ev.stream, payload: ev.payload }, now);
 				if (isTerminalEnvelope(ev)) sawTerminalEnvelope = true;
 			}
+			stdin.observe(events);
 			await stdin.autoRespond(events);
 			await stdin.closeOnTrigger(events);
 		}

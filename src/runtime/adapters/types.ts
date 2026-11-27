@@ -143,10 +143,22 @@ export interface AgentRuntimeAdapter {
 	 * stdin open after writing the prompt and closes it only when this
 	 * predicate returns true for a persisted event (or at process exit).
 	 * Harnesses whose CLI exits the instant stdin closes mid-inference
-	 * (pi — mx-d9b3ad) MUST declare this; harnesses that rely on stdin EOF
-	 * to flush final output (claude-code `--print`) MUST NOT.
+	 * (pi — mx-d9b3ad) MUST declare this. So must a harness that waits for
+	 * more input after its terminal event (claude-code `--input-format
+	 * stream-json` waits after `result`). A harness that reads its prompt to
+	 * EOF (codex `exec -`) MUST NOT.
 	 */
 	shouldCloseStdinOnEvent?(event: AdapterRuntimeEvent): boolean;
+
+	/**
+	 * Per-run gate on mid-run steering (namphuongtran/warren#150). When
+	 * defined, the dispatcher creates one gate per run, shows it every parsed
+	 * event in stream order, and writes a steering message only while
+	 * `isOpen()` is true. A message held by a closed gate stays unread until
+	 * the gate opens again, which may not happen before the run ends. Absent
+	 * means always open.
+	 */
+	createSteeringGate?(): SteeringGate;
 
 	/**
 	 * Auto-reply hook, invoked once per parser-emitted event. Returning
@@ -298,6 +310,14 @@ export interface IgnoredModelSelection {
 export interface SteeringMessage {
 	readonly body: string;
 	readonly priority: InboxPriority;
+}
+
+/** One run's mid-run steering gate (`AgentRuntimeAdapter.createSteeringGate`). */
+export interface SteeringGate {
+	/** Read one parsed event, in stream order. */
+	observe(event: AdapterRuntimeEvent): void;
+	/** True when a message written now reaches the agent within its running turn. */
+	isOpen(): boolean;
 }
 
 /**
