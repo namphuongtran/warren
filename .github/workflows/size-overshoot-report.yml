@@ -25,10 +25,10 @@ name: size-overshoot-report
 # `check:size` was not the failure, and the job says so and stops.
 #
 # Uses the same GitHub App installation token as auto-merge.yml and
-# bundle-size-autoheal.yml, minted per run from AUTO_MERGE_APP_ID +
+# bundle-size-autoheal.yml, minted per run from AUTO_MERGE_APP_CLIENT_ID +
 # AUTO_MERGE_APP_PRIVATE_KEY. The App needs `pull_requests: write` to post the
 # comment; it already needs that scope to enable auto-merge. With no App
-# configured (AUTO_MERGE_APP_ID unset) the job falls back to GITHUB_TOKEN, which
+# configured (AUTO_MERGE_APP_CLIENT_ID unset) the job falls back to GITHUB_TOKEN, which
 # is enough to read an artifact and post a comment (#123).
 # NOTE: workflow_run jobs run from the DEFAULT branch's copy of this file, so
 # this only takes effect once merged to main (warren-8746).
@@ -65,10 +65,10 @@ jobs:
     steps:
       - name: Mint app installation token
         id: app-token
-        if: ${{ vars.AUTO_MERGE_APP_ID != '' }}
-        uses: actions/create-github-app-token@v3.2.0
+        if: ${{ vars.AUTO_MERGE_APP_CLIENT_ID != '' }}
+        uses: actions/create-github-app-token@v3.4.0
         with:
-          app-id: ${{ vars.AUTO_MERGE_APP_ID }}
+          client-id: ${{ vars.AUTO_MERGE_APP_CLIENT_ID }}
           private-key: ${{ secrets.AUTO_MERGE_APP_PRIVATE_KEY }}
 
       # Only report onto a branch with an open same-repo PR. A push-event CI

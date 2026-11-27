@@ -84,7 +84,7 @@ jobs:
       - name: Decide whether a heal is needed
         id: gate
         env:
-          APP_ID: ${{ vars.AUTO_MERGE_APP_ID }}
+          APP_CLIENT_ID: ${{ vars.AUTO_MERGE_APP_CLIENT_ID }}
         run: |
           set -euo pipefail
           # Loop guard: our own heal push re-triggers this workflow via
@@ -111,8 +111,8 @@ jobs:
             exit 0
           fi
           # #123: the heal push needs the App token so it re-triggers CI.
-          if [ -z "${APP_ID}" ]; then
-            echo "::notice::PR is CONFLICTING, but the auto-merge App is not configured (AUTO_MERGE_APP_ID is unset). Resolve the .seeds conflict by hand."
+          if [ -z "${APP_CLIENT_ID}" ]; then
+            echo "::notice::PR is CONFLICTING, but the auto-merge App is not configured (AUTO_MERGE_APP_CLIENT_ID is unset). Resolve the .seeds conflict by hand."
             echo "needed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -122,9 +122,9 @@ jobs:
       - name: Mint app installation token
         id: app-token
         if: steps.gate.outputs.needed == 'true'
-        uses: actions/create-github-app-token@v3.2.0
+        uses: actions/create-github-app-token@v3.4.0
         with:
-          app-id: ${{ vars.AUTO_MERGE_APP_ID }}
+          client-id: ${{ vars.AUTO_MERGE_APP_CLIENT_ID }}
           private-key: ${{ secrets.AUTO_MERGE_APP_PRIVATE_KEY }}
 
       # Commit as the GitHub App that minted the push token, not a hardcoded
@@ -281,7 +281,7 @@ jobs:
       - name: Decide whether a heal is needed
         id: gate
         env:
-          APP_ID: ${{ vars.AUTO_MERGE_APP_ID }}
+          APP_CLIENT_ID: ${{ vars.AUTO_MERGE_APP_CLIENT_ID }}
         run: |
           set -euo pipefail
           HEAD_BRANCH="$(gh pr view "$PR_NUMBER" --json headRefName --jq .headRefName)"
@@ -308,8 +308,8 @@ jobs:
             exit 0
           fi
           # #123: the heal push needs the App token so it re-triggers CI.
-          if [ -z "${APP_ID}" ]; then
-            echo "::notice::PR is CONFLICTING, but the auto-merge App is not configured (AUTO_MERGE_APP_ID is unset). Resolve the .seeds conflict by hand."
+          if [ -z "${APP_CLIENT_ID}" ]; then
+            echo "::notice::PR is CONFLICTING, but the auto-merge App is not configured (AUTO_MERGE_APP_CLIENT_ID is unset). Resolve the .seeds conflict by hand."
             echo "needed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -319,9 +319,9 @@ jobs:
       - name: Mint app installation token
         id: app-token
         if: steps.gate.outputs.needed == 'true'
-        uses: actions/create-github-app-token@v3.2.0
+        uses: actions/create-github-app-token@v3.4.0
         with:
-          app-id: ${{ vars.AUTO_MERGE_APP_ID }}
+          client-id: ${{ vars.AUTO_MERGE_APP_CLIENT_ID }}
           private-key: ${{ secrets.AUTO_MERGE_APP_PRIVATE_KEY }}
 
       # Commit as the GitHub App that minted the push token, not a hardcoded
