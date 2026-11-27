@@ -5,32 +5,35 @@
  * parser keeps as one `assistant_usage` telemetry event on the system stream
  * (`./parsers/jsonl-claude.ts`):
  *
- *   {"type":"assistant_usage","message":{"id":"msg_…","model":"claude-sonnet-5-5",
- *    "usage":{"input_tokens":4,"cache_creation_input_tokens":1200,
- *             "cache_read_input_tokens":150000,"output_tokens":96}}}
+ *   {"type":"assistant_usage","message":{"id":"msg_…","model":"claude-haiku-5-5",
+ *    "usage":{"input_tokens":2,"cache_creation_input_tokens":7794,
+ *             "cache_read_input_tokens":12328,"output_tokens":1}}}
  *
  * A request sends the whole conversation, so input + both cache counts +
  * output is how much of the window the conversation holds after the turn.
+ * The CLI writes one line per content block and repeats the request's usage
+ * on each (`./parsers/__golden__/claude-code-v2.1.332-tool-use.jsonl`), so a
+ * reading can arrive more than once. The event exists only to carry the
+ * reading: the bridge reads it and never persists it
+ * ({@link isClaudeContextOnlyEvent}), so the transcript stays free of one
+ * usage row per request.
  *
- * The window is the CLI's: 200k tokens for a Claude model, 1M when the model is
- * selected with the `[1m]` suffix. The API names the bare model id on each
- * message, so the suffix is read off `runModel`, the model the run's row or its
- * init envelope names. The CLI's own `<synthetic>` messages use no tokens and
- * name no Claude model, so they read as no observation. Like the quota reader
- * beside it, the read refuses an agent-authored line.
+ * The window comes from `./claude-context-windows.ts`. The API names a dated
+ * snapshot id on each message and drops claude-code's `[1m]` suffix, so the
+ * suffix is read off `runModel`, the model the run's row or its init envelope
+ * names. The CLI's own `<synthetic>` messages use no tokens and name no Claude
+ * model, so they read as no observation. Like the quota reader beside it, the
+ * read refuses an agent-authored line.
  */
 
 import { type EventEnvelopeInput, isAgentAuthoredEvent } from "../../core/event-envelope.ts";
+import { claudeContextWindowTokens, selectsOneMillionWindow } from "./claude-context-windows.ts";
 import type { ContextObservation } from "./types.ts";
 
 type JsonObject = Record<string, unknown>;
 
-/** The payload types {@link observeClaudeContext} reads. */
-export const CLAUDE_CONTEXT_ENVELOPE_TYPES: readonly string[] = ["assistant_usage"];
-
-const ONE_MILLION_SUFFIX = /\[1m\]$/i;
-const DEFAULT_WINDOW_TOKENS = 200_000;
-const ONE_MILLION_WINDOW_TOKENS = 1_000_000;
+/** The payload type of the parser's usage event. */
+export const CLAUDE_USAGE_ENVELOPE_TYPE = "assistant_usage";
 
 function asObject(value: unknown): JsonObject | null {
 	return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -42,20 +45,18 @@ function count(value: unknown): number {
 	return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
 }
 
-/** The CLI's context window for `model`, or `null` for a model that is not Claude's. */
-function claudeContextWindowTokens(model: string): number | null {
-	if (ONE_MILLION_SUFFIX.test(model)) return ONE_MILLION_WINDOW_TOKENS;
-	return /^claude-/i.test(model) ? DEFAULT_WINDOW_TOKENS : null;
-}
-
 /** `message` of a trusted `assistant_usage` event, else `null`. */
 function usageMessage(event: EventEnvelopeInput): JsonObject | null {
 	if (isAgentAuthoredEvent(event)) return null;
 	if (event.kind !== "telemetry" || event.stream !== "system") return null;
 	const payload = asObject(event.payload);
-	if (typeof payload?.type !== "string") return null;
-	if (!CLAUDE_CONTEXT_ENVELOPE_TYPES.includes(payload.type)) return null;
+	if (payload?.type !== CLAUDE_USAGE_ENVELOPE_TYPE) return null;
 	return asObject(payload.message);
+}
+
+/** True for the parser's `assistant_usage` event, which only carries a context reading. */
+export function isClaudeContextOnlyEvent(event: EventEnvelopeInput): boolean {
+	return usageMessage(event) !== null;
 }
 
 /** Read one `assistant_usage` event into a context observation, else `null`. */
@@ -67,7 +68,7 @@ export function observeClaudeContext(
 	const usage = asObject(message?.usage);
 	if (message === null || usage === null || typeof message.model !== "string") return null;
 	const model =
-		typeof runModel === "string" && ONE_MILLION_SUFFIX.test(runModel) ? runModel : message.model;
+		typeof runModel === "string" && selectsOneMillionWindow(runModel) ? runModel : message.model;
 	const windowTokens = claudeContextWindowTokens(model);
 	const tokensUsed =
 		count(usage.input_tokens) +

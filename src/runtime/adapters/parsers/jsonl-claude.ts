@@ -132,9 +132,11 @@ function mapAssistantEnvelope(
  * The request usage an `assistant` line carries, as one `assistant_usage`
  * telemetry event (namphuongtran/warren#20). The block mapping above drops it,
  * and it is the only mid-run reading of how full the context window is. The
- * payload keeps claude's own `message.{id,model,usage}` field names and drops
- * the content the block events already carry. A sub-agent's line (non-null
- * `parent_tool_use_id`) measures the sub-agent's context, so it emits none.
+ * event exists only to carry that reading: the bridge reads it and never
+ * persists it. The payload keeps claude's own `message.{id,model,usage}` field
+ * names and drops the content the block events already carry. A sub-agent's
+ * line (non-null `parent_tool_use_id`) measures the sub-agent's context, so it
+ * emits none.
  */
 function mapAssistantUsage(env: ClaudeEnvelope): RuntimeEvent | null {
 	const message = env.message;

@@ -45,25 +45,6 @@ import type { StreamEventView } from "./types.ts";
  */
 const PER_DELTA_NOISE_TYPES = new Set(["message_update", "tool_execution_update", "message_start"]);
 
-/**
- * Per-pass filter for a `telemetry` event whose payload repeats the previous
- * telemetry payload byte for byte. claude-code writes one stream-json line per
- * content block of a request, each carrying the request's usage, so its
- * parser's `assistant_usage` reading repeats (namphuongtran/warren#20). The
- * repeat adds no information. Lifecycle kinds never match: a pi `turn_end`
- * rides `state_change`, which cost aggregation sums.
- */
-export function newRepeatTelemetryFilter(): (event: StreamEventView) => boolean {
-	let previous: string | null = null;
-	return (event) => {
-		if (event.kind !== "telemetry") return false;
-		const payload = JSON.stringify(event.payload);
-		if (payload === previous) return true;
-		previous = payload;
-		return false;
-	};
-}
-
 export function isPerDeltaNoiseEvent(event: StreamEventView): boolean {
 	if (event.kind !== "telemetry" && event.kind !== "state_change") return false;
 	const p = event.payload;

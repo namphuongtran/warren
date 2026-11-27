@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { openDatabase } from "../../db/client.ts";
 import { createRepos, type Repos } from "../../db/repos/index.ts";
 import { RunEventBroker } from "../events.ts";
@@ -11,15 +11,18 @@ function at(seq: number): Date {
 	return new Date(2026, 10, 27, 12, 0, seq);
 }
 
+/** A Claude model with a 200k window, so the numbers below read as percentages of 200k. */
+const MODEL = "claude-sonnet-4-5";
+
 /** Pi `turn_end` naming the model and the request's total tokens. */
-function turnEnd(seq: number, totalTokens: number): StreamEventView {
+function turnEnd(seq: number, totalTokens: number, model = MODEL): StreamEventView {
 	return {
 		seq,
 		kind: "state_change",
 		stream: "system",
 		payload: {
 			type: "turn_end",
-			message: { model: "claude-sonnet-5-5", usage: { totalTokens, input: totalTokens } },
+			message: { model, usage: { totalTokens, input: totalTokens } },
 		},
 		ts: at(seq),
 	};
@@ -35,7 +38,7 @@ function assistantUsage(seq: number, cacheRead: number): StreamEventView {
 			type: "assistant_usage",
 			message: {
 				id: `msg_${seq}`,
-				model: "claude-sonnet-5-5",
+				model: MODEL,
 				usage: { input_tokens: 10, cache_read_input_tokens: cacheRead, output_tokens: 90 },
 			},
 		},
@@ -98,7 +101,7 @@ describe("bridgeRunStream — context-window warning (namphuongtran/warren#20)",
 				windowTokens: 200_000,
 				thresholdTokens: 160_000,
 				fraction: 0.8,
-				model: "claude-sonnet-5-5",
+				model: MODEL,
 			},
 		]);
 	});
@@ -117,12 +120,12 @@ describe("bridgeRunStream — context-window warning (namphuongtran/warren#20)",
 				windowTokens: 200_000,
 				thresholdTokens: 160_000,
 				fraction: 0.8,
-				model: "claude-sonnet-5-5",
+				model: MODEL,
 			},
 		]);
 	});
 
-	test("persists one usage row when claude-code repeats a request's usage on each block line", async () => {
+	test("never persists claude-code's usage events and records the newest reading", async () => {
 		await seed();
 		const block: StreamEventView = {
 			seq: 2,
@@ -131,10 +134,47 @@ describe("bridgeRunStream — context-window warning (namphuongtran/warren#20)",
 			payload: { text: "checking" },
 			ts: at(2),
 		};
-		await bridge([assistantUsage(1, 120_000), block, { ...assistantUsage(1, 120_000), seq: 3 }]);
+		// The CLI repeats a request's usage on each content-block line.
+		await bridge([assistantUsage(1, 120_000), block, assistantUsage(3, 120_000)]);
+		await bridge([assistantUsage(4, 130_000)]);
 
 		const rows = await repos.events.listByRun(runId);
-		expect(rows.map((e) => e.kind)).toEqual(["telemetry", "text"]);
+		expect(rows.map((e) => e.kind)).toEqual(["text"]);
+		expect(await repos.runContext.get(runId)).toEqual({
+			runId,
+			tokensUsed: 130_100,
+			windowTokens: 200_000,
+			model: MODEL,
+			observedAt: at(4).toISOString(),
+		});
+	});
+
+	test("reads a Claude 5.5 model against its 1M window", async () => {
+		await seed();
+		await bridge([turnEnd(1, 165_000, "claude-sonnet-5-5")]);
+
+		expect(await warnings()).toHaveLength(0);
+		expect((await repos.runContext.get(runId))?.windowTokens).toBe(1_000_000);
+	});
+
+	describe("with the warning turned off", () => {
+		const saved = process.env.WARREN_CONTEXT_WARNING_FRACTION;
+		beforeEach(() => {
+			process.env.WARREN_CONTEXT_WARNING_FRACTION = "0";
+		});
+		afterEach(() => {
+			if (saved === undefined) delete process.env.WARREN_CONTEXT_WARNING_FRACTION;
+			else process.env.WARREN_CONTEXT_WARNING_FRACTION = saved;
+		});
+
+		test("still records the reading for the run detail", async () => {
+			await seed({ frontmatter: { steering: "mid-run" } });
+			await bridge([turnEnd(1, 190_000)]);
+
+			expect(await warnings()).toHaveLength(0);
+			expect(steers).toHaveLength(0);
+			expect((await repos.runContext.get(runId))?.tokensUsed).toBe(190_000);
+		});
 	});
 
 	test("emits no warning while the context stays under the threshold", async () => {

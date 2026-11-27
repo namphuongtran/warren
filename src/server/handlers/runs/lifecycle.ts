@@ -311,7 +311,7 @@ export function getRunHandler(deps: ServerDeps): RouteHandler {
 					...projectRun(run, ctx.actor),
 					maxCostUsd: fact?.maxCostUsd ?? null,
 					toolStall: stall,
-					...(await currentContextWindow(deps.repos, run)),
+					...(await currentContextWindow(deps.repos, id)),
 				},
 			});
 		}

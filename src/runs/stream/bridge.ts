@@ -31,7 +31,7 @@ import {
 	resolveBridgeBudgetPolicy,
 } from "./budget-warning.ts";
 import { bridgeContextWatch } from "./context-warning.ts";
-import { isPerDeltaNoiseEvent, newRepeatTelemetryFilter } from "./delta-noise.ts";
+import { isPerDeltaNoiseEvent } from "./delta-noise.ts";
 import { bridgeDurationWatch, resolveDurationWatch } from "./duration-watch.ts";
 import { recordObservedModel } from "./observed-model.ts";
 import { recordProviderQuota } from "./provider-quota.ts";
@@ -184,7 +184,6 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 	// resumed bridge seeds both from the persisted events up to the cursor.
 	const { piUsage, claudeUsage } = await seedResumeUsage(repos, runId, resumeSeq, input.logger);
 	const appendGuard = newAppendGuard();
-	const isRepeatTelemetry = newRepeatTelemetryFilter(); // #20: claude-code's repeated usage lines
 	const capInput: EnforceBudgetCapInput = {
 		runId,
 		sandboxRunId,
@@ -271,7 +270,8 @@ export async function bridgeRunStream(input: BridgeRunStreamInput): Promise<Brid
 				break;
 			}
 			if (durationWatch.expiredAt(event)) break;
-			if (isPerDeltaNoiseEvent(event) || isRepeatTelemetry(event)) {
+			// #20: a context-only event (claude-code's usage line) feeds the watch, never the table.
+			if (isPerDeltaNoiseEvent(event) || (await contextWatch.takeContextOnly(event))) {
 				dropped += 1;
 				continue;
 			}

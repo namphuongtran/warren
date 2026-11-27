@@ -11,6 +11,7 @@ import { EventsRepo } from "./events.ts";
 import { PlanRunsRepo } from "./plan-runs.ts";
 import { ProjectsRepo } from "./projects.ts";
 import { ProviderQuotaRepo } from "./provider-quota.ts";
+import { RunContextRepo } from "./run-context.ts";
 import { RunInboxRepo } from "./run-inbox.ts";
 import { RunsRepo } from "./runs.ts";
 import { ToolCallsRepo } from "./tool-calls.ts";
@@ -27,6 +28,7 @@ export interface Repos {
 	toolCalls: ToolCallsRepo;
 	dispatchContext: DispatchContextRepo;
 	providerQuota: ProviderQuotaRepo;
+	runContext: RunContextRepo;
 }
 
 export function createRepos(db: AnyWarrenDb): Repos {
@@ -42,6 +44,7 @@ export function createRepos(db: AnyWarrenDb): Repos {
 		toolCalls: new ToolCallsRepo(adapter),
 		dispatchContext: new DispatchContextRepo(adapter),
 		providerQuota: new ProviderQuotaRepo(adapter),
+		runContext: new RunContextRepo(adapter),
 	};
 }
 
@@ -53,6 +56,7 @@ export {
 	PlanRunsRepo,
 	ProjectsRepo,
 	ProviderQuotaRepo,
+	RunContextRepo,
 	RunInboxRepo,
 	RunsRepo,
 	ToolCallsRepo,

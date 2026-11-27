@@ -11,19 +11,20 @@
  * usage is per request, not summed across the run, and a request sends the
  * whole conversation, so input + cache read + cache write + output is how much
  * of the window the conversation holds after the turn. pi reports that sum as
- * `totalTokens`.
+ * `totalTokens`. The `turn_end` is persisted for its own sake (cost reads it),
+ * so pi has no context-only event.
  *
- * The stream does not carry the window size, so it comes from the table below.
- * A model it does not know reads as no observation, and the bridge stays quiet.
+ * The stream does not carry the window size. pi runs the same Claude models
+ * claude-code does, so the window comes from the shared table in
+ * `./claude-context-windows.ts`. A model it does not know, Claude or not, reads
+ * as no observation, and the bridge stays quiet.
  */
 
 import { type EventEnvelopeInput, extractAgentEventEnvelope } from "../../core/event-envelope.ts";
+import { claudeContextWindowTokens } from "./claude-context-windows.ts";
 import type { ContextObservation } from "./types.ts";
 
 type JsonObject = Record<string, unknown>;
-
-/** The envelope types {@link observePiContext} reads. */
-export const PI_CONTEXT_ENVELOPE_TYPES: readonly string[] = ["turn_end"];
 
 function asObject(value: unknown): JsonObject | null {
 	return value !== null && typeof value === "object" && !Array.isArray(value)
@@ -35,30 +36,16 @@ function count(value: unknown): number | null {
 	return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
-/**
- * Context window per model family, matched on the id after any `provider/`
- * routing prefix. First match wins.
- */
-const PI_CONTEXT_WINDOWS: readonly { readonly pattern: RegExp; readonly tokens: number }[] = [
-	{ pattern: /^claude-/, tokens: 200_000 },
-];
-
-/** The model's context window in tokens, or `null` when the table does not know it. */
-function piContextWindowTokens(model: string): number | null {
-	const id = model.slice(model.lastIndexOf("/") + 1).toLowerCase();
-	return PI_CONTEXT_WINDOWS.find((entry) => entry.pattern.test(id))?.tokens ?? null;
-}
-
 /** Read a trusted `turn_end` into a context observation, else `null`. */
 export function observePiContext(event: EventEnvelopeInput): ContextObservation | null {
 	const envelope = extractAgentEventEnvelope(event);
-	if (envelope === null || !PI_CONTEXT_ENVELOPE_TYPES.includes(envelope.type)) return null;
+	if (envelope === null || envelope.type !== "turn_end") return null;
 	const message = asObject(envelope.payload.message);
 	const usage = asObject(message?.usage);
 	const model = typeof message?.model === "string" ? message.model : null;
 	if (usage === null || model === null) return null;
 	const tokensUsed = count(usage.totalTokens);
-	const windowTokens = piContextWindowTokens(model);
+	const windowTokens = claudeContextWindowTokens(model);
 	if (tokensUsed === null || tokensUsed === 0 || windowTokens === null) return null;
 	return { tokensUsed, windowTokens, model };
 }

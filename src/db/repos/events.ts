@@ -248,7 +248,11 @@ export class EventsRepo {
 	 */
 	async listUsageEvents(runIds: readonly string[]): Promise<EventRow[]> {
 		if (runIds.length === 0) return [];
-		const extracted = this.payloadType();
+		const column = this.events.payloadJson;
+		const extracted =
+			this.adapter.dialect === "postgres"
+				? sql<string | null>`${column} ->> 'type'`
+				: sql<string | null>`json_extract(${column}, '$.type')`;
 		return this.adapter.pickAll(
 			this.db
 				.select()
@@ -263,42 +267,6 @@ export class EventsRepo {
 				)
 				.orderBy(asc(this.events.runId), asc(this.events.sandboxEventSeq)),
 		);
-	}
-
-	/**
-	 * The run's newest system-stream event whose `payload.type` is one of
-	 * `types`, or null when it has none (namphuongtran/warren#20). The run
-	 * detail reads the newest context-window reading with it; the types come
-	 * from the adapters' `contextEnvelopeTypes`.
-	 */
-	async newestOfPayloadTypes(runId: string, types: readonly string[]): Promise<EventRow | null> {
-		if (types.length === 0) return null;
-		const row = await this.adapter.pickOne<EventRow>(
-			this.db
-				.select()
-				.from(this.events)
-				.where(
-					and(
-						eq(this.events.runId, runId),
-						eq(this.events.stream, "system"),
-						inArray(this.payloadType(), [...types]),
-					),
-				)
-				.orderBy(desc(this.events.sandboxEventSeq))
-				.limit(1),
-		);
-		return row ?? null;
-	}
-
-	/**
-	 * `payload_json.type` as SQL. Dialect-specific: sqlite stores the column
-	 * as TEXT (`json_extract`), postgres as `jsonb` (`->>`).
-	 */
-	private payloadType() {
-		const column = this.events.payloadJson;
-		return this.adapter.dialect === "postgres"
-			? sql<string | null>`${column} ->> 'type'`
-			: sql<string | null>`json_extract(${column}, '$.type')`;
 	}
 
 	/**

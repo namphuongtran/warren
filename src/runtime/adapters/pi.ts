@@ -30,7 +30,7 @@ import { mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { parsePiEvents } from "./parsers/pi.ts";
 import { buildPiArgv, PI_SESSION_DIR } from "./pi-argv.ts";
-import { observePiContext, PI_CONTEXT_ENVELOPE_TYPES } from "./pi-context.ts";
+import { observePiContext } from "./pi-context.ts";
 import { readNewestPiSessionId } from "./pi-session.ts";
 import {
 	encodeExtensionUiDecline,
@@ -88,7 +88,6 @@ export const piAdapter: AgentRuntimeAdapter = {
 	keepAliveEnvelopeTypes: [],
 	// Each `turn_end` names the model and the request's tokens (namphuongtran/warren#20).
 	observeContext: observePiContext,
-	contextEnvelopeTypes: PI_CONTEXT_ENVELOPE_TYPES,
 
 	buildSpawnCommand(ctx: AdapterSpawnContext): SpawnCommand {
 		return {

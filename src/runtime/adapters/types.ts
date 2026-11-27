@@ -226,26 +226,30 @@ export interface AgentRuntimeAdapter {
 
 	/**
 	 * Live check (namphuongtran/warren#20): how full is the model's context
-	 * window after this event? The bridge feeds every persisted event through
-	 * it to raise `context.warning`. `runModel` is the model the run is known to
-	 * run (`runs.model`, or the harness's own init envelope), for a harness whose
-	 * usage reading names a bare model id. Returns `null` for an event that is
-	 * not a usage reading, and when the adapter does not know the model's window.
+	 * window after this event? The bridge feeds every event through it, records
+	 * the newest reading in `run_context`, and raises `context.warning`.
+	 * `runModel` is the model the run is known to run (`runs.model`, or the
+	 * harness's own init envelope), for a harness whose usage reading names a
+	 * bare model id. Returns `null` for an event that is not a usage reading,
+	 * and when the adapter does not know the model's window.
 	 */
 	observeContext?(event: EventEnvelopeInput, runModel?: string | null): ContextObservation | null;
 	/**
-	 * Payload `type` values whose events {@link observeContext} reads. The run
-	 * detail reads the newest one to show context use beside cost. Optional so a
-	 * test double need not declare it; absent means no context reading.
+	 * Live check (namphuongtran/warren#20): does `event` exist only to carry a
+	 * context reading? claude-code's parser emits one such event per stream-json
+	 * `assistant` line. The bridge feeds it to {@link observeContext} and does
+	 * not persist it, so the transcript never holds one usage row per request.
+	 * Absent means every reading rides an event kept for its own sake (pi's
+	 * `turn_end`).
 	 */
-	readonly contextEnvelopeTypes?: readonly string[];
+	isContextOnlyEvent?(event: EventEnvelopeInput): boolean;
 }
 
 /** One context-window reading, read off a harness event by {@link AgentRuntimeAdapter.observeContext}. */
 export interface ContextObservation {
 	/** Tokens the conversation holds after this turn: its prompt (input + cache) plus its output. */
 	readonly tokensUsed: number;
-	/** The model's context window in tokens, from the adapter's own model table. */
+	/** The model's context window in tokens (`./claude-context-windows.ts` for Claude models). */
 	readonly windowTokens: number;
 	/** The model the window was looked up for. */
 	readonly model: string;

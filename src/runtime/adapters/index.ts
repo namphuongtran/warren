@@ -153,9 +153,14 @@ export function observeContext(
 	return firstAnswer((adapter) => adapter.observeContext?.(event, runModel));
 }
 
-/** Every payload type that carries a context reading, across all runtimes (namphuongtran/warren#20). */
-export function contextEnvelopeTypes(): readonly string[] {
-	return union((adapter) => adapter.contextEnvelopeTypes ?? []);
+/**
+ * True when some adapter says `event` exists only to carry a context reading
+ * (namphuongtran/warren#20). The bridge reads such an event and drops it.
+ */
+export function isContextOnlyEvent(event: EventEnvelopeInput): boolean {
+	return (
+		firstAnswer((adapter) => (adapter.isContextOnlyEvent?.(event) === true ? true : null)) === true
+	);
 }
 
 /** The first adapter's non-null answer, in {@link KNOWN_RUNTIME_IDS} order. */

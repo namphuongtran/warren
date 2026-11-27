@@ -22,6 +22,7 @@ import {
 	planRuns as pgPlanRuns,
 	projects as pgProjects,
 	providerQuota as pgProviderQuota,
+	runContext as pgRunContext,
 	runInbox as pgRunInbox,
 	runs as pgRuns,
 	toolCalls as pgToolCalls,
@@ -35,6 +36,7 @@ import {
 	planRuns as sqlitePlanRuns,
 	projects as sqliteProjects,
 	providerQuota as sqliteProviderQuota,
+	runContext as sqliteRunContext,
 	runInbox as sqliteRunInbox,
 	runs as sqliteRuns,
 	toolCalls as sqliteToolCalls,
@@ -55,6 +57,7 @@ const SQLITE_TABLES: Record<string, SQLiteTable> = {
 	toolCalls: sqliteToolCalls,
 	dispatchContext: sqliteDispatchContext,
 	providerQuota: sqliteProviderQuota,
+	runContext: sqliteRunContext,
 };
 
 const PG_TABLES: Record<string, PgTable> = {
@@ -69,6 +72,7 @@ const PG_TABLES: Record<string, PgTable> = {
 	toolCalls: pgToolCalls,
 	dispatchContext: pgDispatchContext,
 	providerQuota: pgProviderQuota,
+	runContext: pgRunContext,
 };
 
 type AnyTable = keyof typeof SQLITE_TABLES;

@@ -1,7 +1,8 @@
 /**
  * The context-window overlay on `GET /runs/:id` (namphuongtran/warren#20):
  * operators see how full the run's context window was at its newest usage
- * reading, beside its cost; spectators never get the fields.
+ * reading, which the bridge records in `run_context`, beside its cost;
+ * spectators never get the fields.
  */
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
@@ -59,19 +60,14 @@ describe("GET /runs/:id context overlay (namphuongtran/warren#20)", () => {
 		return row.id;
 	}
 
-	async function append(runId: string, seq: number, kind: string, payload: unknown) {
-		await repos.events.append({
+	async function record(runId: string, second: number, tokensUsed: number, windowTokens: number) {
+		await repos.runContext.record({
 			runId,
-			sandboxEventSeq: seq,
-			ts: new Date(Date.UTC(2026, 10, 27, 10, 0, seq)).toISOString(),
-			kind,
-			stream: "system",
-			payload,
+			tokensUsed,
+			windowTokens,
+			model: "claude-sonnet-4-5",
+			observedAt: new Date(Date.UTC(2026, 10, 27, 10, 0, second)).toISOString(),
 		});
-	}
-
-	function turnEnd(totalTokens: number) {
-		return { type: "turn_end", message: { model: "claude-sonnet-5-5", usage: { totalTokens } } };
 	}
 
 	async function detail(runId: string, token?: string): Promise<Record<string, unknown>> {
@@ -85,23 +81,17 @@ describe("GET /runs/:id context overlay (namphuongtran/warren#20)", () => {
 
 	test("serves the newest context reading to an operator", async () => {
 		const runId = await createRun();
-		await append(runId, 1, "state_change", turnEnd(50_000));
-		await append(runId, 2, "state_change", { type: "turn_start" });
-		await append(runId, 3, "state_change", turnEnd(120_000));
-		await append(runId, 4, "state_change", { type: "turn_start" });
+		await record(runId, 1, 50_000, 200_000);
+		await record(runId, 3, 120_000, 200_000);
 
 		const run = await detail(runId, TOKEN);
 		expect(run.contextTokens).toBe(120_000);
 		expect(run.contextWindowTokens).toBe(200_000);
 	});
 
-	test("reads the window off the run's model when the usage names the bare id", async () => {
+	test("serves the window the bridge recorded with the reading", async () => {
 		const runId = await createRun();
-		await repos.runs.setModel(runId, "claude-sonnet-5-5[1m]");
-		await append(runId, 1, "telemetry", {
-			type: "assistant_usage",
-			message: { id: "msg_1", model: "claude-sonnet-5-5", usage: { input_tokens: 400_000 } },
-		});
+		await record(runId, 1, 400_000, 1_000_000);
 
 		const run = await detail(runId, TOKEN);
 		expect(run.contextTokens).toBe(400_000);
@@ -118,7 +108,7 @@ describe("GET /runs/:id context overlay (namphuongtran/warren#20)", () => {
 
 	test("omits the fields for a spectator", async () => {
 		const runId = await createRun();
-		await append(runId, 1, "state_change", turnEnd(50_000));
+		await record(runId, 1, 50_000, 200_000);
 
 		const run = await detail(runId);
 		expect(run).not.toHaveProperty("contextTokens");

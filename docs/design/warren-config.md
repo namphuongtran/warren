@@ -71,7 +71,7 @@ warning shape with no config key (namphuongtran/warren#20): one
 `context.warning` event once the conversation fills a fraction of the
 model's window (default 80%, `WARREN_CONTEXT_WARNING_FRACTION`, `0`
 turns it off), plus one wrap-up steer for a `steering: mid-run` harness.
-The harness adapter reads the usage and supplies the window size; see
+The harness adapter reads the usage and looks up the window size; see
 [docs/operations.md](../operations.md#context-window). `config.yaml` and legacy
 `defaults.json` share the same
 schema — `{ defaultRole?, defaultBranch?, defaultPrompt?, defaultProvider?,
