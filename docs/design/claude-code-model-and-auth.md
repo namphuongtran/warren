@@ -32,7 +32,7 @@ Evidence: the `system/init` event of three real runs reported `model: claude-opu
 
 `claudeModelArgs(frontmatter)` adds `--model <id>` when two conditions are both true: `frontmatter.model` has a value, and the provider is empty or is `anthropic`. For other providers, the adapter drops this flag. Claude Code calls only the Anthropic API and cannot accept a model id such as an OpenRouter slug.
 
-The agent image now uses Claude Code 2.1.330, so current model ids resolve inside the container.
+The agent image moved to Claude Code 2.1.330, so current model ids resolve inside the container. Both images now pin 2.1.332 (namphuongtran/warren#150).
 
 ### Benefits
 

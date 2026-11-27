@@ -232,6 +232,12 @@ Releases **0.9.10 and earlier** live in
 
 ### Changed
 
+- **Both images pin claude-code 2.1.332 (namphuongtran/warren#150).** The
+  server image (`Dockerfile`), which the local runtime spawns from, was on
+  2.1.150. The agent image (`deploy/docker/Dockerfile.agent`), which the
+  Docker and K8s runtimes spawn from, was on 2.1.330. 2.1.332 is the version
+  the mid-run steering captures were taken on.
+
 - **`planner` is now a spec agent (namphuongtran/warren#35).** The built-in
   `planner` prompt no longer reads a Plot intent, writes Plot attachments, or
   waits on an interactive turn: those surfaces were already retired, and the
