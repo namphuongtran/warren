@@ -176,7 +176,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           name: design-review-input
           path: .design-review
@@ -186,7 +186,7 @@ jobs:
       - name: Run the evaluator
         id: claude
         continue-on-error: true
-        uses: anthropics/claude-code-action@6fed3ca145920b639991cb756090506e1bcaf515 # v1.0.245
+        uses: anthropics/claude-code-action@4a461cbbb72e467c61b1e47547fc0d7dacece34a # v1.0.288
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ github.token }}
@@ -254,7 +254,7 @@ jobs:
       - name: Mint app installation token
         id: app-token
         if: ${{ vars.AUTO_MERGE_APP_CLIENT_ID != '' }}
-        uses: actions/create-github-app-token@v3.2.0
+        uses: actions/create-github-app-token@v3.4.0
         with:
           client-id: ${{ vars.AUTO_MERGE_APP_CLIENT_ID }}
           private-key: ${{ secrets.AUTO_MERGE_APP_PRIVATE_KEY }}
@@ -267,7 +267,7 @@ jobs:
       - name: Download the verdict
         if: needs.prepare.outputs.mode == 'review'
         continue-on-error: true
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: design-review-verdict
           path: ${{ runner.temp }}/design-review-verdict
