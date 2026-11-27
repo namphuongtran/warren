@@ -31,7 +31,7 @@ function TabLink({
 			replace
 			aria-current={current ? "page" : undefined}
 			className={cn(
-				"-mb-px inline-flex h-9 items-center border-b-2 px-3 font-medium text-xs",
+				"-mb-px inline-flex h-9 items-center border-b-2 px-3 text-xs font-medium",
 				current
 					? "border-(--color-primary) text-(--color-text)"
 					: "border-transparent text-(--color-text-3) hover:text-(--color-text-2)",
@@ -88,7 +88,7 @@ export function RunDetailViews({
 	const view = readRunDetailView(params);
 	return (
 		<>
-			<nav aria-label="Run views" className="flex shrink-0 border-(--color-border) border-b">
+			<nav aria-label="Run views" className="flex shrink-0 border-b border-(--color-border)">
 				<TabLink search="" current={view.tab === "summary"}>
 					Summary
 				</TabLink>

@@ -43,7 +43,7 @@ export function ChangesSection({
 			) : files === 0 ? (
 				<SummaryEmpty>The run changed no files.</SummaryEmpty>
 			) : (
-				<p className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-(--color-text) text-xs">
+				<p className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-xs text-(--color-text)">
 					<span>{plural(files, "file")} changed</span>
 					{run.insertions !== null ? (
 						<span className="text-(--color-success)">+{run.insertions}</span>
@@ -99,11 +99,11 @@ function PullRequestChecks({ run }: { run: RunRow }) {
 					</span>
 				) : null}
 			</div>
-			<p className="text-(--color-text-3) text-xs">{view.detail}</p>
+			<p className="text-xs text-(--color-text-3)">{view.detail}</p>
 			{checks !== null && checks.failing.length > 0 ? (
 				<ul aria-label="Failed checks" className="flex flex-col gap-0.5">
 					{checks.failing.map((name) => (
-						<li key={name} className="break-words font-mono text-(--color-danger) text-xs">
+						<li key={name} className="font-mono text-xs break-words text-(--color-danger)">
 							{name}
 						</li>
 					))}
@@ -119,7 +119,7 @@ function PullRequestReview({ run }: { run: RunRow }) {
 	return (
 		<div className="flex flex-col gap-1">
 			<ToneChip tone={view.tone}>{view.label}</ToneChip>
-			<p className="break-words text-(--color-text-3) text-xs">{view.detail}</p>
+			<p className="text-xs break-words text-(--color-text-3)">{view.detail}</p>
 		</div>
 	);
 }
@@ -130,7 +130,7 @@ export function DeliverySection({ run, isTerminal }: { run: RunRow; isTerminal: 
 		<SummaryCard title="Delivery">
 			<SummaryBlock label="Branch">
 				{branch !== null ? (
-					<code className="break-all font-mono text-(--color-text) text-xs">{branch}</code>
+					<code className="font-mono text-xs break-all text-(--color-text)">{branch}</code>
 				) : (
 					<SummaryEmpty>No branch was recorded for this run.</SummaryEmpty>
 				)}

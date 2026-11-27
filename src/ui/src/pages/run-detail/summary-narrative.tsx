@@ -63,8 +63,8 @@ function VerificationList({ handoff }: { handoff: RunHandoff }) {
 			{handoff.verification.map((step, i) => (
 				// biome-ignore lint/suspicious/noArrayIndexKey: commands can repeat
 				<li key={i} className="flex flex-col gap-0.5">
-					<code className="break-all font-mono text-(--color-text) text-xs">{step.command}</code>
-					<span className="whitespace-pre-wrap break-words">{step.outcome}</span>
+					<code className="font-mono text-xs break-all text-(--color-text)">{step.command}</code>
+					<span className="break-words whitespace-pre-wrap">{step.outcome}</span>
 				</li>
 			))}
 		</ul>
@@ -88,7 +88,7 @@ function TextList({
 		>
 			{items.map((item, i) => (
 				// biome-ignore lint/suspicious/noArrayIndexKey: agent lines can repeat
-				<li key={i} className="whitespace-pre-wrap break-words text-(--color-text)">
+				<li key={i} className="break-words whitespace-pre-wrap text-(--color-text)">
 					{item}
 				</li>
 			))}
@@ -112,11 +112,11 @@ function ReviewVerdict({ handoff }: { handoff: RunHandoff }) {
 						<li key={i} className="flex flex-col gap-0.5">
 							<span className="font-medium text-(--color-text)">{f.title}</span>
 							{f.path !== null ? (
-								<code className="break-all font-mono text-xs">
+								<code className="font-mono text-xs break-all">
 									{f.line !== null ? `${f.path}:${f.line}` : f.path}
 								</code>
 							) : null}
-							<span className="whitespace-pre-wrap break-words">{f.body}</span>
+							<span className="break-words whitespace-pre-wrap">{f.body}</span>
 						</li>
 					))}
 				</ul>
@@ -172,7 +172,7 @@ export function OutcomeSection({ run, isTerminal }: { run: RunRow; isTerminal: b
 					<SummaryEmpty>
 						The agent's handoff report failed validation, so it is not shown.
 					</SummaryEmpty>
-					<code className="break-all font-mono text-(--color-text-3) text-xs">{record.reason}</code>
+					<code className="font-mono text-xs break-all text-(--color-text-3)">{record.reason}</code>
 				</>
 			)}
 		</SummaryCard>

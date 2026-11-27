@@ -26,7 +26,7 @@ function location(flag: RunQualityFlag): string | null {
 function FlagLocation({ flag, href }: { flag: RunQualityFlag; href: string | null }) {
 	const where = location(flag);
 	if (where === null) return null;
-	if (href === null) return <span className="break-all font-mono text-xs">{where}</span>;
+	if (href === null) return <span className="font-mono text-xs break-all">{where}</span>;
 	return (
 		<ExternalLink href={href} mono>
 			{where}
@@ -61,7 +61,7 @@ export function ShortcutFlags({
 						>
 							<span className="flex flex-wrap items-center gap-x-2">
 								<span className="font-medium text-(--color-text)">{FLAG_LABELS[flag.kind]}</span>
-								<span className="break-all font-mono text-(--color-text-3)">{flag.detail}</span>
+								<span className="font-mono break-all text-(--color-text-3)">{flag.detail}</span>
 							</span>
 							<FlagLocation flag={flag} href={qualityFlagHref(run, gitUrl, flag)} />
 						</li>

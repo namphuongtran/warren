@@ -21,7 +21,7 @@ import { cn } from "@/lib/utils.ts";
 
 const controlClass = cn(
 	responsiveFormControl,
-	"w-full rounded-(--radius-sm) border border-(--color-border-strong) bg-(--color-bg) px-2.5 text-(--color-text) leading-[17px] placeholder:text-(--color-text-3) focus-visible:outline-none focus-visible:ring-(--color-primary) focus-visible:ring-2",
+	"w-full rounded-(--radius-sm) border border-(--color-border-strong) bg-(--color-bg) px-2.5 leading-[17px] text-(--color-text) placeholder:text-(--color-text-3) focus-visible:ring-2 focus-visible:ring-(--color-primary) focus-visible:outline-none",
 	"sm:h-8 sm:text-[11px] sm:leading-[14px]",
 );
 
@@ -44,15 +44,15 @@ function Section({
 		<section
 			className={cn(
 				"flex flex-col",
-				divider === "both" && "border-(--color-border) border-b",
-				divider !== "none" && "md:border-(--color-border) md:border-b",
+				divider === "both" && "border-b border-(--color-border)",
+				divider !== "none" && "md:border-b md:border-(--color-border)",
 			)}
 		>
 			{/* Desktop header — below md the card's --color-thead bar replaces it. */}
 			<div className="hidden md:flex md:flex-col md:gap-[3px] md:px-[15px] md:pt-[15px] md:pb-[13px]">
-				<h2 className="font-semibold text-(--color-text) text-[11px] leading-[14px]">{title}</h2>
+				<h2 className="text-[11px] leading-[14px] font-semibold text-(--color-text)">{title}</h2>
 				{description && (
-					<p className="text-(--color-text-3) text-[10px] leading-3">{description}</p>
+					<p className="text-[10px] leading-3 text-(--color-text-3)">{description}</p>
 				)}
 			</div>
 			<div className="flex flex-col px-3 py-3 md:px-[15px] md:py-0 md:pb-[15px]">{children}</div>
@@ -69,8 +69,8 @@ function Section({
 function MobileCard({ title, children }: { title: string; children: ReactNode }) {
 	return (
 		<div className="flex flex-col overflow-clip rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) md:contents">
-			<div className="flex items-center border-(--color-border) border-b bg-(--color-thead) px-3 py-2.5 md:hidden">
-				<h2 className="font-semibold text-(--color-text) text-[12px] leading-[15px]">{title}</h2>
+			<div className="flex items-center border-b border-(--color-border) bg-(--color-thead) px-3 py-2.5 md:hidden">
+				<h2 className="text-[12px] leading-[15px] font-semibold text-(--color-text)">{title}</h2>
 			</div>
 			{children}
 		</div>
@@ -146,7 +146,7 @@ export function DispatchForm(props: DispatchFormProps) {
 
 	return (
 		<form
-			className="flex min-w-0 max-w-[760px] flex-1 flex-col gap-3.5 md:gap-0 md:overflow-clip md:rounded-(--radius-md) md:border md:border-(--color-border) md:bg-(--color-surface)"
+			className="flex max-w-[760px] min-w-0 flex-1 flex-col gap-3.5 md:gap-0 md:overflow-clip md:rounded-(--radius-md) md:border md:border-(--color-border) md:bg-(--color-surface)"
 			onSubmit={(e) => {
 				e.preventDefault();
 				if (canSubmit) props.onSubmit();
@@ -333,7 +333,7 @@ export function DispatchForm(props: DispatchFormProps) {
 					disabled={props.pending}
 					className={cn(
 						responsiveFooterButton,
-						"hidden h-11 items-center justify-center rounded-(--radius-sm) border border-(--color-border-strong) bg-(--color-surface) px-[11px] font-medium text-(--color-text-2) text-[11px] leading-[14px] hover:bg-(--color-surface-hover) disabled:opacity-50 sm:h-[31px] sm:justify-start md:flex",
+						"hidden h-11 items-center justify-center rounded-(--radius-sm) border border-(--color-border-strong) bg-(--color-surface) px-[11px] text-[11px] leading-[14px] font-medium text-(--color-text-2) hover:bg-(--color-surface-hover) disabled:opacity-50 sm:h-[31px] sm:justify-start md:flex",
 					)}
 				>
 					Cancel
@@ -343,7 +343,7 @@ export function DispatchForm(props: DispatchFormProps) {
 					disabled={!canSubmit}
 					className={cn(
 						responsiveFooterButton,
-						"flex h-11 items-center justify-center rounded-(--radius-sm) bg-(--color-primary) px-[11px] font-medium text-(--color-primary-ink) text-[11px] leading-[14px] disabled:opacity-50 sm:h-[31px] sm:justify-start",
+						"flex h-11 items-center justify-center rounded-(--radius-sm) bg-(--color-primary) px-[11px] text-[11px] leading-[14px] font-medium text-(--color-primary-ink) disabled:opacity-50 sm:h-[31px] sm:justify-start",
 					)}
 				>
 					{props.pending ? "Dispatching…" : "Dispatch workload"}
@@ -351,7 +351,7 @@ export function DispatchForm(props: DispatchFormProps) {
 			</div>
 
 			{props.submitError ? (
-				<p className="px-3.5 py-2 font-mono text-(--color-danger) text-[10px] leading-3 md:border-(--color-border) md:border-t md:px-[15px]">
+				<p className="px-3.5 py-2 font-mono text-[10px] leading-3 text-(--color-danger) md:border-t md:border-(--color-border) md:px-[15px]">
 					{props.submitError}
 				</p>
 			) : null}
