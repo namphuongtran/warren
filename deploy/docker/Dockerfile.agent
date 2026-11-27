@@ -19,7 +19,7 @@
 # Build context is the repo root:
 #   docker build -f deploy/docker/Dockerfile.agent -t warren-agent:latest .
 
-FROM oven/bun:1.2
+FROM oven/bun:1.4
 
 # git + https CA roots for clone/push; real Node (NodeSource LTS) for agent
 # tooling whose shims are `#!/usr/bin/env node` (parity with the control-plane
