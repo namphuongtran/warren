@@ -51,15 +51,17 @@ export interface RefreshProjectCloneInput {
 	/** Branch, tag, or SHA. Defaults to the project's tracked default branch. */
 	readonly ref: string;
 	/**
-	 * Detached-HEAD-safe fetch-only mode (warren-232d): when set, fetch the
-	 * given 40-hex commit SHA from origin WITHOUT moving the shared host
-	 * clone's HEAD — no `checkout --force`, no `reset --hard`, no hook arming
-	 * (the tree is untouched, so a prior refresh's config stands). The fetch
-	 * is `git fetch origin <sha>` with a fallback to a full `git fetch origin`
-	 * for servers without `allowReachableSHA1InWant`; the object is then
-	 * verified locally and the call aborts when origin doesn't carry it.
-	 * `headSha` reports the clone's UNCHANGED HEAD (the truthful row stamp);
-	 * the caller cuts the workspace at the SHA itself via the RunSpec base.
+	 * A 40-hex commit the caller cuts a workspace at: a pinned `baseCommit`
+	 * dispatch (warren-232d). The refresh still runs onto `ref`, the default
+	 * branch for a pinned dispatch, so the working tree and the `.warren/`
+	 * config dispatch reads from it are the default-branch tip an unpinned
+	 * dispatch sees (namphuongtran/warren#165). The clone never checks out
+	 * the pin: the provider cuts the workspace at the SHA itself
+	 * (`git worktree add -b <runBranch> <ws> <sha>`), so HEAD never detaches.
+	 * Right after the fetch, the commit must be present locally. A pin that
+	 * no branch or tag reaches gets a direct `git fetch origin <sha>`, and the
+	 * call aborts before any checkout when origin does not carry it. The
+	 * result's `ref` echoes the pin.
 	 */
 	readonly fetchCommit?: string;
 	/**
@@ -124,27 +126,24 @@ export async function refreshProjectClone(
 	// No token → no `env` key, plain inheritance (see CloneProjectInput.token).
 	const credEnv = gitCredentialGitEnv(input.gitCredential);
 	const netEnv: Pick<SpawnOptions, "env"> = Object.keys(credEnv).length > 0 ? { env: credEnv } : {};
-	// warren-232d: fetch-only mode for baseCommit dispatches. The shared host
-	// clone's HEAD is never moved — the workspace is cut at the pinned SHA
-	// directly (`git worktree add -b <runBranch> <ws> <sha>`), so concurrent
-	// runs with different pins cannot fight over the checked-out branch.
+	await runGit(spawn, [config.gitBinary, "fetch", "--prune", "origin"], {
+		cwd: localPath,
+		timeoutMs,
+		...netEnv,
+	});
+	// warren-232d: a pinned dispatch also needs the pin's objects; the rest
+	// of its refresh is an unpinned one. Check before the checkout so a
+	// missing pin leaves the clone untouched.
 	if (input.fetchCommit !== undefined) {
-		return fetchCommitOnly({
+		await ensureCommitPresent({
 			config,
 			localPath,
 			sha: input.fetchCommit,
 			spawn,
 			timeoutMs,
 			netEnv,
-			exists,
 		});
 	}
-
-	await runGit(spawn, [config.gitBinary, "fetch", "--prune", "origin"], {
-		cwd: localPath,
-		timeoutMs,
-		...netEnv,
-	});
 
 	// `git checkout <ref>` moves HEAD onto the named ref (creating a
 	// tracking branch when ref is a remote branch name). Without
@@ -207,53 +206,44 @@ export async function refreshProjectClone(
 
 	const headSha = await readHead(spawn, config.gitBinary, localPath, timeoutMs);
 	const features = detectProjectFeatures(localPath, exists);
-	return { headSha, ref, features };
+	return { headSha, ref: input.fetchCommit ?? ref, features };
 }
 
-interface FetchCommitOnlyInput {
+interface EnsureCommitInput {
 	readonly config: ProjectsConfig;
 	readonly localPath: string;
 	readonly sha: string;
 	readonly spawn: SpawnFn;
 	readonly timeoutMs: number;
 	readonly netEnv: Pick<SpawnOptions, "env">;
-	readonly exists: (path: string) => boolean;
 }
 
 /**
- * warren-232d fetch-only leg: bring the pinned commit's objects into the
- * shared clone and leave HEAD + working tree exactly as they were. See
- * `RefreshProjectCloneInput.fetchCommit`.
+ * Make sure a pinned commit is in the clone after the full fetch, which
+ * brought every branch and tag. A pin only a pull-request ref or a deleted
+ * branch reaches needs `git fetch origin <sha>`; servers without
+ * allowReachableSHA1InWant refuse that, and the second check catches it.
  */
-async function fetchCommitOnly(input: FetchCommitOnlyInput): Promise<RefreshProjectCloneResult> {
+async function ensureCommitPresent(input: EnsureCommitInput): Promise<void> {
 	const { config, localPath, sha, spawn, timeoutMs } = input;
-	// Prefer the O(1) sha fetch; servers without allowReachableSHA1InWant
-	// reject it, so fall back to a full fetch and check the object after.
-	const shaFetch = await trySpawn(spawn, [config.gitBinary, "fetch", "origin", sha], {
+	const hasCommit = async () =>
+		(
+			await trySpawn(spawn, [config.gitBinary, "cat-file", "-e", `${sha}^{commit}`], {
+				cwd: localPath,
+				timeoutMs,
+			})
+		).exitCode === 0;
+	if (await hasCommit()) return;
+	await trySpawn(spawn, [config.gitBinary, "fetch", "origin", sha], {
 		cwd: localPath,
 		timeoutMs,
 		...input.netEnv,
 	});
-	if (shaFetch.exitCode !== 0) {
-		await runGit(spawn, [config.gitBinary, "fetch", "--prune", "origin"], {
-			cwd: localPath,
-			timeoutMs,
-			...input.netEnv,
-		});
-	}
-	const verify = await trySpawn(spawn, [config.gitBinary, "cat-file", "-e", `${sha}^{commit}`], {
-		cwd: localPath,
-		timeoutMs,
-	});
-	if (verify.exitCode !== 0) {
-		throw new ProjectUnavailableError(
-			`base commit ${sha} is not present on origin (or is not a commit)`,
-			{ recoveryHint: "Pin baseCommit to a full commit SHA that exists on the project's origin" },
-		);
-	}
-	const headSha = await readHead(spawn, config.gitBinary, localPath, timeoutMs);
-	const features = detectProjectFeatures(localPath, input.exists);
-	return { headSha, ref: sha, features };
+	if (await hasCommit()) return;
+	throw new ProjectUnavailableError(
+		`base commit ${sha} is not present on origin (or is not a commit)`,
+		{ recoveryHint: "Pin baseCommit to a full commit SHA that exists on the project's origin" },
+	);
 }
 
 async function readHead(

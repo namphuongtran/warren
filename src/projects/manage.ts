@@ -160,11 +160,11 @@ export interface RefreshProjectInput {
 	/** Branch, tag, or SHA. Defaults to the project row's tracked default_branch. */
 	readonly ref?: string;
 	/**
-	 * Detached-HEAD-safe fetch-only mode (warren-232d): fetch this 40-hex
-	 * commit from origin without moving the host clone's HEAD. Forwarded to
-	 * `refreshProjectClone` — see `RefreshProjectCloneInput.fetchCommit`.
-	 * Takes precedence over `ref` for the clone operation; the echo `ref` in
-	 * the result is the fetched SHA.
+	 * A pinned commit (warren-232d) that must be present after the refresh.
+	 * The clone still refreshes onto `ref`; it never checks out the pin.
+	 * Forwarded to `refreshProjectClone`, see
+	 * `RefreshProjectCloneInput.fetchCommit`. The echo `ref` in the result is
+	 * the pin.
 	 */
 	readonly fetchCommit?: string;
 	/**

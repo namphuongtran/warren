@@ -370,16 +370,13 @@ describe("refreshProjectClone git-hooks arming (warren-8f4c)", () => {
 	});
 });
 
-describe("refreshProjectClone: fetch-only mode (warren-232d)", () => {
+describe("refreshProjectClone: pinned commit (warren-232d, namphuongtran/warren#165)", () => {
 	const PIN = "0123456789abcdef0123456789abcdef01234567";
 	const HEAD = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+	const VERIFY = ["git", "cat-file", "-e", `${PIN}^{commit}`];
 
-	test("fetches the pinned sha, verifies it, and never moves HEAD (no checkout/reset)", async () => {
-		const { spawn, calls } = recorder((cmd) => {
-			if (cmd[1] === "rev-parse") return ok(`${HEAD}\n`);
-			return ok();
-		});
-		const result = await refreshProjectClone({
+	function refreshPinned(spawn: SpawnFn) {
+		return refreshProjectClone({
 			config: CFG,
 			localPath: "/data/projects/x/y",
 			ref: "main",
@@ -387,69 +384,63 @@ describe("refreshProjectClone: fetch-only mode (warren-232d)", () => {
 			spawn,
 			exists: () => true,
 		});
+	}
 
-		// headSha is the clone's UNCHANGED HEAD; ref echoes the pin.
+	test("refreshes onto the default branch and verifies the pin before the checkout", async () => {
+		const { spawn, calls } = recorder((cmd) => {
+			if (cmd[1] === "rev-parse") return ok(`${HEAD}\n`);
+			return ok();
+		});
+		const result = await refreshPinned(spawn);
+
+		// headSha is the default-branch tip the clone now sits on; ref echoes the pin.
 		expect(result).toEqual({
 			headSha: HEAD,
 			ref: PIN,
 			features: { hasSeeds: true, hasMulch: true },
 		});
-		expect(calls.map((c) => c.cmd.slice(0, 2))).toEqual([
-			["git", "fetch"],
-			["git", "cat-file"],
-			["git", "rev-parse"],
-		]);
-		expect(calls[0]?.cmd).toEqual(["git", "fetch", "origin", PIN]);
-		expect(calls[1]?.cmd).toEqual(["git", "cat-file", "-e", `${PIN}^{commit}`]);
-		// Detached-HEAD safety: the shared clone's checked-out branch never moves.
-		const verbs = calls.map((c) => c.cmd[1]);
-		expect(verbs).not.toContain("checkout");
-		expect(verbs).not.toContain("reset");
-	});
-
-	test("falls back to a full fetch when the server rejects the sha fetch (no allowReachableSHA1InWant)", async () => {
-		const { spawn, calls } = recorder((cmd) => {
-			if (cmd[1] === "fetch" && cmd.includes(PIN)) {
-				return { stdout: "", stderr: "Server does not allow request", exitCode: 128 };
-			}
-			if (cmd[1] === "rev-parse") return ok(`${HEAD}\n`);
-			return ok();
-		});
-		const result = await refreshProjectClone({
-			config: CFG,
-			localPath: "/data/projects/x/y",
-			ref: "main",
-			fetchCommit: PIN,
-			spawn,
-			exists: () => true,
-		});
-
-		expect(result.headSha).toBe(HEAD);
 		expect(calls.map((c) => c.cmd)).toEqual([
-			["git", "fetch", "origin", PIN],
 			["git", "fetch", "--prune", "origin"],
-			["git", "cat-file", "-e", `${PIN}^{commit}`],
+			VERIFY,
+			["git", "checkout", "--force", "main"],
+			["git", "reset", "--hard", "origin/main"],
+			["git", "config", "--local", "--unset-all", "user.name"],
+			["git", "config", "--local", "--unset-all", "user.email"],
 			["git", "rev-parse", "HEAD"],
 		]);
 	});
 
-	test("aborts when the pinned commit is not on origin", async () => {
-		const { spawn } = recorder((cmd) => {
+	test("fetches the pin directly when no branch or tag reaches it", async () => {
+		let verifies = 0;
+		const { spawn, calls } = recorder((cmd) => {
 			if (cmd[1] === "cat-file") {
-				return { stdout: "", stderr: "bad object", exitCode: 128 };
+				verifies += 1;
+				return verifies === 1 ? { stdout: "", stderr: "bad object", exitCode: 128 } : ok();
 			}
 			if (cmd[1] === "rev-parse") return ok(`${HEAD}\n`);
 			return ok();
 		});
-		await expect(
-			refreshProjectClone({
-				config: CFG,
-				localPath: "/data/projects/x/y",
-				ref: "main",
-				fetchCommit: PIN,
-				spawn,
-				exists: () => true,
-			}),
-		).rejects.toBeInstanceOf(ProjectUnavailableError);
+		await refreshPinned(spawn);
+
+		expect(calls.slice(0, 5).map((c) => c.cmd)).toEqual([
+			["git", "fetch", "--prune", "origin"],
+			VERIFY,
+			["git", "fetch", "origin", PIN],
+			VERIFY,
+			["git", "checkout", "--force", "main"],
+		]);
+	});
+
+	test("aborts before any checkout when origin does not carry the pin", async () => {
+		const { spawn, calls } = recorder((cmd) => {
+			if (cmd[1] === "cat-file") return { stdout: "", stderr: "bad object", exitCode: 128 };
+			if (cmd[1] === "rev-parse") return ok(`${HEAD}\n`);
+			return ok();
+		});
+
+		await expect(refreshPinned(spawn)).rejects.toBeInstanceOf(ProjectUnavailableError);
+		const verbs = calls.map((c) => c.cmd[1]);
+		expect(verbs).not.toContain("checkout");
+		expect(verbs).not.toContain("reset");
 	});
 });

@@ -247,6 +247,17 @@ operator fat-fingered, which is the same bug with a smaller blast radius.
 Strict parse plus a dispatch-blocking failure is the only shape where a
 typo cannot widen a guardrail.
 
+**Pinned dispatches read the default-branch config
+(namphuongtran/warren#165).** A `baseCommit` dispatch refreshes the host
+clone onto the default branch, exactly like an unpinned dispatch, and
+reads `.warren/` from that working tree. Its workspace is still cut at
+the pin. The refresh only makes sure the pin's objects are present, and
+the provider runs `git worktree add` at the SHA, so the clone never
+detaches onto a pin (warren-232d). Each refreshed run records the clone
+HEAD its config was read at in `dispatch_context.config_commit`; NULL
+means the dispatch ran without a refresh. A `--ref` dispatch and a
+continuation still read the config of the branch they check out.
+
 **HTTP surface.** `GET /projects/:id/warren-config` returns the
 `LoadedWarrenConfig` envelope verbatim (`mx-adf588`); 404 if the project
 doesn't exist; `WarrenConfigUnavailableError` joins the existing

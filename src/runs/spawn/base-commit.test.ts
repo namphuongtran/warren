@@ -108,7 +108,7 @@ describe("spawnRun: baseCommit dispatch is detached-HEAD safe (warren-232d)", ()
 		await db.close();
 	});
 
-	test("refreshes in fetch-only mode — fetchCommit carried, no checkout ref", async () => {
+	test("refreshes onto the default branch with the pin as fetchCommit, never as the checkout ref", async () => {
 		const { client } = makeSandboxClient();
 		let receivedRef: string | undefined;
 		let receivedFetchCommit: string | undefined;
@@ -133,8 +133,8 @@ describe("spawnRun: baseCommit dispatch is detached-HEAD safe (warren-232d)", ()
 			},
 		});
 
-		// The refresh runs in fetch-only mode: the SHA rides fetchCommit (which
-		// never moves the host clone's HEAD), never as the checkout ref.
+		// The SHA rides fetchCommit, never as the checkout ref: the clone
+		// refreshes onto the default branch and never detaches onto the pin.
 		expect(receivedFetchCommit).toBe(SHA);
 		expect(receivedRef).toBeUndefined();
 	});
