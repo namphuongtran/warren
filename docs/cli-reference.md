@@ -7,7 +7,7 @@ This page enumerates every `warren` command with its arguments, flags, and the s
 
 To refresh: `bun run gen:cli-ref`. To check (CI mode): `bun run gen:cli-ref:check`.
 
-Total commands: **22**.
+Total commands: **23**.
 
 ## Global options
 
@@ -256,6 +256,20 @@ warren projects [options]
 
 | Flag | Required | Default | Description |
 | --- | --- | --- | --- |
+| `--url <url>` |  |  | warren server base URL (env WARREN_BASE_URL) |
+| `--token <token>` |  |  | bearer token (env WARREN_API_TOKEN) |
+
+### `warren attention`
+
+list finished runs that wait on the operator (GET /attention)
+
+```bash
+warren attention [options]
+```
+
+| Flag | Required | Default | Description |
+| --- | --- | --- | --- |
+| `--window <window>` |  |  | trailing window of queued runs: 24h, 7d, 30d |
 | `--url <url>` |  |  | warren server base URL (env WARREN_BASE_URL) |
 | `--token <token>` |  |  | bearer token (env WARREN_API_TOKEN) |
 

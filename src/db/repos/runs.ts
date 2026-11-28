@@ -20,6 +20,7 @@ import type {
 	RunTerminalState,
 } from "../schema.ts";
 import type { DrizzleAdapter } from "./drizzle-adapter.ts";
+import { type RunAttentionInputs, readAttentionInputs } from "./runs-attention.ts";
 import { fixAttemptHistoryByPrUrl, listPrCandidatesByProject } from "./runs-ci-fixer.ts";
 import { deleteNeverStarted } from "./runs-delete.ts";
 import {
@@ -419,13 +420,17 @@ export class RunsRepo {
 		return setPrChecks(this.adapter, id, checks);
 	}
 
+	/** Needs-attention inputs since a queued instant (namphuongtran/warren#26). */
+	readAttentionInputs(createdSinceMs: number): Promise<RunAttentionInputs> {
+		return readAttentionInputs(this.adapter, createdSinceMs);
+	}
+
 	/** PRs the merge watcher still has to settle (warren-3bc6): boot re-adopts these. */
 	listWithUnresolvedPr(): Promise<RunRow[]> {
 		return listWithUnresolvedPr(this.adapter);
 	}
 
-	/** Where a failed finalize's work was salvaged (warren-cd3b): rescue ref and/or
-	 * git bundle. Last write wins. */
+	/** Where a failed finalize's work was salvaged (warren-cd3b). Last write wins. */
 	async setSalvage(
 		id: string,
 		salvage: { rescueRef: string | null; bundlePath: string | null },

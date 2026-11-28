@@ -8,6 +8,7 @@ import { ToastProvider } from "@/components/ui/toast.tsx";
 import { shouldInvalidateWhoami, WHOAMI_QUERY_KEY } from "@/hooks/use-capabilities.helpers.ts";
 import { useLifecycleStreamInvalidation } from "@/hooks/use-lifecycle-stream-invalidation.ts";
 import { AgentsPage } from "@/pages/agents.tsx";
+import { AttentionPage } from "@/pages/attention.tsx";
 import { DispatchPage } from "@/pages/dispatch.tsx";
 import { DispatchPlanPage } from "@/pages/dispatch-plan.tsx";
 import { EventExplorerPage } from "@/pages/event-explorer.tsx";
@@ -148,6 +149,16 @@ export function App() {
 								<Route path="/plan-runs" element={<PlanRunsPage />} />
 								<Route path="/plan-runs/new" element={<Navigate to="/dispatch/plan" replace />} />
 								<Route path="/plan-runs/:id" element={<PlanRunDetailPage />} />
+								{/* namphuongtran/warren#26: GET /attention is readOperator,
+								    so the page keeps the same guard. */}
+								<Route
+									path="/attention"
+									element={
+										<OperatorRoute capability="readOperator">
+											<AttentionPage />
+										</OperatorRoute>
+									}
+								/>
 
 								{/* INFRASTRUCTURE */}
 								<Route path="/projects" element={<ProjectsPage />} />

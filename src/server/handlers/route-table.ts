@@ -10,6 +10,7 @@
 import type { Route, RouteHandler, RoutePolicy, ServerDeps } from "../types.ts";
 import { getAgentHandler, listAgentsHandler } from "./agents.ts";
 import { healAlertHandler } from "./alerts.ts";
+import { attentionHandler } from "./attention.ts";
 import { readyzHandler } from "./diagnostics.ts";
 import { listEventsHandler } from "./events-query.ts";
 import { streamLifecycleEventsHandler } from "./events-stream.ts";
@@ -78,11 +79,8 @@ import { setupHandoffHandler } from "./setup.ts";
 interface RouteEntry {
 	readonly method: Route["method"];
 	readonly pattern: string;
-	/**
-	 * The capability this route demands (warren-b875). Required — TypeScript
-	 * refuses an entry that omits it, so a new route can never default to
-	 * open. Enforced once, in `handleRequest` (`src/server/server.ts`).
-	 */
+	/** The capability this route demands (warren-b875). Required, so a route never defaults to
+	 * open. Enforced once, in `handleRequest` (`src/server/server.ts`). */
 	readonly policy: RoutePolicy;
 	readonly build: (deps: ServerDeps) => RouteHandler;
 }
@@ -110,11 +108,10 @@ interface RouteEntry {
  *   rollup (per-run cost on a run detail is a deliberate exception).
  *   `/analytics/behavior`, `/analytics/dispatch` (dispatch-context log),
  *   the per-project seeds read, `/projects/:id/triggers` (trigger prompt
- *   text), `/preview/config` (discloses `WARREN_PREVIEW_HOST`), and the
- *   judge export proxy (warren-1b40) all surface operator internals.
- *   The ready-plans read (warren-b754) and the narrowed
- *   `/projects/:id/warren-config` envelope (redacted defaults, no
- *   triggers — warren-b754) are `readPublic` instead. `GET /runs/:id/inbox` is here for a stronger
+ *   text), `/preview/config` (discloses `WARREN_PREVIEW_HOST`), the judge export proxy
+ *   (warren-1b40), and `/attention` (namphuongtran/warren#26) all surface operator internals.
+ *   The ready-plans read and the narrowed `/projects/:id/warren-config` envelope (redacted
+ *   defaults, no triggers — warren-b754) are `readPublic` instead. `GET /runs/:id/inbox` is here for a stronger
  *   reason than disclosure: it MUTATES on read (`src/runs/inbox.ts` claims
  *   unread rows and flips them to delivered), so an anonymous poll would
  *   silently drain the operator's steering queue.
@@ -172,6 +169,8 @@ const ROUTE_TABLE: readonly RouteEntry[] = [
 	{ method: "GET", pattern: "/provider-quota", policy: "readOperator", build: listQuotaHandler },
 	// pl-7e38 step 12 (warren-d850): one-poll Operations snapshot, readPublic with a reduced projection.
 	{ method: "GET", pattern: "/ops/overview", policy: "readPublic", build: opsOverviewHandler },
+	// namphuongtran/warren#26: finished runs that wait on the operator, derived on read.
+	{ method: "GET", pattern: "/attention", policy: "readOperator", build: attentionHandler },
 	// pl-7e38 step 15 (warren-5eec): cross-run Event explorer query, same per-row `projectEvent` reduction.
 	{ method: "GET", pattern: "/events", policy: "readPublic", build: listEventsHandler },
 	// warren-e195: `readPublic`, not `anonymous` — an exempt route gets no actor to name.
@@ -247,9 +246,8 @@ const ROUTE_TABLE: readonly RouteEntry[] = [
 		policy: "readOperator",
 		build: listCostAnalyticsHandler,
 	},
-	// warren-97ae: spectators get the reduced projection — counts, rates and timings survive; USD
-	// aggregates stay redacted, including the per-agent/per-model/per-provider buckets, because
-	// ratio × merged count reconstructs spend (instance-wide cost/merged-PR ratio excepted).
+	// warren-97ae: spectators get counts, rates and timings; USD aggregates (per-agent/model/provider
+	// too, since ratio × merged count reconstructs spend) stay redacted, bar the cost/merged-PR ratio.
 	{
 		method: "GET",
 		pattern: "/analytics/runs",
@@ -428,6 +426,7 @@ export const API_PREFIXES: readonly string[] = [
 	"/events",
 	"/extensions", // warren-1b40: the judge export proxy surface.
 	"/forge", // warren-2601: installation repo listing for the Add Project picker.
+	"/attention", // namphuongtran/warren#26: the operator's needs-attention list.
 ];
 
 /**

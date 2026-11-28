@@ -4,7 +4,10 @@
  * there so the canonical import path stays `src/core/wire.ts`.
  */
 
-/** Trailing-window options for the `GET /ops/overview` snapshot. */
+/**
+ * Trailing-window options for the `GET /ops/overview` snapshot, also used by
+ * `GET /attention` (namphuongtran/warren#26).
+ */
 export const OPS_WINDOWS = ["24h", "7d", "30d"] as const satisfies readonly string[];
 export type OpsWindow = (typeof OPS_WINDOWS)[number];
 

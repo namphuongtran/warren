@@ -221,7 +221,8 @@ admission:
   continuation, such as a CI fix, does not answer the questions. Warren derives both fields from the stored
   report and the run links, so the run keeps its state. The run Summary shows each question
   with its options and recommendation. Its answer form opens Dispatch as a continuation of the
-  run, with the answers in the prompt.
+  run, with the answers in the prompt. The Needs attention page (section 5.4) dispatches the
+  continuation from its own answer form.
 - The source-editing built-in agents write an approach note to `.warren/approach.md` before
   their first edit: Understanding, Options considered, Chosen approach and why, Risks /
   unknowns, and Verification plan. Git ignores the file. Reap serves it as `approach` on
@@ -324,6 +325,26 @@ When a push fails, or the agent finishes without committing its changes, Warren 
 the work to the `warren/rescue/<runId>` branch or to a `git bundle` file, so the agent's
 work is not lost.
 
+### 5.4 What needs you
+
+The **Needs attention** page in the UI, `warren attention`, and `GET /attention` list the
+finished runs that wait on an operator, in four sections:
+
+- **Blocked on you.** The handoff says `blocked`, and no operator continuation has answered it.
+  Answer the questions on the page and press **Dispatch continuation**. Warren starts a run
+  that continues from the blocked run's branch, with your answers in its prompt.
+- **Review asked for changes.** An open PR whose `warren/review` status asks for changes, or
+  whose fix rounds ran out.
+- **Failed.** A failed run that no retry and no re-run followed. A CI fix does not count.
+- **Quality signals.** Work that is not merged or closed yet, with no valid handoff report, a
+  gate that failed or never ran, or shortcut flags.
+
+A run appears once, in the first section that applies. Warren stores nothing for the list. It
+derives the list from the run rows on each read, so a run leaves it once an answer, a retry, a
+re-run, or a merge lands, or once it ages out of the window. The window covers runs queued in
+the last 7 days by default (`?window=24h|7d|30d`, `warren attention --window`). The page and
+the route are for operators only: a `WARREN_AUTH=public` spectator gets 403.
+
 ---
 
 ## 6. Run many tasks in sequence (plan-run)
@@ -405,6 +426,7 @@ echo "exit=$?"     # 0 = succeeded, 1 = failed/cancelled
 | Liveness / readiness | `GET /healthz`, `GET /readyz` |
 | Metrics | `GET /metrics` (Prometheus) |
 | Overview | The Operations page in the UI, `GET /ops/overview` |
+| What needs you | The Needs attention page in the UI, `warren attention`, `GET /attention` (section 5.4) |
 | Cost | `GET /analytics/cost`, the Analytics page |
 | Stuck run | The watchdog fails a run that is silent for more than 45 minutes. Change it with `WARREN_RUN_HEARTBEAT_TIMEOUT_MS`. Harness keep-alives such as claude-code's `tool_progress` heartbeat do not count as activity. |
 | Stalled tool call | When one tool call stays open for more than 15 minutes, the watchdog writes a `watchdog.tool_stalled` event to the run's log. The run keeps running. The runs list and run page show the run as stalled. Change the threshold with `WARREN_TOOL_STALL_WARN_MS` or the project's `toolStallWarnMinutes`. To fail the run instead past a longer threshold, set `WARREN_TOOL_STALL_KILL_MS` or `toolStallKillMinutes` (off by default) below the 45-minute heartbeat budget. |
