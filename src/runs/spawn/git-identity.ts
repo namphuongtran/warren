@@ -1,57 +1,44 @@
 /**
- * Agent git-identity env helpers for the dispatch path (warren-4e36,
- * warren-e7b7). Extracted from `dispatch.ts` to keep that file under the
- * per-file size budget (warren-4553).
+ * Agent git-identity env for the dispatch path (warren-4e36, warren-e7b7,
+ * namphuongtran/warren#160). Extracted from `dispatch.ts` to keep that file
+ * under the per-file size budget (warren-4553).
  */
 
-import { resolveRuntimeKind } from "../../runtime/registry.ts";
+import { agentGitIdentityEnv, resolveAgentGitIdentity } from "../../agent-identity.ts";
 import type { EnvLike } from "./callback-env.ts";
 import type { SpawnLogger } from "./types.ts";
 
-/** Both halves or nothing — mirrors the supervisor's rule (warren-4e36). */
-function readGitIdentity(serverEnv: EnvLike): { name: string; email: string } | undefined {
-	const name = serverEnv.WARREN_GIT_AUTHOR_NAME?.trim();
-	const email = serverEnv.WARREN_GIT_AUTHOR_EMAIL?.trim();
-	if (name === undefined || name === "" || email === undefined || email === "") {
-		return undefined;
-	}
-	return { name, email };
-}
-
 /**
- * Forward the operator's agent-commit identity (`WARREN_GIT_AUTHOR_NAME` /
- * `WARREN_GIT_AUTHOR_EMAIL`, see `.env.example`) into the sandbox as the four
- * `GIT_AUTHOR_*` / `GIT_COMMITTER_*` env vars git reads ahead of any config.
+ * Put the agent's commit identity into the run env as the four
+ * `GIT_AUTHOR_*` / `GIT_COMMITTER_*` vars, which git reads ahead of any
+ * config. The identity is the operator's `WARREN_GIT_AUTHOR_NAME` /
+ * `WARREN_GIT_AUTHOR_EMAIL` pair, or the documented default from
+ * `src/agent-identity.ts` when the pair is unset or half-set.
  *
- * This is the only path that carries them into a Local sandbox: `warren up`
- * runs no supervisor, so nothing else exports them (gh #1298). `warren up`
- * copies its stored `~/.warren/env` into `process.env` for this read. On the
- * K8s path there is NO supervisor and the run pod has no gitconfig at all — without this every
- * agent `git commit` dies with "Author identity unknown" exit 128 (hit live on
- * GKE, warren-4e36). Mirrors the supervisor's rule: both halves or nothing.
+ * This is the only path that gives a run its identity, on every runtime:
+ * Local, Docker, and K8s all receive the run env, and none of them gets a
+ * gitconfig with a `[user]` block that warren controls. Without it the agent's
+ * first `git commit` fails with "Author identity unknown" exit 128 (warren-4e36
+ * on GKE) and the agent invents an author to get past it
+ * (namphuongtran/warren#160). `warren up` copies its stored `~/.warren/env`
+ * into `process.env` for this read (gh #1298).
  */
 export function injectGitIdentityEnv(env: Record<string, string>, serverEnv: EnvLike): void {
-	const identity = readGitIdentity(serverEnv);
-	if (identity === undefined) return;
-	env.GIT_AUTHOR_NAME = identity.name;
-	env.GIT_AUTHOR_EMAIL = identity.email;
-	env.GIT_COMMITTER_NAME = identity.name;
-	env.GIT_COMMITTER_EMAIL = identity.email;
+	Object.assign(env, agentGitIdentityEnv(serverEnv));
 }
 
 /**
- * warren-e7b7: warn once per dispatch when the K8s topology runs without
- * `WARREN_GIT_AUTHOR_NAME` / `WARREN_GIT_AUTHOR_EMAIL` configured. The
- * Local topology already gets the supervisor's loud warn fallback
- * (`src/supervisor/git-identity.ts`, warren-6a28), so this fires only when
- * `resolveRuntimeKind` says k8s — the pod boundary has no supervisor, no
- * gitconfig, and no other operator-facing signal.
+ * Warn once per dispatch when exactly one of `WARREN_GIT_AUTHOR_NAME` /
+ * `WARREN_GIT_AUTHOR_EMAIL` is set. The run still commits as the default
+ * identity, but the operator clearly meant to configure their own. An unset
+ * pair is not a warning: the default is documented, and `warren doctor`
+ * names the identity that applies.
  */
-export function warnIfGitIdentityUnconfigured(log: SpawnLogger, serverEnv: EnvLike): void {
-	if (resolveRuntimeKind(serverEnv) !== "k8s") return;
-	if (readGitIdentity(serverEnv) !== undefined) return;
+export function warnIfGitIdentityHalfSet(log: SpawnLogger, serverEnv: EnvLike): void {
+	const identity = resolveAgentGitIdentity(serverEnv);
+	if (identity.source !== "half-set") return;
 	log.warn(
-		{ event: "spawn.git_identity_unconfigured" },
-		"dispatching without WARREN_GIT_AUTHOR_NAME/WARREN_GIT_AUTHOR_EMAIL — agent commits attribute to the pod's fallback git identity; set both vars to a dedicated machine-account noreply address",
+		{ event: "spawn.git_identity_half_set", name: identity.name, email: identity.email },
+		"only one of WARREN_GIT_AUTHOR_NAME/WARREN_GIT_AUTHOR_EMAIL is set — agent commits use the default identity; set both or neither",
 	);
 }

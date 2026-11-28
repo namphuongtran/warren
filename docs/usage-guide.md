@@ -112,7 +112,7 @@ Important environment variables (see the full list in `.env.example`):
 | `WARREN_DB_URL` | SQLite (default) or Postgres |
 | `WARREN_AUTH` | `token` (default) or `public` (read-only access for guests) |
 | `WARREN_AUTO_OPEN_PR` | When `true`, opens a PR after the push |
-| `WARREN_GIT_AUTHOR_NAME` / `_EMAIL` | The agent's commit identity. Use a machine (bot) account, not a personal account. |
+| `WARREN_GIT_AUTHOR_NAME` / `_EMAIL` | The agent's commit identity. Use a machine (bot) account, not a personal account. Unset: `warren-agent <agent@warren.invalid>`. |
 
 ### 3.3 Kubernetes
 

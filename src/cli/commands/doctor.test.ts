@@ -390,8 +390,8 @@ describe("runDoctor", () => {
 		});
 	});
 
-	describe("git_identity check (warren-e7b7)", () => {
-		test("warns on unset WARREN_GIT_AUTHOR_* (ok:true — a warning, not a failure)", async () => {
+	describe("git_identity check (warren-e7b7, namphuongtran/warren#160)", () => {
+		test("names the default identity when WARREN_GIT_AUTHOR_* is unset", async () => {
 			const { context } = captureContext({ WARREN_API_TOKEN: "tok" });
 			const result = await runDoctor(
 				context,
@@ -400,8 +400,27 @@ describe("runDoctor", () => {
 			);
 			const check = result.checks.find((c: DoctorCheck) => c.name === "git_identity");
 			expect(check?.ok).toBe(true);
-			expect(check?.message).toContain("warning");
+			expect(check?.message).not.toContain("warning");
+			expect(check?.message).toContain("warren-agent <agent@warren.invalid>");
 			expect(check?.hint).toContain("machine account");
+			expect(result.exitCode).toBe(0);
+		});
+
+		test("warns on a half-set pair without echoing the configured half", async () => {
+			const { context } = captureContext({
+				WARREN_API_TOKEN: "tok",
+				WARREN_GIT_AUTHOR_EMAIL: "12345+warren-bot@users.noreply.github.com",
+			});
+			const result = await runDoctor(
+				context,
+				{ existsSync: () => true, probeLocalRuntime: async () => undefined },
+				{},
+			);
+			const check = result.checks.find((c: DoctorCheck) => c.name === "git_identity");
+			expect(check?.ok).toBe(true);
+			expect(check?.message).toContain("warning");
+			expect(check?.message).toContain("warren-agent <agent@warren.invalid>");
+			expect(check?.message).not.toContain("warren-bot");
 			expect(result.exitCode).toBe(0);
 		});
 

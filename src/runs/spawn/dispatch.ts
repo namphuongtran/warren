@@ -21,7 +21,7 @@ import { heldDispatchRequest, recordQuotaHold, requireHeldRunPending } from "../
 import { ProviderQuotaExhaustedError } from "../quota/state.ts";
 import { injectWarrenCallbackEnv } from "./callback-env.ts";
 import { writeDispatchContext } from "./dispatch-context.ts";
-import { injectGitIdentityEnv, warnIfGitIdentityUnconfigured } from "./git-identity.ts";
+import { injectGitIdentityEnv, warnIfGitIdentityHalfSet } from "./git-identity.ts";
 import {
 	appendMigrationCollisionNote,
 	detectMigrationJournalCollisions,
@@ -225,8 +225,8 @@ async function launchRun(
 		dispatcherHandle: input.dispatcherHandle,
 		dispatchOrigin: input.dispatchOrigin,
 	});
-	// warren-e7b7: warn once per dispatch when agent git identity is unset (K8s).
-	warnIfGitIdentityUnconfigured(log, input.serverEnv ?? process.env);
+	// namphuongtran/warren#160: warn once per dispatch on a half-set agent git identity.
+	warnIfGitIdentityHalfSet(log, input.serverEnv ?? process.env);
 	// namphuongtran/warren#7 / #43: warn about a dropped provider/model.
 	const selection = {
 		...prepared.providerChoice,

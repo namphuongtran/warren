@@ -13,14 +13,14 @@
  * commit on the agent's behalf must reference `WARREN_BOT_IDENTITY` (or the
  * `warrenCommitIdentityArgs()` helper) rather than re-spelling the literals.
  *
- * This is distinct from the operator-configured identity in
- * `src/supervisor/git-identity.ts`, which controls the *agent's* own
- * commits (via `WARREN_GIT_AUTHOR_NAME` / `WARREN_GIT_AUTHOR_EMAIL`). The
- * identity below is warren's own bookkeeping bot, not the agent's author.
+ * This is distinct from the agent identity in `src/agent-identity.ts`,
+ * which controls the *agent's* own commits (via `WARREN_GIT_AUTHOR_NAME` /
+ * `WARREN_GIT_AUTHOR_EMAIL`, default `warren-agent <agent@warren.invalid>`).
+ * The identity below is warren's own bookkeeping bot, not the agent's author.
  *
  * The spelling is operator-configurable (warren-02cd): `WARREN_BOT_NAME` +
  * `WARREN_BOT_EMAIL` override the default when BOTH are set (both halves
- * or nothing, mirroring the supervisor's agent-identity rule). Warren is
+ * or nothing, mirroring the agent-identity rule). Warren is
  * self-hosted by strangers, so the default must attribute to nobody: the
  * historical `warren@os-eco.dev` default lived at a domain the project
  * does not own, and any real domain would pin every deployment's

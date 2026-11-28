@@ -745,11 +745,17 @@ identities exist. Do not conflate them.
   (warren-02cd). Never re-spell `user.name` or `user.email` inline at a
   new commit site. Go through the resolver. warren-598f closed a
   nine-spelling drift this way.
-- **The agent's author identity** comes from `WARREN_GIT_AUTHOR_NAME`
-  and `WARREN_GIT_AUTHOR_EMAIL`, installed by
-  `src/supervisor/git-identity.ts`. Operators should use a dedicated
-  GitHub machine account's noreply address so agent work attributes to
-  the bot, not to a personal account.
+- **The agent's author identity** comes from the resolver in
+  `src/agent-identity.ts` (namphuongtran/warren#160).
+  - It is `WARREN_GIT_AUTHOR_NAME` with `WARREN_GIT_AUTHOR_EMAIL`. When
+    the pair is unset or half-set, it is
+    `warren-agent <agent@warren.invalid>`.
+  - Dispatch passes it to every run as `GIT_AUTHOR_*` and
+    `GIT_COMMITTER_*` env, so the model never picks an author. Warren
+    never writes a gitconfig for it.
+  - Operators should use a dedicated GitHub machine account's noreply
+    address so agent work attributes to the bot, not to a personal
+    account.
 
 ## Protected paths (Article IX)
 
