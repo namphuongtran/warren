@@ -271,6 +271,19 @@ Releases **0.9.10 and earlier** live in
 
 ### Changed
 
+- **Operator guide to agent oversight, and the evidence behind it.**
+  `docs/agent-oversight.md` says who decides what in a run, where to read the
+  approach note (the run Summary's Approach card, `GET /runs/:id` `approach`;
+  not the PR body), how to check an agent's claims against the event log, how
+  to commit a third-party skill pack (Tier 0), and which controls warren
+  enforces versus the ones a team must add. The 2026-11-28 familyroots pilot
+  record (`docs/design/2026-11-28-familyroots-oversight-pilot.md`) checks
+  three runs claim by claim and counts 27 earlier ones: warren recorded an
+  approach note for 59% of them while the agents wrote one for 89%, because
+  the prompt names `/workspace/.warren/` on Docker and Local runs
+  (namphuongtran/warren#158). It also filed namphuongtran/warren#159 (an
+  approval gate and a note-order signal) and namphuongtran/warren#160 (agents
+  invent a commit author when none is configured).
 - **Both images pin claude-code 2.1.332 (namphuongtran/warren#150).** The
   server image (`Dockerfile`), which the local runtime spawns from, was on
   2.1.150. The agent image (`deploy/docker/Dockerfile.agent`), which the

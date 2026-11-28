@@ -229,6 +229,8 @@ admission:
   `GET /runs/:id` and emits `approach.recorded`. A run whose agent was asked for a note and
   wrote none is flagged `approach.missing`, for information only. The handoff report's `approach` block
   (`followed`, plus `deviation` when the work left the plan) says whether the work kept to it.
+- [`agent-oversight.md`](agent-oversight.md) shows where to read these records and how to check
+  them against the event log.
 - Optional: a `.seeds/` directory for the issue tracker, and `.mulch/` for agent memory across
   runs. Warren detects these directories when they exist.
 
