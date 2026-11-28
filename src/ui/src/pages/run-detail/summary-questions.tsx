@@ -5,7 +5,11 @@ import { Button } from "@/components/ui/button.tsx";
 import { Label } from "@/components/ui/label.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
 import type { DispatchRouteState } from "@/pages/dispatch/dispatch-draft.ts";
-import { answeredContinuationPrompt, canContinueWithAnswers } from "./continuation-prompt.ts";
+import {
+	type AnsweredQuestion,
+	answeredContinuationPrompt,
+	canContinueWithAnswers,
+} from "./continuation-prompt.ts";
 import { SummaryBlock, SummaryEmpty } from "./summary-card.tsx";
 
 /**
@@ -74,6 +78,81 @@ function AnsweredNote({ runId }: { runId: string | null | undefined }) {
 	);
 }
 
+/** The operator's draft answers to `questions`, one per question, in order. */
+export function useAnswers(questions: readonly RunHandoffQuestion[]): {
+	answers: readonly string[];
+	setAnswer: (index: number, value: string) => void;
+	answered: readonly AnsweredQuestion[];
+} {
+	const [answers, setAnswers] = useState<readonly string[]>(() => questions.map(() => ""));
+	const answered = questions.map((question, i) => ({ question, answer: answers[i] ?? "" }));
+	function setAnswer(index: number, value: string) {
+		setAnswers((prev) => prev.map((a, i) => (i === index ? value : a)));
+	}
+	return { answers, setAnswer, answered };
+}
+
+/**
+ * One answer field per open question, each labelled by its question, with
+ * the options the agent weighed and a one-click "Use the recommendation".
+ * The run Summary and the Needs attention page (namphuongtran/warren#26)
+ * both answer through it.
+ */
+export function AnswerFields({
+	questions,
+	answers,
+	onAnswer,
+}: {
+	questions: readonly RunHandoffQuestion[];
+	answers: readonly string[];
+	onAnswer: (index: number, value: string) => void;
+}) {
+	const idBase = useId();
+	return (
+		<ol className="flex flex-col gap-3">
+			{questions.map((question, i) => {
+				const fieldId = `${idBase}-answer-${i}`;
+				const recommendation = question.recommendation;
+				return (
+					// biome-ignore lint/suspicious/noArrayIndexKey: questions can repeat
+					<li key={i} className="flex flex-col gap-1.5">
+						<Label
+							htmlFor={fieldId}
+							className="text-xs leading-relaxed font-normal break-words whitespace-pre-wrap text-(--color-text)"
+						>
+							{`${i + 1}. ${question.question}`}
+						</Label>
+						<QuestionDetails question={question} />
+						<Textarea
+							id={fieldId}
+							rows={2}
+							value={answers[i] ?? ""}
+							onChange={(e) => onAnswer(i, e.target.value)}
+							placeholder={
+								recommendation === null
+									? "Your answer. Leave it blank to let the agent decide."
+									: "Your answer. Leave it blank to take the recommendation."
+							}
+							className="text-xs"
+						/>
+						{recommendation !== null ? (
+							<Button
+								size="sm"
+								variant="outline"
+								className="w-fit"
+								aria-label={`Use the recommendation for question ${i + 1}`}
+								onClick={() => onAnswer(i, recommendation)}
+							>
+								Use the recommendation
+							</Button>
+						) : null}
+					</li>
+				);
+			})}
+		</ol>
+	);
+}
+
 /**
  * Answer controls for a blocked run (namphuongtran/warren#38, #25). The
  * operator answers each open question here, or takes the agent's
@@ -86,13 +165,7 @@ function AnsweredNote({ runId }: { runId: string | null | undefined }) {
 export function BlockedQuestions({ run, handoff }: { run: RunRow; handoff: RunHandoff }) {
 	const questions = handoff.openQuestions;
 	const navigate = useNavigate();
-	const idBase = useId();
-	const [answers, setAnswers] = useState<readonly string[]>(() => questions.map(() => ""));
-	const answered = questions.map((question, i) => ({ question, answer: answers[i] ?? "" }));
-
-	function setAnswer(index: number, value: string) {
-		setAnswers((prev) => prev.map((a, i) => (i === index ? value : a)));
-	}
+	const { answers, setAnswer, answered } = useAnswers(questions);
 
 	function continueWithAnswers() {
 		const prompt = answeredContinuationPrompt({
@@ -113,47 +186,7 @@ export function BlockedQuestions({ run, handoff }: { run: RunRow; handoff: RunHa
 	return (
 		<SummaryBlock label="Blocked on">
 			<AnsweredNote runId={run.answeredByRunId} />
-			<ol className="flex flex-col gap-3">
-				{questions.map((question, i) => {
-					const fieldId = `${idBase}-answer-${i}`;
-					const recommendation = question.recommendation;
-					return (
-						// biome-ignore lint/suspicious/noArrayIndexKey: questions can repeat
-						<li key={i} className="flex flex-col gap-1.5">
-							<Label
-								htmlFor={fieldId}
-								className="text-xs leading-relaxed font-normal break-words whitespace-pre-wrap text-(--color-text)"
-							>
-								{`${i + 1}. ${question.question}`}
-							</Label>
-							<QuestionDetails question={question} />
-							<Textarea
-								id={fieldId}
-								rows={2}
-								value={answers[i] ?? ""}
-								onChange={(e) => setAnswer(i, e.target.value)}
-								placeholder={
-									recommendation === null
-										? "Your answer. Leave it blank to let the agent decide."
-										: "Your answer. Leave it blank to take the recommendation."
-								}
-								className="text-xs"
-							/>
-							{recommendation !== null ? (
-								<Button
-									size="sm"
-									variant="outline"
-									className="w-fit"
-									aria-label={`Use the recommendation for question ${i + 1}`}
-									onClick={() => setAnswer(i, recommendation)}
-								>
-									Use the recommendation
-								</Button>
-							) : null}
-						</li>
-					);
-				})}
-			</ol>
+			<AnswerFields questions={questions} answers={answers} onAnswer={setAnswer} />
 			<div className="flex flex-wrap items-center gap-2 pt-1">
 				<Button
 					size="sm"

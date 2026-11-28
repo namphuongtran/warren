@@ -316,6 +316,24 @@
       ]
     },
     {
+      "name": "attention",
+      "description": "list finished runs that wait on the operator (GET /attention)",
+      "options": [
+        {
+          "flags": "--window <window>",
+          "description": "trailing window of queued runs: 24h, 7d, 30d"
+        },
+        {
+          "flags": "--url <url>",
+          "description": "warren server base URL (env WARREN_BASE_URL)"
+        },
+        {
+          "flags": "--token <token>",
+          "description": "bearer token (env WARREN_API_TOKEN)"
+        }
+      ]
+    },
+    {
       "name": "show",
       "description": "render a run's detail (GET /runs/:id; json mode is the raw run document)",
       "options": [

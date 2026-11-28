@@ -55,10 +55,10 @@ export function toPublicOpsOverview(body: OpsOverview): PublicOpsOverview {
 	};
 }
 
-/** Parse `?window=24h|7d|30d` (default `24h`), rejecting unknown tokens. */
-export function parseOpsWindow(ctx: { url: URL }): OpsWindow {
+/** Parse `?window=24h|7d|30d` (default `fallback`), rejecting unknown tokens. */
+export function parseOpsWindow(ctx: { url: URL }, fallback: OpsWindow = "24h"): OpsWindow {
 	const raw = ctx.url.searchParams.get("window");
-	if (raw === null || raw === "") return "24h";
+	if (raw === null || raw === "") return fallback;
 	if (!(OPS_WINDOWS as readonly string[]).includes(raw)) {
 		throw new ValidationError(`?window must be one of ${OPS_WINDOWS.join(", ")}; got '${raw}'`);
 	}

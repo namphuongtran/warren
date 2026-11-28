@@ -1,4 +1,5 @@
 import { ValidationError } from "../core/errors.ts";
+import type { OpsWindow, RunAttentionResponse } from "../core/wire.ts";
 import { pollUntilTerminal } from "./client-helpers.ts";
 import { type EnvLike, loadWarrenClientConfigFromEnv, type WarrenClientConfig } from "./config.ts";
 import { WarrenClientError, WarrenUnreachableError } from "./errors.ts";
@@ -100,10 +101,7 @@ export class WarrenClient {
 		return new WarrenClient(fetchImpl !== undefined ? { config, fetch: fetchImpl } : { config });
 	}
 
-	/**
-	 * Hit `/healthz` with a timeout and convert transport-layer failures
-	 * into `WarrenUnreachableError`. `/healthz` is auth-exempt.
-	 */
+	/** Hit the auth-exempt `/healthz` with a timeout; transport failures become unreachable errors. */
 	async probe(timeoutMs: number = DEFAULT_PROBE_TIMEOUT_MS): Promise<void> {
 		const ctrl = new AbortController();
 		const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -123,10 +121,7 @@ export class WarrenClient {
 		}
 	}
 
-	/**
-	 * Helper to send requests and handle common things like bearer token auth,
-	 * URL concatenation, and response deserialization.
-	 */
+	/** Send a request with the bearer token and parse the JSON response body. */
 	async request<T>(path: string, init: RequestInit = {}): Promise<T> {
 		return this.withTransportMapping(async () => {
 			const res = await this.requestRaw(path, init);
@@ -296,6 +291,11 @@ export class WarrenClient {
 
 	async listRuns(): Promise<ListRunsResponse> {
 		return this.request<ListRunsResponse>("/runs");
+	}
+
+	/** `GET /attention` — finished runs that wait on the operator (namphuongtran/warren#26). */
+	async listAttention(window?: OpsWindow): Promise<RunAttentionResponse> {
+		return this.request(window === undefined ? "/attention" : `/attention?window=${window}`);
 	}
 
 	/**

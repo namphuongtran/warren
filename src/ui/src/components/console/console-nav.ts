@@ -12,10 +12,14 @@ import type { CapabilityName } from "@/api/types.ts";
  * Addendum (warren-1c7b): the Event explorer page (warren-24b9) shipped
  * orphaned, so Events was appended to INFRASTRUCTURE as 07 and the footer
  * Instance index moved to 08. A canvas update should ratify this ordering.
+ *
+ * Addendum (namphuongtran/warren#26): Needs attention joins WORKLOADS as 04,
+ * after Plan runs, so INFRASTRUCTURE moves to 05-08 and Instance to 09. It
+ * reads an operator-only route, so a spectator never sees the entry.
  */
 
 export interface ConsoleNavItem {
-	/** Mono index rendered before the label ("01"…"08"). */
+	/** Mono index rendered before the label ("01"…"09"). */
 	readonly index: string;
 	readonly label: string;
 	readonly to: string;
@@ -30,18 +34,19 @@ export const WORKLOADS_NAV: readonly ConsoleNavItem[] = [
 	{ index: "01", label: "Operations", to: "/operations" },
 	{ index: "02", label: "Runs", to: "/runs" },
 	{ index: "03", label: "Plan runs", to: "/plan-runs" },
+	{ index: "04", label: "Needs attention", to: "/attention", capability: "readOperator" },
 ];
 
 export const INFRASTRUCTURE_NAV: readonly ConsoleNavItem[] = [
-	{ index: "04", label: "Projects", to: "/projects" },
-	{ index: "05", label: "Agents", to: "/agents" },
-	{ index: "06", label: "Telemetry", to: "/telemetry" },
-	{ index: "07", label: "Events", to: "/events" },
+	{ index: "05", label: "Projects", to: "/projects" },
+	{ index: "06", label: "Agents", to: "/agents" },
+	{ index: "07", label: "Telemetry", to: "/telemetry" },
+	{ index: "08", label: "Events", to: "/events" },
 ];
 
-/** Footer entry: 08 Instance. */
+/** Footer entry: 09 Instance. */
 export const INSTANCE_NAV_ITEM: ConsoleNavItem = {
-	index: "08",
+	index: "09",
 	label: "Instance",
 	to: "/instance",
 };

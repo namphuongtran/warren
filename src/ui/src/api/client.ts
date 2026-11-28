@@ -4,6 +4,7 @@
 // router can redirect back to login on the next render pass.
 
 import { readNdjsonStream } from "../../../client/ndjson.ts";
+import type { RunAttentionResponse } from "../../../core/wire.ts";
 import type { InstanceFactsResponse } from "./instance-types.ts";
 import type { ListProviderQuotaResponse, OpsOverviewResponse } from "./ops-types.ts";
 import type {
@@ -568,10 +569,18 @@ export const forgeApi = {
 		request<ForgeReposResponse>("/forge/repos", { ...(signal ? { signal } : {}) }),
 };
 
-/** Trailing window selection for the ops-overview snapshot (warren-7194). */
-function opsOverviewQuery(window?: string): string {
+/** Trailing window selection for the ops-overview snapshot and the attention list. */
+function windowQuery(window?: string): string {
 	return window === undefined ? "" : `?window=${encodeURIComponent(window)}`;
 }
+
+/** Finished runs that wait on the operator (namphuongtran/warren#26). Operator-only. */
+export const attentionApi = {
+	list: (window?: string, signal?: AbortSignal) =>
+		request<RunAttentionResponse>(`/attention${windowQuery(window)}`, {
+			...(signal ? { signal } : {}),
+		}),
+};
 
 export const opsApi = {
 	/**
@@ -580,7 +589,7 @@ export const opsApi = {
 	 * envelope's operator sections arrive undefined, never zero.
 	 */
 	overview: (window?: string, signal?: AbortSignal) =>
-		request<OpsOverviewResponse>(`/ops/overview${opsOverviewQuery(window)}`, {
+		request<OpsOverviewResponse>(`/ops/overview${windowQuery(window)}`, {
 			...(signal ? { signal } : {}),
 		}),
 	/** Each provider credential's newest usage window (namphuongtran/warren#30). Operator-only. */

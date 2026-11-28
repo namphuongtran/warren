@@ -33,6 +33,7 @@ export const PAGE_SOURCES: readonly (readonly [stem: string, pages: readonly str
 	["dispatch", ["dispatch"]],
 	["plan-run-detail", ["plan-run-detail"]],
 	["plan-runs", ["plan-runs"]],
+	["attention", ["attention"]],
 	["run-detail", ["run-detail"]],
 	["runs", ["runs"]],
 	["project-detail", ["project-detail"]],

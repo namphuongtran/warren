@@ -171,7 +171,7 @@ the wrong module:
 
 ### `src/runs/` today
 
-`src/runs/` holds 27k lines in 144 files. Its top level has 38 non-test files. Name
+`src/runs/` holds 27k lines in 144 files. Its top level has 42 non-test files. Name
 prefixes stand in for missing directories. PR delivery lives partly at the top level and
 partly in `reap/`.
 
@@ -186,7 +186,8 @@ src/runs/
 │   cost-cap.ts  duration-limit.ts                           supervision
 ├── cost-analytics.ts  usage-aggregate.ts  usage-hydrate.ts
 │   tool-calls-backfill.ts  ops-stats.ts  ops-overview.ts
-│   events-query.ts  context-window-view.ts                  read side
+│   events-query.ts  context-window-view.ts
+│   needs-input-view.ts  attention.ts                        read side
 └── cancel.ts  steer.ts  inbox.ts  events.ts  lifecycle-bus.ts
     seed.ts  branch.ts  target-branch.ts  ...                lifecycle
 ```

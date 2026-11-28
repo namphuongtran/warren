@@ -17,6 +17,8 @@ tags:
     description: '`/alerts` routes.'
   - name: analytics
     description: '`/analytics` routes.'
+  - name: attention
+    description: '`/attention` routes.'
   - name: events
     description: '`/events` routes.'
   - name: extensions
@@ -174,9 +176,25 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
       description: >-
-        warren-97ae: spectators get the reduced projection — counts, rates and timings survive; USD
-        aggregates stay redacted, including the per-agent/per-model/per-provider buckets, because
-        ratio × merged count reconstructs spend (instance-wide cost/merged-PR ratio excepted).
+        warren-97ae: spectators get counts, rates and timings; USD aggregates
+        (per-agent/model/provider too, since ratio × merged count reconstructs spend) stay redacted,
+        bar the cost/merged-PR ratio.
+  /attention:
+    get:
+      operationId: attentionHandler
+      tags:
+        - attention
+      summary: GET /attention
+      responses:
+        '200':
+          description: Successful response.
+        default:
+          description: Error response (see `src/core/errors.ts`).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+      description: 'namphuongtran/warren#26: finished runs that wait on the operator, derived on read.'
   /events:
     get:
       operationId: listEventsHandler

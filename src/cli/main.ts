@@ -19,12 +19,14 @@
  */
 
 import { Command, CommanderError } from "commander";
+import type { OpsWindow } from "../core/wire.ts";
 import { openDatabase } from "../db/client.ts";
 import { parseDatabaseUrl } from "../db/url.ts";
 import { VERSION } from "../index.ts";
 import { sandboxGitPreflightCached } from "../sandbox/git-preflight.ts";
 import { addClientFlags, clientFlags, type RemoteOpts, resolveCommandClient } from "./client.ts";
 import { runAddProject } from "./commands/add-project.ts";
+import { parseAttentionWindow, runAttention } from "./commands/attention.ts";
 import { registerBootstrapCommands } from "./commands/bootstrap.ts";
 import { runConfigMigrate } from "./commands/config-migrate.ts";
 import { runMigrateToPostgres } from "./commands/db.ts";
@@ -406,6 +408,22 @@ export function buildProgram(baseContext: CliContext): Command {
 	).action(async (opts: RemoteOpts) => {
 		const { client, context: ctx } = resolveCommandClient(context, opts);
 		const result = await runProjects(ctx, { client });
+		process.exitCode = result.exitCode;
+	});
+
+	addClientFlags(
+		program
+			.command("attention")
+			.description("list finished runs that wait on the operator (GET /attention)")
+			.option(
+				"--window <window>",
+				"trailing window of queued runs: 24h, 7d, 30d",
+				parseAttentionWindow,
+			),
+	).action(async (opts: { window?: OpsWindow } & RemoteOpts) => {
+		const { client, context: ctx } = resolveCommandClient(context, opts);
+		const window = opts.window;
+		const result = await runAttention(ctx, { client }, window === undefined ? {} : { window });
 		process.exitCode = result.exitCode;
 	});
 
