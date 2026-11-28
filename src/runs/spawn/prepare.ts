@@ -24,6 +24,7 @@ import { withDurationLimit } from "../duration-limit.ts";
 import { buildSeedFiles, type SeedFile } from "../seed.ts";
 import { validateTargetBranch } from "../target-branch.ts";
 import { readCachedAgent, readProjectDefaults, resolveOverride } from "./agent-cache.ts";
+import { withBranchDefaults } from "./branch-config.ts";
 import { resolveContinuationRef, resolveDispatchBranches } from "./continuation.ts";
 import { gateAgentPrompts, withMulchArm } from "./prompt-capabilities.ts";
 import {
@@ -45,7 +46,9 @@ export interface PreparedDispatch {
 	readonly refreshed: boolean;
 	/**
 	 * The clone HEAD after the refresh, which `projectDefaults` was read at
-	 * (namphuongtran/warren#165). Undefined without a refresh.
+	 * (namphuongtran/warren#165). Always the default-branch tip: a run cut
+	 * from another base takes only its branch-sourced keys from that base
+	 * (namphuongtran/warren#169). Undefined without a refresh.
 	 */
 	readonly configCommit: string | undefined;
 	readonly project: ProjectRow;
@@ -89,11 +92,12 @@ export async function prepareDispatch(input: SpawnRunInput): Promise<PreparedDis
 
 	// warren-4b11: continuation runs ("re-run with follow-up") seed their
 	// workspace from the prior run's pushed branch instead of the project
-	// default branch. Resolve the parent's branch up front and feed it as the
-	// refresh ref so the local clone is checked out to the parent branch tip
-	// before burrow forks the new run branch off it. The parent link is also
-	// recorded on the new run row below so the UI can render a chain indicator
-	// and chain cost/token totals are derivable by walking the link.
+	// default branch. Resolve the parent's branch up front and hand it to the
+	// refresh as the base, which brings it to origin's tip without a checkout
+	// (namphuongtran/warren#169), before the provider cuts the new run branch
+	// off it. The parent link is also recorded on the new run row below so the
+	// UI can render a chain indicator and chain cost/token totals are
+	// derivable by walking the link.
 	const baseRef = input.baseCommit ?? (await resolveContinuationRef(input, project, pushTarget));
 
 	const refreshed = await refreshDispatchClone(input, project, baseRef);
@@ -103,10 +107,17 @@ export async function prepareDispatch(input: SpawnRunInput): Promise<PreparedDis
 	// frontmatter, operator per-run override winning. Order: operator
 	// override > .warren/defaults.json > agent frontmatter, all riding the
 	// same `withProviderOverrides` path onto frozen `rendered_agent_json`.
-	const projectDefaults = await readProjectDefaults(
-		input.warrenConfigs,
-		projectAfterRefresh.id,
-		projectAfterRefresh.localPath,
+	// namphuongtran/warren#169: the clone sits on the default-branch tip, so
+	// this reads every guardrail and `repoContext` from there. A run cut from
+	// another base then takes its branch-sourced keys from that base.
+	const projectDefaults = await withBranchDefaults(
+		input,
+		refreshed,
+		await readProjectDefaults(
+			input.warrenConfigs,
+			projectAfterRefresh.id,
+			projectAfterRefresh.localPath,
+		),
 	);
 	// namphuongtran/warren#43: a model-only override drops an incompatible inherited provider.
 	const providerChoice = resolveDispatchProvider(input, projectDefaults?.defaultProvider);
@@ -143,12 +154,14 @@ export async function prepareDispatch(input: SpawnRunInput): Promise<PreparedDis
 }
 
 /**
- * A baseCommit dispatch refreshes onto the default branch like an unpinned
- * one, so the project defaults read next come from the default-branch tip
- * (namphuongtran/warren#165). The pin rides `fetchCommit`: its objects must
- * be present, and the provider cuts the workspace at the SHA itself
- * (`git worktree add -b <runBranch> <ws> <sha>`), so the shared clone never
- * detaches onto a pin (warren-232d).
+ * Every dispatch refreshes the shared clone onto the default branch, so the
+ * project defaults read next come from the default-branch tip, and so does
+ * every later reader of the clone (namphuongtran/warren#165, #169). A base
+ * rides alongside without a checkout. A pin rides `fetchCommit`: its objects
+ * must be present, and the provider cuts the workspace at the SHA itself, so
+ * the clone never detaches onto a pin (warren-232d). Any other non-default
+ * base (`--ref`, existing branch, continuation parent) rides `fetchRef`: a
+ * branch is brought to origin's tip as a local ref the provider cuts from.
  * `null` when the caller wired no spawn seam (no refresh happens).
  */
 async function refreshDispatchClone(
@@ -160,8 +173,8 @@ async function refreshDispatchClone(
 	const target =
 		input.baseCommit !== undefined
 			? { fetchCommit: input.baseCommit }
-			: baseRef !== undefined
-				? { ref: baseRef }
+			: baseRef !== undefined && baseRef !== project.defaultBranch
+				? { fetchRef: baseRef }
 				: {};
 	return (input.refreshProjectFn ?? refreshProject)({
 		repo: input.repos.projects,

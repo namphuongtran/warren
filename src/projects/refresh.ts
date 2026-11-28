@@ -16,7 +16,9 @@
  *
  * The default ref is the project's tracked default branch
  * (`projects.default_branch`). Callers can pass a branch name, tag, or
- * SHA via `ref` to point a run at something specific.
+ * SHA via `ref` to check something else out. Dispatch never does: it
+ * keeps the shared clone on the default branch and names its base through
+ * `fetchCommit` or `fetchRef` (namphuongtran/warren#165, #169).
  *
  * Returns the post-reset HEAD sha so the caller can stamp it onto the
  * row alongside the fetch timestamp. Spawn + filesystem are injected so
@@ -65,6 +67,19 @@ export interface RefreshProjectCloneInput {
 	 */
 	readonly fetchCommit?: string;
 	/**
+	 * A non-default base the caller cuts a workspace from: a `--ref`, an
+	 * existing branch, or a continuation parent's branch
+	 * (namphuongtran/warren#169). Exclusive with `fetchCommit`. The refresh
+	 * still lands on `ref`, so the working tree and every `.warren/` read
+	 * from it stay the default-branch tip. The clone never checks the base
+	 * out. A branch origin carries force-updates `refs/heads/<fetchRef>` to
+	 * origin's tip, the same tip a checkout plus `reset --hard` left before.
+	 * A tag or SHA must resolve after the fetch. A base that does not
+	 * resolve aborts before any checkout. The result's `ref` echoes the base
+	 * and `baseSha` names its commit.
+	 */
+	readonly fetchRef?: string;
+	/**
 	 * GitHub token for private-repo access (`GITHUB_TOKEN` at the HTTP
 	 * boundary). Applied to the `git fetch` spawn as a process-scoped
 	 * `insteadOf` rewrite (`gitCredentialGitEnv`) so a bare `warren
@@ -96,6 +111,8 @@ export interface RefreshProjectCloneResult {
 	readonly headSha: string;
 	/** Echo of the resolved ref the caller asked for. */
 	readonly ref: string;
+	/** The commit `fetchRef` resolved to; present only when the caller passed one. */
+	readonly baseSha?: string;
 	/**
 	 * Feature-directory probe taken after the hard-reset to origin/<ref>
 	 * (warren-4e20, warren-9990). Reflects the on-disk shape of the
@@ -144,6 +161,12 @@ export async function refreshProjectClone(
 			netEnv,
 		});
 	}
+	// namphuongtran/warren#169: resolve the base before the checkout too, so a
+	// base origin does not carry leaves the clone untouched.
+	const base =
+		input.fetchRef !== undefined
+			? await resolveFetchRef({ config, localPath, spawn, timeoutMs, ref: input.fetchRef })
+			: undefined;
 
 	// `git checkout <ref>` moves HEAD onto the named ref (creating a
 	// tracking branch when ref is a remote branch name). Without
@@ -171,6 +194,10 @@ export async function refreshProjectClone(
 			timeoutMs,
 		});
 	}
+	const baseSha =
+		base !== undefined
+			? await settleFetchRef({ config, localPath, spawn, timeoutMs, ...base })
+			: undefined;
 
 	// Drop any stale user.name / user.email from the local .git/config
 	// (warren-9f70). Warren never writes either itself; if one is here
@@ -206,7 +233,65 @@ export async function refreshProjectClone(
 
 	const headSha = await readHead(spawn, config.gitBinary, localPath, timeoutMs);
 	const features = detectProjectFeatures(localPath, exists);
-	return { headSha, ref: input.fetchCommit ?? ref, features };
+	return {
+		headSha,
+		ref: input.fetchCommit ?? input.fetchRef ?? ref,
+		...(baseSha !== undefined ? { baseSha } : {}),
+		features,
+	};
+}
+
+interface FetchRefInput {
+	readonly config: ProjectsConfig;
+	readonly localPath: string;
+	readonly spawn: SpawnFn;
+	readonly timeoutMs: number;
+	readonly ref: string;
+}
+
+interface ResolvedFetchRef {
+	readonly ref: string;
+	/** True when origin carries `ref` as a branch; false for a tag or SHA. */
+	readonly remoteBranch: boolean;
+}
+
+/** Classify a base after the fetch, or abort when it does not resolve. */
+async function resolveFetchRef(input: FetchRefInput): Promise<ResolvedFetchRef> {
+	const { config, localPath, spawn, timeoutMs, ref } = input;
+	const resolves = async (name: string) =>
+		(
+			await trySpawn(spawn, [config.gitBinary, "rev-parse", "--verify", "--quiet", name], {
+				cwd: localPath,
+				timeoutMs,
+			})
+		).exitCode === 0;
+	if (await resolves(`refs/remotes/origin/${ref}^{commit}`)) return { ref, remoteBranch: true };
+	if (await resolves(`${ref}^{commit}`)) return { ref, remoteBranch: false };
+	throw new ProjectUnavailableError(`base ref ${ref} does not resolve after fetching origin`, {
+		recoveryHint: "Dispatch onto a branch, tag, or commit that exists on the project's origin",
+	});
+}
+
+/**
+ * Point the local branch at origin's tip without checking it out, then read
+ * the base's commit. The workspace is cut from the short name, which
+ * resolves to that local branch.
+ */
+async function settleFetchRef(input: FetchRefInput & ResolvedFetchRef): Promise<string> {
+	const { config, localPath, spawn, timeoutMs, ref } = input;
+	if (input.remoteBranch) {
+		await runGit(
+			spawn,
+			[config.gitBinary, "update-ref", `refs/heads/${ref}`, `refs/remotes/origin/${ref}`],
+			{ cwd: localPath, timeoutMs },
+		);
+	}
+	const result = await runGit(
+		spawn,
+		[config.gitBinary, "rev-parse", "--verify", "--quiet", `${ref}^{commit}`],
+		{ cwd: localPath, timeoutMs },
+	);
+	return result.stdout.trim();
 }
 
 interface EnsureCommitInput {

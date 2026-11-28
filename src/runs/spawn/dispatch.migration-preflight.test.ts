@@ -1,7 +1,4 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { WarrenDb } from "../../db/client.ts";
 import type { Repos } from "../../db/repos/index.ts";
 import type { SpawnFn } from "../../projects/clone.ts";
@@ -11,8 +8,8 @@ import { makeProvider, makeSandboxClient, setupRepos } from "./test-helpers.ts";
 
 /**
  * warren-1f03 / warren-4371: spawnRun runs the drizzle migration journal
- * preflight for ref-dispatches onto an existing branch (host clone refreshed
- * onto the branch). A detected collision is surfaced to the agent as a
+ * preflight for ref-dispatches onto an existing branch (the refresh makes the
+ * branch resolvable; the clone stays on the default branch). A detected collision is surfaced to the agent as a
  * prompt note and recorded as a `migration_journal_collision` system event;
  * the host never runs a repository-defined script or commits. Fresh
  * dispatches from the default branch skip it.
@@ -106,56 +103,48 @@ describe("spawnRun: migration journal preflight (warren-4371)", () => {
 	});
 
 	test("real detection on a colliding branch never executes repository scripts on the host", async () => {
-		const root = await mkdtemp(join(tmpdir(), "warren-4371-dispatch-"));
-		try {
-			const dir = join(root, "src/db/migrations");
-			await mkdir(join(dir, "meta"), { recursive: true });
-			const branchJournal = JSON.stringify({ entries: [{ idx: 0, tag: "0000_branch" }] });
-			await writeFile(join(dir, "meta/_journal.json"), branchJournal);
-			await writeFile(join(dir, "0000_branch.sql"), "-- branch\n");
-			await repos.projects.create({
-				id: "prj_migrations01",
-				gitUrl: "https://github.com/x/m.git",
-				localPath: root,
-				defaultBranch: "main",
-			});
-			const hostCalls: string[] = [];
-			const projectSpawn: SpawnFn = async (cmd) => {
-				const joined = cmd.join(" ");
-				hostCalls.push(joined);
-				if (joined.includes("ls-files")) {
-					return { stdout: "src/db/migrations/meta/_journal.json\n", stderr: "", exitCode: 0 };
-				}
-				if (joined.includes("cat-file")) {
-					const main = { entries: [{ idx: 0, tag: "0000_main" }] };
-					return { stdout: JSON.stringify(main), stderr: "", exitCode: 0 };
-				}
-				return { stdout: "", stderr: "", exitCode: 0 };
-			};
-			const { client, calls } = makeSandboxClient();
+		const journalPath = "src/db/migrations/meta/_journal.json";
+		const journals: Record<string, unknown> = {
+			"warren/run_parent": { entries: [{ idx: 0, tag: "0000_branch" }] },
+			"origin/main": { entries: [{ idx: 0, tag: "0000_main" }] },
+		};
+		const hostCalls: string[] = [];
+		const projectSpawn: SpawnFn = async (cmd) => {
+			const joined = cmd.join(" ");
+			hostCalls.push(joined);
+			if (joined.includes("ls-tree")) {
+				return { stdout: `README.md\n${journalPath}\n`, stderr: "", exitCode: 0 };
+			}
+			const spec = cmd[cmd.length - 1] ?? "";
+			const journal = journals[spec.slice(0, spec.indexOf(":"))];
+			if (cmd[1] === "cat-file" && journal !== undefined && spec.endsWith(`:${journalPath}`)) {
+				return { stdout: JSON.stringify(journal), stderr: "", exitCode: 0 };
+			}
+			return { stdout: "", stderr: "", exitCode: 0 };
+		};
+		const { client, calls } = makeSandboxClient();
 
-			// spawnRun resolving (not throwing) is the repair-run dispatch succeeding.
-			await spawnRun({
-				repos,
-				runtimeProvider: makeProvider(client),
-				agentName: "refactor-bot",
-				projectId: "prj_migrations01",
-				prompt: "repair the PR",
-				ref: "warren/run_parent",
-				...refreshStub(projectSpawn),
-			});
+		// spawnRun resolving (not throwing) is the repair-run dispatch succeeding.
+		await spawnRun({
+			repos,
+			runtimeProvider: makeProvider(client),
+			agentName: "refactor-bot",
+			projectId: "prj_xxxxxxxxxxxx",
+			prompt: "repair the PR",
+			ref: "warren/run_parent",
+			...refreshStub(projectSpawn),
+		});
 
-			// Default posture: detection only — no generate script, no commit.
-			expect(hostCalls.length).toBeGreaterThan(0);
-			for (const call of hostCalls) expect(call).toMatch(/^git (ls-files|cat-file) /);
-			expect(await readFile(join(dir, "meta/_journal.json"), "utf8")).toBe(branchJournal);
-			// No configured command → the note names none.
-			const prompt = dispatchedPrompt(calls);
-			expect(prompt).toContain("run this project's migration generator");
-			expect(prompt).not.toContain("db:generate");
-		} finally {
-			await rm(root, { recursive: true, force: true });
-		}
+		// Default posture: detection only — read-only plumbing, no generate
+		// script, no commit. The branch side comes from git objects, because
+		// the clone stays on the default branch (namphuongtran/warren#169).
+		expect(hostCalls).toContain(`git cat-file blob warren/run_parent:${journalPath}`);
+		for (const call of hostCalls) expect(call).toMatch(/^git (ls-tree|cat-file) /);
+		// No configured command → the note names none.
+		const prompt = dispatchedPrompt(calls);
+		expect(prompt).toContain("`0000_branch` (idx 0) collides with `0000_main`");
+		expect(prompt).toContain("run this project's migration generator");
+		expect(prompt).not.toContain("db:generate");
 	});
 
 	test("no collision → no event, unchanged prompt; a fresh dispatch from main skips the preflight", async () => {

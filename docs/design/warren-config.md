@@ -255,8 +255,25 @@ the pin. The refresh only makes sure the pin's objects are present, and
 the provider runs `git worktree add` at the SHA, so the clone never
 detaches onto a pin (warren-232d). Each refreshed run records the clone
 HEAD its config was read at in `dispatch_context.config_commit`; NULL
-means the dispatch ran without a refresh. A `--ref` dispatch and a
-continuation still read the config of the branch they check out.
+means the dispatch ran without a refresh.
+
+**Runs cut from another base read the default-branch config too
+(namphuongtran/warren#169).** A `--ref` or existing-branch repair run and
+a continuation also refresh the clone onto the default branch. Their base
+rides along without a checkout. A branch origin carries becomes a local
+ref at origin's tip, and the provider cuts the workspace from it. So the
+shared clone never sits on a PR branch, and the project-wide config cache,
+the project row's `head_sha`, and the feature flags always describe the
+default branch. The default-branch tip supplies every guardrail and the
+`repoContext`: a branch cannot loosen its own limits, and an old branch
+still gets config merged after it was cut. Two keys come from the base
+when its committed config sets them: `qualityGate` and
+`migrations.regenerateCommand`. They describe how to build and check the
+branch's own code, and they run only inside the sandbox. The base's config
+is read from git objects at the base commit. A base without a committed
+config (a mirror, warren-540f) or with a malformed one gives no overlay,
+and the run keeps the default branch's values. The migration journal
+preflight reads the branch side from git objects for the same reason.
 
 **HTTP surface.** `GET /projects/:id/warren-config` returns the
 `LoadedWarrenConfig` envelope verbatim (`mx-adf588`); 404 if the project

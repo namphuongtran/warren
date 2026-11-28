@@ -41,12 +41,14 @@ describe("POST /runs — seedId validation (#1234)", () => {
 	let handle: ServeHandle | null = null;
 	let calls: { method: string; path: string; body: unknown }[];
 	let refreshes: number;
+	let refreshRefs: (string | undefined)[];
 
 	beforeEach(async () => {
 		db = await openDatabase({ path: ":memory:" });
 		repos = createRepos(db);
 		calls = [];
 		refreshes = 0;
+		refreshRefs = [];
 		await repos.agents.upsert({
 			name: "refactor-bot",
 			renderedJson: {
@@ -81,7 +83,10 @@ describe("POST /runs — seedId validation (#1234)", () => {
 		await db.close();
 	});
 
-	async function dispatch(issueTracker: IssueTracker): Promise<Response> {
+	async function dispatch(
+		issueTracker: IssueTracker,
+		extra: Record<string, string> = {},
+	): Promise<Response> {
 		const project = (await repos.projects.listAll())[0];
 		if (!project) throw new Error("project missing");
 		const sandboxClient = makeSandboxClient(
@@ -95,6 +100,7 @@ describe("POST /runs — seedId validation (#1234)", () => {
 			// fed through its input bag, not this deps seam.
 			refreshProjectFn: async (input) => {
 				refreshes++;
+				refreshRefs.push(input.ref);
 				const row = await input.repo.require(input.id);
 				return { project: row, headSha: "deadbeef".repeat(5), ref: input.ref ?? "main" };
 			},
@@ -112,6 +118,7 @@ describe("POST /runs — seedId validation (#1234)", () => {
 				project: project.id,
 				prompt: "hello",
 				seedId: "seed-missing",
+				...extra,
 			}),
 		});
 	}
@@ -141,6 +148,19 @@ describe("POST /runs — seedId validation (#1234)", () => {
 		expect(res.status).toBe(201);
 		expect(refreshes).toBe(1);
 		expect((await repos.runs.listAll()).length).toBe(1);
+	});
+
+	test("retries a pinned dispatch against the default-branch tip (namphuongtran/warren#169)", async () => {
+		const res = await dispatch(trackerWith(alwaysMissing), { baseCommit: "a".repeat(40) });
+		await expectNotFound(res);
+		expect(refreshes).toBe(1);
+		expect(refreshRefs).toEqual([undefined]);
+	});
+
+	test("retries a ref dispatch against the default-branch tip, not the ref (namphuongtran/warren#169)", async () => {
+		const res = await dispatch(trackerWith(alwaysMissing), { ref: "feature/x" });
+		await expectNotFound(res);
+		expect(refreshRefs).toEqual([undefined]);
 	});
 
 	test("skips the refresh retry for a remote (non-git-native) tracker", async () => {

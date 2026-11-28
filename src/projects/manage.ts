@@ -168,6 +168,13 @@ export interface RefreshProjectInput {
 	 */
 	readonly fetchCommit?: string;
 	/**
+	 * A non-default base the caller cuts a workspace from
+	 * (namphuongtran/warren#169). The clone still refreshes onto `ref` and
+	 * never checks the base out. Forwarded to `refreshProjectClone`, see
+	 * `RefreshProjectCloneInput.fetchRef`.
+	 */
+	readonly fetchRef?: string;
+	/**
 	 * GitHub token for private-repo fetches (`GITHUB_TOKEN`), forwarded to
 	 * `refreshProjectClone` — see `RefreshProjectCloneInput.token`.
 	 */
@@ -191,6 +198,8 @@ export interface RefreshProjectResult {
 	readonly project: ProjectRow;
 	readonly headSha: string;
 	readonly ref: string;
+	/** The commit `fetchRef` resolved to; present only when the caller passed one. */
+	readonly baseSha?: string;
 }
 
 export async function refreshProject(input: RefreshProjectInput): Promise<RefreshProjectResult> {
@@ -232,6 +241,7 @@ export async function refreshProject(input: RefreshProjectInput): Promise<Refres
 		localPath: row.localPath,
 		ref,
 		...(input.fetchCommit !== undefined ? { fetchCommit: input.fetchCommit } : {}),
+		...(input.fetchRef !== undefined ? { fetchRef: input.fetchRef } : {}),
 		gitCredential: input.gitCredential,
 		spawn: input.spawn,
 		timeoutMs: input.timeoutMs ?? config.gitTimeoutMs ?? DEFAULT_GIT_TIMEOUT_MS,
@@ -255,7 +265,12 @@ export async function refreshProject(input: RefreshProjectInput): Promise<Refres
 		hasSeeds: result.features.hasSeeds,
 		now: input.now?.(),
 	});
-	return { project: updated, headSha: result.headSha, ref: result.ref };
+	return {
+		project: updated,
+		headSha: result.headSha,
+		ref: result.ref,
+		...(result.baseSha !== undefined ? { baseSha: result.baseSha } : {}),
+	};
 }
 
 export interface DeleteProjectInput {

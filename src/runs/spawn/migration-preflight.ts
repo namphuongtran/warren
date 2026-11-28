@@ -10,14 +10,15 @@
  * `origin/<defaultBranch>`'s. A branch entry whose idx also exists on main
  * with a different tag (or whose tag exists on main at a different idx) is
  * a collision. The preflight only runs for ref-dispatches onto an existing
- * branch (`baseRef` resolved, host clone refreshed onto it) — a fresh
- * dispatch from the default branch cannot collide.
+ * branch (`baseRef` resolved by the refresh) — a fresh dispatch from the
+ * default branch cannot collide. Both sides are read from git objects: the
+ * host clone stays on the default branch (namphuongtran/warren#169).
  *
  * Trust boundary (warren-4371): the preflight runs in the control plane, so
- * it is DETECTION ONLY. It reads the working-tree journal file and runs two
- * read-only git plumbing commands (`git ls-files`, `git cat-file blob`). It
- * never executes a repository-defined script, never writes to the host
- * clone, and never commits. The warren-1f03 heal ran the repository's own
+ * it is DETECTION ONLY. It runs two read-only git plumbing commands
+ * (`git ls-tree`, `git cat-file blob`). It never executes a
+ * repository-defined script, never writes to the host clone, and never
+ * commits. The warren-1f03 heal ran the repository's own
  * generate script and committed on the host clone, which executed
  * repository code outside the run's isolation boundary with the control
  * plane's environment. Regeneration now happens inside the run's sandbox:
@@ -27,7 +28,6 @@
  * system event for operators. See SECURITY.md "Runtime isolation".
  */
 
-import { join } from "node:path";
 import { WarrenError } from "../../core/errors.ts";
 import type { Repos } from "../../db/repos/index.ts";
 import { DEFAULT_GIT_TIMEOUT_MS, type SpawnFn } from "../../projects/clone.ts";
@@ -71,10 +71,10 @@ export interface MigrationPreflightOutcome {
 
 export interface MigrationPreflightInput {
 	readonly spawn: SpawnFn;
-	/** Host clone path (checked out to `baseRef` by the pre-dispatch refresh). */
+	/** Host clone path; git runs there. */
 	readonly projectPath: string;
 	readonly defaultBranch: string;
-	/** Branch the dispatch bases its workspace on. */
+	/** Branch the dispatch bases its workspace on; the refresh made it resolvable. */
 	readonly baseRef: string;
 	/** Git binary; defaults to `git` (mirrors ProjectsConfig.gitBinary). */
 	readonly gitBinary?: string;
@@ -137,6 +137,23 @@ export function findCollisions(
 	return out;
 }
 
+/**
+ * One journal as `ref` commits it; null when absent or not a journal.
+ * Plumbing read of the blob: no textconv, no filters, no hooks.
+ */
+async function readJournalAt(
+	input: MigrationPreflightInput,
+	git: string,
+	ref: string,
+	journalPath: string,
+): Promise<Journal | null> {
+	const blob = await input.spawn([git, "cat-file", "blob", `${ref}:${journalPath}`], {
+		cwd: input.projectPath,
+		timeoutMs: DEFAULT_GIT_TIMEOUT_MS,
+	});
+	return blob.exitCode === 0 ? parseJournal(blob.stdout) : null;
+}
+
 /** Collisions in one journal; empty when either side has no parseable journal. */
 async function detectOneJournal(
 	input: MigrationPreflightInput,
@@ -144,40 +161,31 @@ async function detectOneJournal(
 	originRef: string,
 	journalPath: string,
 ): Promise<JournalCollision[]> {
-	const branchRaw = await Bun.file(join(input.projectPath, journalPath))
-		.text()
-		.catch(() => null);
-	const branch = branchRaw === null ? null : parseJournal(branchRaw);
+	const branch = await readJournalAt(input, git, input.baseRef, journalPath);
 	if (branch === null) return [];
-	// Plumbing read of the blob: no textconv, no filters, no hooks.
-	const mainBlob = await input.spawn([git, "cat-file", "blob", `${originRef}:${journalPath}`], {
-		cwd: input.projectPath,
-		timeoutMs: DEFAULT_GIT_TIMEOUT_MS,
-	});
 	// No journal on main → nothing to collide with.
-	if (mainBlob.exitCode !== 0) return [];
-	const main = parseJournal(mainBlob.stdout);
+	const main = await readJournalAt(input, git, originRef, journalPath);
 	if (main === null) return [];
 	const dir = journalPath.slice(0, -JOURNAL_SUFFIX.length - 1);
 	return findCollisions(dir, branch.entries, main.entries);
 }
 
 /**
- * Detect journal-slot collisions between the checked-out branch and
- * `origin/<defaultBranch>` across every drizzle journal tracked in the clone.
+ * Detect journal-slot collisions between `baseRef` and
+ * `origin/<defaultBranch>` across every drizzle journal `baseRef` commits.
  * Read-only: the host clone is never mutated and no repository-defined
  * command runs (warren-4371).
  */
 export const detectMigrationJournalCollisions: MigrationPreflightFn = async (input) => {
 	const git = input.gitBinary ?? "git";
 	const originRef = `origin/${input.defaultBranch}`;
-	const listing = await input.spawn([git, "ls-files", "--", `:(glob)**/${JOURNAL_SUFFIX}`], {
+	const listing = await input.spawn([git, "ls-tree", "-r", "--name-only", input.baseRef], {
 		cwd: input.projectPath,
 		timeoutMs: DEFAULT_GIT_TIMEOUT_MS,
 	});
 	if (listing.exitCode !== 0) {
 		throw new MigrationPreflightError(
-			`migration preflight: \`git ls-files\` failed: ${listing.stderr.trim()}`,
+			`migration preflight: \`git ls-tree\` failed: ${listing.stderr.trim()}`,
 		);
 	}
 	const journalPaths = listing.stdout

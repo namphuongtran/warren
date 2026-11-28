@@ -46,7 +46,7 @@ describe("spawnRun: continuation (warren-4b11)", () => {
 			projectsConfig: { root: "/data/projects", gitBinary: "git" },
 			projectSpawn: async () => ({ stdout: "", stderr: "", exitCode: 0 }),
 			refreshProjectFn: async (input) => {
-				refreshRef = input.ref;
+				refreshRef = input.fetchRef;
 				const updated = await repos.projects.recordRefresh({
 					id: input.id,
 					headSha: "feedface".repeat(5),
@@ -58,6 +58,35 @@ describe("spawnRun: continuation (warren-4b11)", () => {
 		// Default prefix is "warren"; parent branch is warren/<parentId>.
 		expect(refreshRef).toBe(`warren/${parentId}`);
 		expect(run.parentRunId).toBe(parentId);
+	});
+
+	test("continues from the parent's frozen branch, not one recomposed from today's prefix (warren-5255)", async () => {
+		const parentId = await makeParent();
+		// The parent pushed under a prefix the project has since changed.
+		await repos.runs.setBranch(parentId, `burrow/${parentId}`);
+		const { client } = makeSandboxClient();
+		let refreshRef: string | undefined;
+		await spawnRun({
+			repos,
+			runtimeProvider: makeProvider(client),
+			agentName: "refactor-bot",
+			projectId: "prj_xxxxxxxxxxxx",
+			prompt: "follow up",
+			parentRunId: parentId,
+			runBranchPrefixDefault: "warren",
+			projectsConfig: { root: "/data/projects", gitBinary: "git" },
+			projectSpawn: async () => ({ stdout: "", stderr: "", exitCode: 0 }),
+			refreshProjectFn: async (input) => {
+				refreshRef = input.fetchRef;
+				const updated = await repos.projects.recordRefresh({
+					id: input.id,
+					headSha: "feedface".repeat(5),
+				});
+				return { project: updated, headSha: "feedface".repeat(5), ref: input.ref ?? "main" };
+			},
+		});
+
+		expect(refreshRef).toBe(`burrow/${parentId}`);
 	});
 
 	test("honors a project runBranchPrefix when recomposing the parent branch", async () => {
@@ -75,7 +104,7 @@ describe("spawnRun: continuation (warren-4b11)", () => {
 			projectsConfig: { root: "/data/projects", gitBinary: "git" },
 			projectSpawn: async () => ({ stdout: "", stderr: "", exitCode: 0 }),
 			refreshProjectFn: async (input) => {
-				refreshRef = input.ref;
+				refreshRef = input.fetchRef;
 				const updated = await repos.projects.recordRefresh({
 					id: input.id,
 					headSha: "feedface".repeat(5),
@@ -102,7 +131,7 @@ describe("spawnRun: continuation (warren-4b11)", () => {
 			projectsConfig: { root: "/data/projects", gitBinary: "git" },
 			projectSpawn: async () => ({ stdout: "", stderr: "", exitCode: 0 }),
 			refreshProjectFn: async (input) => {
-				refreshRef = input.ref;
+				refreshRef = input.fetchRef;
 				const updated = await repos.projects.recordRefresh({
 					id: input.id,
 					headSha: "feedface".repeat(5),
@@ -208,7 +237,7 @@ describe("spawnRun: continuation (warren-4b11)", () => {
 				return { stdout: "", stderr: "", exitCode: 0 };
 			},
 			refreshProjectFn: async (input) => {
-				refreshRef = input.ref;
+				refreshRef = input.fetchRef;
 				const updated = await repos.projects.recordRefresh({
 					id: input.id,
 					headSha: "feedface".repeat(5),

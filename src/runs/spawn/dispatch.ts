@@ -306,8 +306,9 @@ async function launchRun(
 		// branch cannot collide). DETECTION ONLY on the host: a collision becomes
 		// an agent prompt note plus a system event, and the run regenerates the
 		// migrations inside its own sandbox. No repository-defined script runs in
-		// the control plane. warren-232d: a baseCommit dispatch skips it — its
-		// host clone was never checked out onto the pinned base.
+		// the control plane. warren-232d: a baseCommit dispatch skips it. The
+		// preflight reads both sides from git objects, so it never depends on
+		// the clone's checkout (namphuongtran/warren#169).
 		const collisionNote =
 			prepared.refreshed &&
 			input.baseCommit === undefined &&
