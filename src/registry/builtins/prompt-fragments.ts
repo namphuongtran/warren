@@ -56,18 +56,29 @@ export const VALIDATION_DISCIPLINE_BULLETS = `- Validation discipline. Broad tes
 /** Harness-agent mulch fragment: expertise load ritual + workspace path. */
 export const MULCH_FRAGMENT = `## Project expertise (mulch)
 
-- /workspace/.mulch/expertise/<domain>.jsonl holds the project's expertise records.
+- .mulch/expertise/<domain>.jsonl holds the project's expertise records.
 - Run \`ml prime\` at the start of the session to load them, and record insights worth preserving with \`ml record\` before finishing.`;
 
 /** Harness-agent tracker fragment: the project's issue queue + sd CLI. */
 export const TRACKER_FRAGMENT = `## Project issue queue (seeds)
 
-- /workspace/.seeds/issues.jsonl holds the project's issue queue.
+- .seeds/issues.jsonl holds the project's issue queue.
 - The \`sd\` CLI manages it (\`sd ready\`, \`sd create\`, \`sd close\`, \`sd sync\`); see AGENTS.md for the workflow.`;
 
+/**
+ * Where the workspace files are (namphuongtran/warren#158). The repository's
+ * absolute path differs per runtime: K8s and the bwrap sandbox mount it at
+ * /workspace, while Docker and the macOS sandbox keep the host path. Every
+ * runtime starts the agent in the repository root, and reap reads the notes
+ * at `join(workspacePath, RUN_*_PATH)`. So a prompt names a workspace file
+ * relative to the root and never by an absolute path.
+ */
+export const REPO_ROOT_BULLET =
+	"- Your session starts in the repository root. Every repository path this prompt names, such as .warren/agent.json, is relative to that root. Its absolute path differs between runtimes, so if you change directory, find the root again with `git rev-parse --show-toplevel`.";
+
 /** Workspace-map bullets shared by every harness builtin (ungated). */
-export const BASE_WORKSPACE_BULLETS = `- The project repo is mounted at the burrow workspace root.
-- /workspace/.warren/agent.json is the rendered agent definition (warren seeded it).`;
+export const BASE_WORKSPACE_BULLETS = `${REPO_ROOT_BULLET}
+- .warren/agent.json is the rendered agent definition (warren seeded it).`;
 
 /**
  * The run closure contract (namphuongtran/warren#21), shared by every
@@ -79,7 +90,7 @@ export const BASE_WORKSPACE_BULLETS = `- The project repo is mounted at the burr
  */
 export const HANDOFF_FRAGMENT = `## Handoff report (required)
 
-Before the run ends, write your handoff report to /workspace/${RUN_HANDOFF_PATH}. Warren reads it after the run, stores it with the run, and shows it to the operator and in the pull request. Write it even when the work failed or you are blocked. Git ignores the file, so do not commit it. If you write it more than once, the last version counts. Keep it under ${RUN_HANDOFF_MAX_BYTES / 1024} KiB of JSON in this shape:
+Before the run ends, write your handoff report to ${RUN_HANDOFF_PATH} in the repository root, the directory your session starts in. Warren reads it after the run, stores it with the run, and shows it to the operator and in the pull request. Write it even when the work failed or you are blocked. Git ignores the file, so do not commit it. If you write it more than once, the last version counts. Keep it under ${RUN_HANDOFF_MAX_BYTES / 1024} KiB of JSON in this shape:
 
 \`\`\`json
 {
@@ -124,7 +135,7 @@ const [UNDERSTANDING, OPTIONS, CHOSEN, RISKS, VERIFICATION] = RUN_APPROACH_HEADI
  */
 export const APPROACH_FRAGMENT = `## Approach note (before your first edit)
 
-Before your first edit, write your approach to /workspace/${RUN_APPROACH_PATH}. Warren reads it after the run, stores it with the run, and shows it to the operator, so they can tell a deliberate design from a workaround. Git ignores the file, so do not commit it. Keep it under ${RUN_APPROACH_MAX_BYTES / 1024} KiB of Markdown under these headings:
+Before your first edit, write your approach to ${RUN_APPROACH_PATH} in the repository root, the directory your session starts in. Warren reads it after the run, stores it with the run, and shows it to the operator, so they can tell a deliberate design from a workaround. Git ignores the file, so do not commit it. Keep it under ${RUN_APPROACH_MAX_BYTES / 1024} KiB of Markdown under these headings:
 
 - \`## ${UNDERSTANDING}\`: the problem in your own words, including what is out of scope.
 - \`## ${OPTIONS}\`: two or three options, each with its trade-off.

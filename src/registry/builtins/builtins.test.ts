@@ -3,6 +3,7 @@ import { isKnownRuntimeId, parseRunHandoff, RUN_APPROACH_HEADINGS } from "../../
 import { openDatabase, type WarrenDb } from "../../db/client.ts";
 import { AgentsRepo } from "../../db/repos/agents.ts";
 import { DrizzleAdapter } from "../../db/repos/drizzle-adapter.ts";
+import { ALL_PROMPT_CAPABILITIES, withGatedPromptFragments } from "../prompt-gating.ts";
 import {
 	AgentNameSchema,
 	parseRenderedAgent,
@@ -27,6 +28,7 @@ import {
 	APPROACH_FRAGMENT,
 	GATE_FINAL_RUN_RULE,
 	HANDOFF_FRAGMENT,
+	REPO_ROOT_BULLET,
 	VALIDATION_DISCIPLINE_BULLETS,
 } from "./prompt-fragments.ts";
 
@@ -101,6 +103,25 @@ describe("BUILTIN_AGENTS", () => {
 			for (const field of ["status", "summary", "verification", "howToTry", "openQuestions"]) {
 				expect(system).toContain(`"${field}"`);
 			}
+		}
+	});
+
+	// namphuongtran/warren#158: only K8s and the bwrap sandbox mount the repository
+	// at /workspace. Docker and the macOS sandbox keep the host path, so an agent
+	// that wrote /workspace/.warren/ lost both notes. Every runtime starts the
+	// agent in the repository root, and reap reads the notes relative to it.
+	test("names workspace paths relative to the repository root, never under /workspace (namphuongtran/warren#158)", () => {
+		const rendered = BUILTIN_AGENTS.map((builtin) => {
+			const agent = withGatedPromptFragments(builtin, ALL_PROMPT_CAPABILITIES);
+			return { name: builtin.name, system: agent.sections.system ?? "" };
+		});
+		const absolute = rendered.filter(({ system }) => system.includes("/workspace"));
+		expect(absolute.map(({ name }) => name)).toEqual([]);
+		for (const fragment of [HANDOFF_FRAGMENT, APPROACH_FRAGMENT]) {
+			expect(fragment).toContain("in the repository root, the directory your session starts in");
+		}
+		for (const { system } of rendered.filter(({ system }) => system.includes("Workspace map"))) {
+			expect(system).toContain(REPO_ROOT_BULLET);
 		}
 	});
 

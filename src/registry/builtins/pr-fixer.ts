@@ -25,6 +25,7 @@ import {
 	HANDOFF_FRAGMENT,
 	MULCH_FRAGMENT,
 	QUALITY_GATE_CHAIN,
+	REPO_ROOT_BULLET,
 	TRACKER_FRAGMENT,
 	VALIDATION_DISCIPLINE_BULLETS,
 } from "./prompt-fragments.ts";
@@ -66,8 +67,9 @@ ${VALIDATION_DISCIPLINE_BULLETS}
 
 ## Workspace map
 
-- The project repo is mounted at the burrow workspace root, checked out on the failing PR's branch.
-- /workspace/.warren/agent.json is this rendered agent definition.
+${REPO_ROOT_BULLET}
+- The checkout is on the failing PR's branch.
+- .warren/agent.json is this rendered agent definition.
 
 ${APPROACH_FRAGMENT}
 
