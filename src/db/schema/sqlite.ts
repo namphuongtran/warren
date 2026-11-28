@@ -527,6 +527,7 @@ export const dispatchContext = sqliteTable(
 		promptBytes: integer("prompt_bytes"),
 		mode: text("mode"),
 		network: text("network"),
+		configCommit: text("config_commit"), // clone HEAD `.warren/` was read at (namphuongtran/warren#165)
 		queueQueuedRuns: integer("queue_queued_runs"),
 		queueRunningRuns: integer("queue_running_runs"),
 		queueProjectNonTerminal: integer("queue_project_non_terminal"),

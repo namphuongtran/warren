@@ -317,6 +317,18 @@ Releases **0.9.10 and earlier** live in
 
 ### Fixed
 
+- **A `--base-commit` dispatch reads `.warren/` config from the
+  default-branch tip (namphuongtran/warren#165).** The pinned refresh
+  fetched only the pin, so the host clone stayed checked out where the last
+  unpinned refresh had left it. A pinned run then read whatever config that
+  checkout held: two familyroots pilot runs missed a `repoContext` that was
+  already merged. A pinned dispatch now refreshes onto the default branch
+  like an unpinned one. It verifies the pin before the checkout, fetching
+  the pin directly when no branch or tag reaches it. It still cuts the
+  workspace at the pin, so the clone never detaches onto it (warren-232d).
+  The new `dispatch_context.config_commit` column records the clone HEAD
+  each refreshed run read its config at (SQLite migration 0065, Postgres
+  0060).
 - **Every run commits under an identity the operator controls
   (namphuongtran/warren#160).** With `WARREN_GIT_AUTHOR_NAME` and
   `WARREN_GIT_AUTHOR_EMAIL` unset, a run had no git identity: the agent's

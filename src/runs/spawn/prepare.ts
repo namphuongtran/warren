@@ -10,7 +10,7 @@
 
 import { NotFoundError } from "../../core/errors.ts";
 import type { ProjectRow } from "../../db/schema.ts";
-import { refreshProject } from "../../projects/manage.ts";
+import { type RefreshProjectResult, refreshProject } from "../../projects/manage.ts";
 import {
 	type AgentDefinition,
 	readProviderFrontmatter,
@@ -43,6 +43,11 @@ export interface PreparedDispatch {
 	readonly baseRef: string | undefined;
 	/** Whether the host clone was refreshed (it is not without a spawn seam). */
 	readonly refreshed: boolean;
+	/**
+	 * The clone HEAD after the refresh, which `projectDefaults` was read at
+	 * (namphuongtran/warren#165). Undefined without a refresh.
+	 */
+	readonly configCommit: string | undefined;
 	readonly project: ProjectRow;
 	readonly projectDefaults: DefaultsConfig | null;
 	readonly providerChoice: DispatchProviderChoice;
@@ -123,6 +128,7 @@ export async function prepareDispatch(input: SpawnRunInput): Promise<PreparedDis
 		newBranch,
 		baseRef,
 		refreshed: refreshed !== null,
+		configCommit: refreshed?.headSha,
 		project: projectAfterRefresh,
 		projectDefaults,
 		providerChoice,
@@ -137,19 +143,19 @@ export async function prepareDispatch(input: SpawnRunInput): Promise<PreparedDis
 }
 
 /**
- * warren-232d: a baseCommit dispatch NEVER moves the host clone's HEAD.
- * The refresh runs in fetch-only mode (the pinned SHA's objects come
- * down, HEAD/working tree untouched — see refreshProjectClone's
- * `fetchCommit` leg) and the workspace is cut at the SHA directly by
- * the provider (`git worktree add -b <runBranch> <ws> <sha>`), so the
- * shared clone's checked-out branch never moves for a pinned replay.
+ * A baseCommit dispatch refreshes onto the default branch like an unpinned
+ * one, so the project defaults read next come from the default-branch tip
+ * (namphuongtran/warren#165). The pin rides `fetchCommit`: its objects must
+ * be present, and the provider cuts the workspace at the SHA itself
+ * (`git worktree add -b <runBranch> <ws> <sha>`), so the shared clone never
+ * detaches onto a pin (warren-232d).
  * `null` when the caller wired no spawn seam (no refresh happens).
  */
 async function refreshDispatchClone(
 	input: SpawnRunInput,
 	project: ProjectRow,
 	baseRef: string | undefined,
-): Promise<{ project: ProjectRow } | null> {
+): Promise<RefreshProjectResult | null> {
 	if (input.projectsConfig === undefined || input.projectSpawn === undefined) return null;
 	const target =
 		input.baseCommit !== undefined

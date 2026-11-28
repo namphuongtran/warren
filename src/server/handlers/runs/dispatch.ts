@@ -102,8 +102,7 @@ interface SeedRefreshPin {
  * warren-a25a: refresh the host clone for the seed-lookup retry. Same gate
  * as `refreshDispatchProject` in `src/plan-runs/create.ts`: only a
  * git-native tracker reads the clone, and only with a spawn seam wired. A
- * `baseCommit` dispatch never moves the clone's HEAD (warren-232d), so it
- * gets no retry. Returns whether a refresh ran.
+ * `baseCommit` dispatch gets no retry. Returns whether a refresh ran.
  */
 async function refreshForSeedRetry(
 	deps: ServerDeps,
