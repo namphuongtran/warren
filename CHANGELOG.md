@@ -317,6 +317,20 @@ Releases **0.9.10 and earlier** live in
 
 ### Fixed
 
+- **Repair runs and continuations read guardrails and `repoContext` from
+  the default-branch tip (namphuongtran/warren#169).** A `--ref` or
+  existing-branch dispatch and a continuation checked their base out in the
+  shared host clone. They read that branch's `.warren/config.yaml`, so a
+  branch cut before a config change missed it, and a branch could loosen its
+  own `maxCostUsd` or `protectedPaths`. Until the next refresh, every other
+  reader of the clone saw the branch too: the project config cache, the
+  project row's `head_sha`, and the feature flags. The clone now always
+  lands on the default branch. The base becomes a local ref at origin's tip
+  that the workspace is cut from. Only `qualityGate` and
+  `migrations.regenerateCommand` come from the base's committed config, when
+  it sets them. A continuation now bases on the parent's frozen
+  `runs.branch` instead of recomposing it from today's prefix. A seed-lookup
+  retry now also runs for a pinned dispatch, against the default branch.
 - **A `--base-commit` dispatch reads `.warren/` config from the
   default-branch tip (namphuongtran/warren#165).** The pinned refresh
   fetched only the pin, so the host clone stayed checked out where the last

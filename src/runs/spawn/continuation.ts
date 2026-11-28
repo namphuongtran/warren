@@ -13,11 +13,12 @@
  *   NOT check out the parent's pushed branch — that branch may be stale or may
  *   never have been pushed (parent failed early).
  * - `parentRunId` set (default `cloneKind: "continue"`) → the parent run's
- *   pushed branch, recomposed from the same prefix precedence the parent's
- *   spawn used (`composeRunBranch(resolveRunBranchPrefix(...), parentRunId)`).
- *   We read the project defaults here (a lightweight pre-refresh peek) only to
- *   get the prefix; the working tree's `.warren/` is stable across a project's
- *   runs, so this matches the branch the parent actually pushed.
+ *   pushed branch, read off the parent's frozen `runs.branch` (warren-5255).
+ *   The prefix in today's config may differ from the one the parent used, and
+ *   a parent that pushed to an existing or named branch never had a composed
+ *   one. Only a legacy row without a frozen branch falls back to recomposing
+ *   it from the prefix precedence (`composeRunBranch(resolveRunBranchPrefix(...),
+ *   parentRunId)`).
  *
  * The parent must belong to the same project — a continuation forks the
  * parent's branch on the same origin, so a cross-project parent would be a
@@ -152,6 +153,7 @@ export async function resolveContinuationRef(
 			{ recoveryHint: "re-run with a parentRunId from the same project, or omit it" },
 		);
 	}
+	if (parent.branch !== null && parent.branch !== "") return parent.branch;
 	const defaults = await readProjectDefaults(input.warrenConfigs, project.id, project.localPath);
 	const prefix = resolveRunBranchPrefix({
 		projectDefault: defaults?.runBranchPrefix,

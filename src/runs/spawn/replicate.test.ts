@@ -34,8 +34,8 @@ describe("spawnRun: replicate (warren-e96f)", () => {
 	}
 
 	function refresher(record: (ref: string | undefined) => void) {
-		return async (input: { id: string; ref?: string }) => {
-			record(input.ref);
+		return async (input: { id: string; ref?: string; fetchRef?: string }) => {
+			record(input.fetchRef);
 			const updated = await repos.projects.recordRefresh({
 				id: input.id,
 				headSha: "feedface".repeat(5),

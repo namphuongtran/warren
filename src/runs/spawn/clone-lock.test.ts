@@ -28,14 +28,19 @@ describe("spawnRun: per-project host-clone serialization (warren-232d)", () => {
 		let maxActive = 0;
 		const startedRefs: string[] = [];
 		const finishedRefs: string[] = [];
-		const refreshProjectFn = async (input: { id: string; ref?: string; fetchCommit?: string }) => {
+		const refreshProjectFn = async (input: {
+			id: string;
+			ref?: string;
+			fetchCommit?: string;
+			fetchRef?: string;
+		}) => {
 			active += 1;
 			maxActive = Math.max(maxActive, active);
-			startedRefs.push(input.ref ?? "main");
+			startedRefs.push(input.fetchRef ?? "main");
 			// Widen the race window: without the lock a second dispatch enters
 			// while this one is still "resetting" the shared clone.
 			await new Promise((resolve) => setTimeout(resolve, 15));
-			finishedRefs.push(input.ref ?? "main");
+			finishedRefs.push(input.fetchRef ?? "main");
 			active -= 1;
 			const updated = await repos.projects.recordRefresh({
 				id: input.id,

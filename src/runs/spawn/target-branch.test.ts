@@ -58,7 +58,7 @@ describe("spawnRun: targetBranch (warren-709e)", () => {
 			projectsConfig: { root: "/data/projects", gitBinary: "git" },
 			projectSpawn: async () => ({ stdout: "", stderr: "", exitCode: 0 }),
 			refreshProjectFn: async (input) => {
-				refreshRef = input.ref;
+				refreshRef = input.fetchRef;
 				const updated = await repos.projects.recordRefresh({
 					id: input.id,
 					headSha: "feedface".repeat(5),
@@ -84,7 +84,7 @@ describe("spawnRun: targetBranch (warren-709e)", () => {
 			projectsConfig: { root: "/data/projects", gitBinary: "git" },
 			projectSpawn: async () => ({ stdout: "", stderr: "", exitCode: 0 }),
 			refreshProjectFn: async (input) => {
-				refreshRef = input.ref;
+				refreshRef = input.fetchRef;
 				const updated = await repos.projects.recordRefresh({
 					id: input.id,
 					headSha: "feedface".repeat(5),

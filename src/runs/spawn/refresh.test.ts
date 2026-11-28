@@ -47,9 +47,10 @@ describe("spawnRun: project refresh (warren-1bb6)", () => {
 		expect(persisted.lastFetchedAt).not.toBeNull();
 	});
 
-	test("forwards an explicit ref override into refreshProjectFn", async () => {
+	test("forwards an explicit ref as the base and keeps the clone on the default branch (namphuongtran/warren#169)", async () => {
 		const { client } = makeSandboxClient();
 		let receivedRef: string | undefined;
+		let checkoutRef: string | undefined = "sentinel";
 		await spawnRun({
 			repos,
 			runtimeProvider: makeProvider(client),
@@ -60,7 +61,8 @@ describe("spawnRun: project refresh (warren-1bb6)", () => {
 			projectsConfig: { root: "/data/projects", gitBinary: "git" },
 			projectSpawn: async () => ({ stdout: "", stderr: "", exitCode: 0 }),
 			refreshProjectFn: async (input) => {
-				receivedRef = input.ref;
+				receivedRef = input.fetchRef;
+				checkoutRef = input.ref;
 				const updated = await repos.projects.recordRefresh({
 					id: input.id,
 					headSha: "abcd".repeat(10),
@@ -69,6 +71,7 @@ describe("spawnRun: project refresh (warren-1bb6)", () => {
 			},
 		});
 		expect(receivedRef).toBe("feature/x");
+		expect(checkoutRef).toBeUndefined();
 	});
 
 	test("aborts spawn when refresh fails — no warren row, no burrow", async () => {
