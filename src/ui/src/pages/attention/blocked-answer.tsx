@@ -41,8 +41,7 @@ function AnswerForm({
 	handoff: RunHandoff;
 	project: string;
 }) {
-	const questions = handoff.openQuestions;
-	const { answers, setAnswer, answered } = useAnswers(questions);
+	const draft = useAnswers(handoff.openQuestions);
 	const queryClient = useQueryClient();
 	const { toast } = useToast();
 	const dispatch = useMutation({
@@ -53,7 +52,7 @@ function AnswerForm({
 				prompt: answeredContinuationPrompt({
 					task: run.prompt,
 					handoffSummary: handoff.summary,
-					answers: answered,
+					...draft.reply,
 				}),
 				continueFromRunId: run.id,
 			}),
@@ -75,7 +74,7 @@ function AnswerForm({
 
 	return (
 		<div className="flex flex-col gap-3">
-			<AnswerFields questions={questions} answers={answers} onAnswer={setAnswer} />
+			<AnswerFields draft={draft} />
 			{dispatch.isError ? <Alert variant="danger">{formatError(dispatch.error)}</Alert> : null}
 			<div className="flex flex-wrap items-center gap-2">
 				<Button
@@ -83,7 +82,9 @@ function AnswerForm({
 					onClick={() => dispatch.mutate()}
 					// Stays disabled after success: one answer dispatches one continuation.
 					// An error re-enables it, so the operator can try again.
-					disabled={!canContinueWithAnswers(answered) || dispatch.isPending || dispatch.isSuccess}
+					disabled={
+						!canContinueWithAnswers(draft.reply) || dispatch.isPending || dispatch.isSuccess
+					}
 				>
 					{dispatch.isPending
 						? "Dispatching…"
@@ -92,7 +93,7 @@ function AnswerForm({
 							: "Dispatch continuation"}
 				</Button>
 				<span className="text-xs text-(--color-text-3)">
-					Starts a run that continues from this one's branch, with your answers in its prompt.
+					{`Starts a run that continues from this one's branch, with your ${draft.subject} in its prompt.`}
 				</span>
 			</div>
 		</div>

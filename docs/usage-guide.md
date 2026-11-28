@@ -221,8 +221,9 @@ admission:
   continuation, such as a CI fix, does not answer the questions. Warren derives both fields from the stored
   report and the run links, so the run keeps its state. The run Summary shows each question
   with its options and recommendation. Its answer form opens Dispatch as a continuation of the
-  run, with the answers in the prompt. The Needs attention page (section 5.4) dispatches the
-  continuation from its own answer form.
+  run, with the answers in the prompt. When a blocked report asks no question, the form asks
+  what the agent should do next, and the prompt carries your instructions instead. The Needs
+  attention page (section 5.4) dispatches the continuation from its own answer form.
 - The source-editing built-in agents write an approach note to `.warren/approach.md` before
   their first edit: Understanding, Options considered, Chosen approach and why, Risks /
   unknowns, and Verification plan. Git ignores the file. Reap serves it as `approach` on
@@ -332,7 +333,8 @@ finished runs that wait on an operator, in four sections:
 
 - **Blocked on you.** The handoff says `blocked`, and no operator continuation has answered it.
   Answer the questions on the page and press **Dispatch continuation**. Warren starts a run
-  that continues from the blocked run's branch, with your answers in its prompt.
+  that continues from the blocked run's branch, with your answers in its prompt. If the agent
+  stopped without a question, say what it should do next instead.
 - **Review asked for changes.** An open PR whose `warren/review` status asks for changes, or
   whose fix rounds ran out.
 - **Failed.** A failed run that no retry and no re-run followed. A CI fix does not count.

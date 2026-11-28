@@ -19,19 +19,20 @@
 	"$comment_outcomes_histogram_2026_10_08": "BOUNDED AUTO-RAISE, RAW JS ONLY (warren-e9cd via warren-9fd7): the telemetry run-outcomes chart gains loop-tab.buckets.ts (pad the series to one column per UTC day, weekly at 90 days) and telemetryWindowBounds. Net +699 B raw js measured by check-bundle-size; totals.raw.js takes measured + HEADROOM_RAW from a laptop --update. CI gzips about 1.8 KB hotter than the laptop, so the bundle-size-autoheal workflow then re-baselined the gzip and css figures from the CI measure (+514 B gzip js).",
 	"$comment_run_summary_2026_11_22": "BOUNDED AUTO-RAISE (namphuongtran/warren#38): the run detail Summary tab adds the approach, outcome, quality, changes, and delivery sections plus the tab view model. +13560 B raw js, +3757 B gzip js, +485 B raw css from a laptop --update, inside every AUTO_RAISE_CAP. CI gzips hotter than the laptop, so the bundle-size-autoheal workflow may re-baseline the gzip figures from the CI measure.",
 	"$comment_needs_attention_2026_11_28": "BOUNDED AUTO-RAISE (namphuongtran/warren#26): the Needs attention page, its four sections, and the inline answer form. +7176 B raw js, +2016 B gzip js, +292 B raw css from a laptop --update, inside every AUTO_RAISE_CAP.",
+	"$comment_blocked_no_question_2026_11_28": "BOUNDED AUTO-RAISE (namphuongtran/warren#25): the next-step field that answers a blocked run with no open question. +1155 B raw js, +250 B gzip js from a laptop --update, inside every AUTO_RAISE_CAP.",
 	"totals": {
 		"raw": {
-			"js": 744810,
+			"js": 745965,
 			"css": 55892
 		},
 		"gzip": {
-			"js": 216600,
+			"js": 216850,
 			"css": 11015
 		}
 	},
 	"largest": {
 		"gzip": {
-			"js": 216600,
+			"js": 216850,
 			"css": 11015
 		}
 	}

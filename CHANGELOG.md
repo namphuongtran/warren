@@ -317,6 +317,15 @@ Releases **0.9.10 and earlier** live in
 
 ### Fixed
 
+- **A blocked run that asked no question can be answered
+  (namphuongtran/warren#25).** A handoff may say `blocked` with an empty
+  `openQuestions` list, and the run still needs input. The run Summary
+  showed no answer form for it, and the Needs attention page's "Dispatch
+  continuation" stayed disabled, so the run sat in "Blocked on you" until it
+  aged out of the window. Both forms now ask what the agent should do next,
+  and the continuation prompt carries the answer under
+  `## The operator's instructions`.
+
 - **Repair runs and continuations read guardrails and `repoContext` from
   the default-branch tip (namphuongtran/warren#169).** A `--ref` or
   existing-branch dispatch and a continuation checked their base out in the
