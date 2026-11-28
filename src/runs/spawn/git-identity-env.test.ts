@@ -72,9 +72,9 @@ describe("spawnRun: agent git identity env (warren-4e36)", () => {
 		});
 		const env = sandboxEnv(calls);
 		expect(env?.GIT_AUTHOR_NAME).toBe("warren-agent");
-		expect(env?.GIT_AUTHOR_EMAIL).toBe("agent@warren.invalid");
+		expect(env?.GIT_AUTHOR_EMAIL).toBe("agent@warren.ai");
 		expect(env?.GIT_COMMITTER_NAME).toBe("warren-agent");
-		expect(env?.GIT_COMMITTER_EMAIL).toBe("agent@warren.invalid");
+		expect(env?.GIT_COMMITTER_EMAIL).toBe("agent@warren.ai");
 	});
 
 	test("unset vars inject the documented default on every runtime (namphuongtran/warren#160)", async () => {
@@ -92,9 +92,9 @@ describe("spawnRun: agent git identity env (warren-4e36)", () => {
 			});
 			expect(sandboxEnv(calls)).toMatchObject({
 				GIT_AUTHOR_NAME: "warren-agent",
-				GIT_AUTHOR_EMAIL: "agent@warren.invalid",
+				GIT_AUTHOR_EMAIL: "agent@warren.ai",
 				GIT_COMMITTER_NAME: "warren-agent",
-				GIT_COMMITTER_EMAIL: "agent@warren.invalid",
+				GIT_COMMITTER_EMAIL: "agent@warren.ai",
 			});
 		}
 	});
@@ -128,7 +128,7 @@ describe("spawnRun: half-set git identity surfacing (namphuongtran/warren#160)",
 			expect(warns).toHaveLength(1);
 			expect(warns[0]?.level).toBe("warn");
 			expect(warns[0]?.msg).toContain("WARREN_GIT_AUTHOR_NAME");
-			expect(warns[0]?.obj.email).toBe("agent@warren.invalid");
+			expect(warns[0]?.obj.email).toBe("agent@warren.ai");
 			expect(warns[0]?.obj.run_id).toBeDefined();
 		}
 	});

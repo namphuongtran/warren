@@ -65,7 +65,6 @@ describe("resolveAgentGitIdentity", () => {
 		// bookkeeping by author alone.
 		expect(AGENT_GIT_IDENTITY_DEFAULT.name).not.toBe(WARREN_BOT_IDENTITY.name);
 		expect(AGENT_GIT_IDENTITY_DEFAULT.email).not.toBe(WARREN_BOT_IDENTITY.email);
-		expect(AGENT_GIT_IDENTITY_DEFAULT.email.endsWith(".invalid")).toBe(true);
 	});
 });
 
@@ -82,9 +81,9 @@ describe("agentGitIdentityEnv", () => {
 	test("sets author and committer to the default when nothing is configured", () => {
 		expect(agentGitIdentityEnv({})).toEqual({
 			GIT_AUTHOR_NAME: "warren-agent",
-			GIT_AUTHOR_EMAIL: "agent@warren.invalid",
+			GIT_AUTHOR_EMAIL: "agent@warren.ai",
 			GIT_COMMITTER_NAME: "warren-agent",
-			GIT_COMMITTER_EMAIL: "agent@warren.invalid",
+			GIT_COMMITTER_EMAIL: "agent@warren.ai",
 		});
 	});
 });
@@ -131,9 +130,7 @@ describe("agentGitIdentityEnv in a sandbox with no git identity", () => {
 		expect(run.stderr).toBe("");
 		expect(run.exitCode).toBe(0);
 		const log = git(["log", "-1", "--format=%an <%ae>|%cn <%ce>"]);
-		expect(log.stdout.trim()).toBe(
-			"warren-agent <agent@warren.invalid>|warren-agent <agent@warren.invalid>",
-		);
+		expect(log.stdout.trim()).toBe("warren-agent <agent@warren.ai>|warren-agent <agent@warren.ai>");
 	});
 
 	test("an in-sandbox git config user.name cannot change the author", () => {

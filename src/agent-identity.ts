@@ -22,12 +22,13 @@
  * `src/bot-identity.ts` (`warren <bot@warren.invalid>`), which authors the
  * reap-time `chore(warren)` commits. Two identities, two spellings, so an
  * auditor can tell agent work from bookkeeping by author alone. The default
- * sits under the RFC 2606 `.invalid` TLD for the same reason as the bot's: a
- * self-hosted default must attribute to nobody.
+ * is a fixed label. Warren does not own the `warren.ai` domain, so an
+ * operator who wants GitHub to link agent commits to an account sets their
+ * own pair.
  */
 export const AGENT_GIT_IDENTITY_DEFAULT = {
 	name: "warren-agent",
-	email: "agent@warren.invalid",
+	email: "agent@warren.ai",
 } as const;
 
 /** Minimal env surface for identity resolution — injectable for tests. */

@@ -193,7 +193,7 @@ The table puts each control in one of four classes.
 |---|---|---|
 | Enforced by warren | Sandbox per run | The agent reaches only its workspace and the network that the profile allows |
 | Enforced by warren | Host-side push | Warren pushes a run branch and opens a pull request. Give the agent no forge credential. |
-| Enforced by warren | Commit author | Every run commits as `WARREN_GIT_AUTHOR_NAME`/`_EMAIL`, or as `warren-agent <agent@warren.invalid>` when unset |
+| Enforced by warren | Commit author | Every run commits as `WARREN_GIT_AUTHOR_NAME`/`_EMAIL`, or as `warren-agent <agent@warren.ai>` when unset |
 | Enforced by warren | Cost and time limits | `maxCostUsd` and `maxDurationMinutes` stop the run mid-flight |
 | Enforced by warren | Merge policy | Auto-merge is off by default. Article IX paths never auto-merge. |
 | Enforced by warren | Frozen definition | The run row keeps the agent definition and the prompt that it ran with |

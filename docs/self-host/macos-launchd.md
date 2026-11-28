@@ -251,7 +251,7 @@ docker tag <name>-agent:pre-<SHA> <name>-agent:latest
   rebuild an image while a run is live.
 - **`WARREN_GIT_AUTHOR_NAME` and `WARREN_GIT_AUTHOR_EMAIL` are safe to set.** Warren passes them
   to each run as env and never writes your `~/.gitconfig`. When both are unset, agent commits use
-  `warren-agent <agent@warren.invalid>`.
+  `warren-agent <agent@warren.ai>`.
 - **Do not run `check:all` in a clone whose path has a space.** Seven tests fail there. Commit
   from a worktree with no space in its path.
 - **`bun install` in `server-src` runs the `prepare` script, which arms the git hooks.** The hook
