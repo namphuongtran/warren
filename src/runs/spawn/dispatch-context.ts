@@ -67,6 +67,8 @@ export interface WriteDispatchContextInput {
 	prompt: string;
 	/** warren-540f: project repoContext — its bytes count into prompt_bytes. */
 	repoContext?: string;
+	/** namphuongtran/warren#165: the commit the project config was read from. */
+	configCommit?: string;
 	mode: string;
 	network: string;
 	trigger: string;
@@ -94,6 +96,8 @@ export async function writeDispatchContext(args: {
 	readonly declaredProvider: string | undefined;
 	readonly declaredModel: string | undefined;
 	readonly projectDefaults: DefaultsConfig | null | undefined;
+	/** namphuongtran/warren#165: undefined when no refresh fetched a tip. */
+	readonly configCommit: string | undefined;
 	readonly network: string;
 }): Promise<void> {
 	const input = assembleWriteInput(args);
@@ -101,6 +105,7 @@ export async function writeDispatchContext(args: {
 	if (args.projectDefaults?.repoContext !== undefined) {
 		input.repoContext = args.projectDefaults.repoContext;
 	}
+	if (args.configCommit !== undefined) input.configCommit = args.configCommit;
 	try {
 		const row = await buildDispatchContextRow(input);
 		await input.repos.dispatchContext.insert(row);
@@ -213,6 +218,7 @@ export async function buildDispatchContextRow(
 			(input.repoContext !== undefined ? PROMPT_ENCODER.encode(input.repoContext).byteLength : 0),
 		mode: input.mode,
 		network: input.network,
+		...(input.configCommit !== undefined ? { configCommit: input.configCommit } : {}),
 		queueQueuedRuns: queue.queued,
 		queueRunningRuns: queue.running,
 		queueProjectNonTerminal: queue.projectNonTerminal,

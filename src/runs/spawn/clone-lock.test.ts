@@ -41,7 +41,12 @@ describe("spawnRun: per-project host-clone serialization (warren-232d)", () => {
 				id: input.id,
 				headSha: "feedface".repeat(5),
 			});
-			return { project: updated, headSha: "feedface".repeat(5), ref: input.ref ?? "main" };
+			return {
+				project: updated,
+				headSha: "feedface".repeat(5),
+				ref: input.ref ?? "main",
+				configCommit: "feedface".repeat(5),
+			};
 		};
 
 		const [a, b] = await Promise.all([
@@ -98,7 +103,12 @@ describe("spawnRun: per-project host-clone serialization (warren-232d)", () => {
 				id: input.id,
 				headSha: "feedface".repeat(5),
 			});
-			return { project: updated, headSha: "feedface".repeat(5), ref: input.ref ?? "main" };
+			return {
+				project: updated,
+				headSha: "feedface".repeat(5),
+				ref: input.ref ?? "main",
+				configCommit: "feedface".repeat(5),
+			};
 		};
 
 		await Promise.all([

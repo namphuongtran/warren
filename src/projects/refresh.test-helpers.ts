@@ -23,3 +23,7 @@ export function recorder(handler: (cmd: readonly string[]) => SpawnResult): {
 export function ok(stdout = ""): SpawnResult {
 	return { stdout, stderr: "", exitCode: 0 };
 }
+
+/** A default-branch tip distinct from every HEAD sha the refresh tests use (namphuongtran/warren#165). */
+export const TIP = "cafef00dcafef00dcafef00dcafef00dcafef00d";
+export const TIP_REF = "refs/remotes/origin/main^{commit}";

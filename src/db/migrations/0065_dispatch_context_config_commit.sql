@@ -1,0 +1,1 @@
+ALTER TABLE `dispatch_context` ADD `config_commit` text;

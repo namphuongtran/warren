@@ -39,24 +39,32 @@ describe("spawnRun: migration journal preflight (warren-4371)", () => {
 					id: input.id,
 					headSha: "feedface".repeat(5),
 				});
-				return { project: updated, headSha: "feedface".repeat(5), ref: input.ref ?? "main" };
+				return {
+					project: updated,
+					headSha: "feedface".repeat(5),
+					ref: input.ref ?? "main",
+					configCommit: "feedface".repeat(5),
+				};
 			},
 		};
 	}
 
-	const warrenConfigs = (regenerateCommand: string) => ({
-		get: async () => ({
-			triggers: null,
-			defaults: { migrations: { regenerateCommand } },
-			prTemplate: null,
-			sourceFile: null,
-			errors: [],
-			warnings: [],
-		}),
-		invalidate: () => undefined,
-		clear: () => undefined,
-		size: () => 0,
-	});
+	/**
+	 * Host git whose default-branch tip carries `.warren/config.yaml` with
+	 * `regenerateCommand`: dispatch reads config from that tip's tree
+	 * (namphuongtran/warren#165), not from a working-tree cache.
+	 */
+	function configTreeSpawn(regenerateCommand: string): SpawnFn {
+		const oid = "c0ffee".padEnd(40, "0");
+		const yaml = `migrations:\n  regenerateCommand: ${JSON.stringify(regenerateCommand)}\n`;
+		return async (cmd) => {
+			if (cmd.includes("ls-tree")) {
+				return { stdout: `100644 blob ${oid}\t.warren/config.yaml\0`, stderr: "", exitCode: 0 };
+			}
+			if (cmd.includes(oid)) return { stdout: yaml, stderr: "", exitCode: 0 };
+			return { stdout: "", stderr: "", exitCode: 0 };
+		};
+	}
 
 	const COLLISION = {
 		migrationsDir: "src/db/migrations",
@@ -81,8 +89,7 @@ describe("spawnRun: migration journal preflight (warren-4371)", () => {
 			projectId: "prj_xxxxxxxxxxxx",
 			prompt: "continue the plan child",
 			ref: "burrow/run_parent",
-			...refreshStub(),
-			warrenConfigs: warrenConfigs("bun run db:generate"),
+			...refreshStub(configTreeSpawn("bun run db:generate")),
 			migrationPreflightFn: async (input) => {
 				detectBaseRef = input.baseRef;
 				return outcome;
@@ -147,7 +154,8 @@ describe("spawnRun: migration journal preflight (warren-4371)", () => {
 
 			// Default posture: detection only — no generate script, no commit.
 			expect(hostCalls.length).toBeGreaterThan(0);
-			for (const call of hostCalls) expect(call).toMatch(/^git (ls-files|cat-file) /);
+			// Read-only git only (ls-tree reads `.warren/` from the default-branch tip).
+			for (const call of hostCalls) expect(call).toMatch(/^git (ls-files|ls-tree|cat-file) /);
 			expect(await readFile(join(dir, "meta/_journal.json"), "utf8")).toBe(branchJournal);
 			// No configured command → the note names none.
 			const prompt = dispatchedPrompt(calls);

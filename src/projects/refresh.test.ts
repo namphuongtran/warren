@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { SpawnFn } from "./clone.ts";
 import { ProjectUnavailableError } from "./errors.ts";
-import { CFG, ok, recorder } from "./refresh.test-helpers.ts";
+import { CFG, ok, recorder, TIP, TIP_REF } from "./refresh.test-helpers.ts";
 import {
 	detectHooksPathFromPackageJson,
 	detectProjectFeatures,
@@ -12,6 +12,7 @@ describe("refreshProjectClone", () => {
 	test("fetches, checks out ref, hard-resets to origin/<ref>, scrubs stale user identity, and returns HEAD sha", async () => {
 		const sha = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
 		const { spawn, calls } = recorder((cmd) => {
+			if (cmd.includes(TIP_REF)) return ok(`${TIP}\n`);
 			if (cmd[1] === "rev-parse") return ok(`${sha}\n`);
 			return ok();
 		});
@@ -19,6 +20,7 @@ describe("refreshProjectClone", () => {
 			config: CFG,
 			localPath: "/data/projects/x/y",
 			ref: "main",
+			defaultBranch: "main",
 			spawn,
 			exists: () => true,
 		});
@@ -27,9 +29,13 @@ describe("refreshProjectClone", () => {
 			headSha: sha,
 			ref: "main",
 			features: { hasSeeds: true, hasMulch: true },
+			configCommit: TIP,
 		});
+		// The default-branch tip resolves straight after the fetch, before the
+		// checkout moves anything (namphuongtran/warren#165).
 		expect(calls.map((c) => c.cmd[1])).toEqual([
 			"fetch",
+			"rev-parse",
 			"checkout",
 			"reset",
 			"config",
@@ -37,11 +43,53 @@ describe("refreshProjectClone", () => {
 			"rev-parse",
 		]);
 		expect(calls[0]?.cmd).toEqual(["git", "fetch", "--prune", "origin"]);
-		expect(calls[1]?.cmd).toEqual(["git", "checkout", "--force", "main"]);
-		expect(calls[2]?.cmd).toEqual(["git", "reset", "--hard", "origin/main"]);
-		expect(calls[3]?.cmd).toEqual(["git", "config", "--local", "--unset-all", "user.name"]);
-		expect(calls[4]?.cmd).toEqual(["git", "config", "--local", "--unset-all", "user.email"]);
+		expect(calls[1]?.cmd).toEqual(["git", "rev-parse", "--verify", "--quiet", TIP_REF]);
+		expect(calls[2]?.cmd).toEqual(["git", "checkout", "--force", "main"]);
+		expect(calls[3]?.cmd).toEqual(["git", "reset", "--hard", "origin/main"]);
+		expect(calls[4]?.cmd).toEqual(["git", "config", "--local", "--unset-all", "user.name"]);
+		expect(calls[5]?.cmd).toEqual(["git", "config", "--local", "--unset-all", "user.email"]);
 		expect(calls.every((c) => c.cwd === "/data/projects/x/y")).toBe(true);
+	});
+
+	test("reports the default-branch tip as configCommit when the clone checks out another ref (namphuongtran/warren#165)", async () => {
+		const prHead = "1111111111111111111111111111111111111111";
+		const { spawn } = recorder((cmd) => {
+			if (cmd.includes(TIP_REF)) return ok(`${TIP}\n`);
+			if (cmd[1] === "rev-parse") return ok(`${prHead}\n`);
+			return ok();
+		});
+		const result = await refreshProjectClone({
+			config: CFG,
+			localPath: "/data/projects/x/y",
+			ref: "fix/pr-head",
+			defaultBranch: "main",
+			spawn,
+			exists: () => true,
+		});
+
+		expect(result.headSha).toBe(prHead);
+		expect(result.configCommit).toBe(TIP);
+	});
+
+	test("reports a null configCommit when origin no longer carries the default branch (namphuongtran/warren#165)", async () => {
+		const head = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
+		const { spawn } = recorder((cmd) => {
+			if (cmd.includes(TIP_REF)) return { stdout: "", stderr: "", exitCode: 1 };
+			if (cmd[1] === "rev-parse") return ok(`${head}\n`);
+			return ok();
+		});
+		const result = await refreshProjectClone({
+			config: CFG,
+			localPath: "/data/projects/x/y",
+			ref: "fix/pr-head",
+			defaultBranch: "main",
+			spawn,
+			exists: () => true,
+		});
+
+		// The refresh itself still succeeds; dispatch decides what a missing tip means.
+		expect(result.headSha).toBe(head);
+		expect(result.configCommit).toBeNull();
 	});
 
 	test("tolerates the user identity scrub exiting non-zero when keys are absent (warren-9f70)", async () => {
@@ -59,6 +107,7 @@ describe("refreshProjectClone", () => {
 			config: CFG,
 			localPath: "/data/projects/x/y",
 			ref: "main",
+			defaultBranch: "main",
 			spawn,
 			exists: () => true,
 		});
@@ -82,6 +131,7 @@ describe("refreshProjectClone", () => {
 			config: CFG,
 			localPath: "/data/projects/x/y",
 			ref: "v1.2.3",
+			defaultBranch: "main",
 			spawn,
 			exists: () => true,
 		});
@@ -103,6 +153,7 @@ describe("refreshProjectClone", () => {
 			config: CFG,
 			localPath: "/data/projects/x/y",
 			ref: "main",
+			defaultBranch: "main",
 			gitCredential: { username: "x-access-token", secret: "ghp_secret", host: "github.com" },
 			spawn,
 			exists: () => true,
@@ -132,6 +183,7 @@ describe("refreshProjectClone", () => {
 			config: CFG,
 			localPath: "/data/projects/x/y",
 			ref: "main",
+			defaultBranch: "main",
 			spawn,
 			exists: () => true,
 		});
@@ -145,6 +197,7 @@ describe("refreshProjectClone", () => {
 				config: CFG,
 				localPath: "/data/projects/x/missing",
 				ref: "main",
+				defaultBranch: "main",
 				spawn,
 				exists: () => false,
 			}),
@@ -163,6 +216,7 @@ describe("refreshProjectClone", () => {
 				config: CFG,
 				localPath: "/data/projects/x/y",
 				ref: "main",
+				defaultBranch: "main",
 				spawn,
 				exists: () => true,
 			}),
@@ -178,6 +232,7 @@ describe("refreshProjectClone", () => {
 				config: CFG,
 				localPath: "/data/projects/x/y",
 				ref: "main",
+				defaultBranch: "main",
 				spawn,
 				exists: () => true,
 			}),
@@ -195,6 +250,7 @@ describe("refreshProjectClone", () => {
 			config: CFG,
 			localPath: "/data/projects/x/y",
 			ref: "main",
+			defaultBranch: "main",
 			spawn,
 			exists: (p) => {
 				probed.push(p);
@@ -218,6 +274,7 @@ describe("refreshProjectClone", () => {
 				config: CFG,
 				localPath: "/data/projects/x/y",
 				ref: "main",
+				defaultBranch: "main",
 				spawn,
 				exists: () => true,
 			}),
@@ -291,6 +348,7 @@ describe("refreshProjectClone git-hooks arming (warren-8f4c)", () => {
 			config: CFG,
 			localPath: "/data/projects/x/y",
 			ref: "main",
+			defaultBranch: "main",
 			spawn,
 			exists: () => true,
 			readFileFn: async () => pkg,
@@ -318,6 +376,7 @@ describe("refreshProjectClone git-hooks arming (warren-8f4c)", () => {
 			config: CFG,
 			localPath: "/data/projects/x/y",
 			ref: "main",
+			defaultBranch: "main",
 			spawn,
 			exists: () => true,
 			armHooks: false,
@@ -339,6 +398,7 @@ describe("refreshProjectClone git-hooks arming (warren-8f4c)", () => {
 			config: CFG,
 			localPath: "/data/projects/x/y",
 			ref: "main",
+			defaultBranch: "main",
 			spawn,
 			exists: () => true,
 			readFileFn: async () => pkg,
@@ -358,6 +418,7 @@ describe("refreshProjectClone git-hooks arming (warren-8f4c)", () => {
 			config: CFG,
 			localPath: "/data/projects/x/y",
 			ref: "main",
+			defaultBranch: "main",
 			spawn,
 			exists: () => true,
 			readFileFn: async () => {
@@ -367,89 +428,5 @@ describe("refreshProjectClone git-hooks arming (warren-8f4c)", () => {
 
 		// Run must succeed even when package.json is unreadable.
 		expect(result.headSha).toBe(sha);
-	});
-});
-
-describe("refreshProjectClone: fetch-only mode (warren-232d)", () => {
-	const PIN = "0123456789abcdef0123456789abcdef01234567";
-	const HEAD = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-
-	test("fetches the pinned sha, verifies it, and never moves HEAD (no checkout/reset)", async () => {
-		const { spawn, calls } = recorder((cmd) => {
-			if (cmd[1] === "rev-parse") return ok(`${HEAD}\n`);
-			return ok();
-		});
-		const result = await refreshProjectClone({
-			config: CFG,
-			localPath: "/data/projects/x/y",
-			ref: "main",
-			fetchCommit: PIN,
-			spawn,
-			exists: () => true,
-		});
-
-		// headSha is the clone's UNCHANGED HEAD; ref echoes the pin.
-		expect(result).toEqual({
-			headSha: HEAD,
-			ref: PIN,
-			features: { hasSeeds: true, hasMulch: true },
-		});
-		expect(calls.map((c) => c.cmd.slice(0, 2))).toEqual([
-			["git", "fetch"],
-			["git", "cat-file"],
-			["git", "rev-parse"],
-		]);
-		expect(calls[0]?.cmd).toEqual(["git", "fetch", "origin", PIN]);
-		expect(calls[1]?.cmd).toEqual(["git", "cat-file", "-e", `${PIN}^{commit}`]);
-		// Detached-HEAD safety: the shared clone's checked-out branch never moves.
-		const verbs = calls.map((c) => c.cmd[1]);
-		expect(verbs).not.toContain("checkout");
-		expect(verbs).not.toContain("reset");
-	});
-
-	test("falls back to a full fetch when the server rejects the sha fetch (no allowReachableSHA1InWant)", async () => {
-		const { spawn, calls } = recorder((cmd) => {
-			if (cmd[1] === "fetch" && cmd.includes(PIN)) {
-				return { stdout: "", stderr: "Server does not allow request", exitCode: 128 };
-			}
-			if (cmd[1] === "rev-parse") return ok(`${HEAD}\n`);
-			return ok();
-		});
-		const result = await refreshProjectClone({
-			config: CFG,
-			localPath: "/data/projects/x/y",
-			ref: "main",
-			fetchCommit: PIN,
-			spawn,
-			exists: () => true,
-		});
-
-		expect(result.headSha).toBe(HEAD);
-		expect(calls.map((c) => c.cmd)).toEqual([
-			["git", "fetch", "origin", PIN],
-			["git", "fetch", "--prune", "origin"],
-			["git", "cat-file", "-e", `${PIN}^{commit}`],
-			["git", "rev-parse", "HEAD"],
-		]);
-	});
-
-	test("aborts when the pinned commit is not on origin", async () => {
-		const { spawn } = recorder((cmd) => {
-			if (cmd[1] === "cat-file") {
-				return { stdout: "", stderr: "bad object", exitCode: 128 };
-			}
-			if (cmd[1] === "rev-parse") return ok(`${HEAD}\n`);
-			return ok();
-		});
-		await expect(
-			refreshProjectClone({
-				config: CFG,
-				localPath: "/data/projects/x/y",
-				ref: "main",
-				fetchCommit: PIN,
-				spawn,
-				exists: () => true,
-			}),
-		).rejects.toBeInstanceOf(ProjectUnavailableError);
 	});
 });

@@ -21,6 +21,11 @@
  * Returns the post-reset HEAD sha so the caller can stamp it onto the
  * row alongside the fetch timestamp. Spawn + filesystem are injected so
  * tests don't shell out to git or touch disk.
+ *
+ * Every refresh also leaves `refs/remotes/origin/<defaultBranch>` at the
+ * remote tip and reports that commit as `configCommit`
+ * (namphuongtran/warren#165). Dispatch reads `.warren/` config from that
+ * commit, whatever ref the clone checks out.
  */
 
 import { existsSync } from "node:fs";
@@ -50,6 +55,12 @@ export interface RefreshProjectCloneInput {
 	readonly localPath: string;
 	/** Branch, tag, or SHA. Defaults to the project's tracked default branch. */
 	readonly ref: string;
+	/**
+	 * The project's tracked default branch (namphuongtran/warren#165). Both
+	 * legs fetch it and report its remote tip as `configCommit`, so a refresh
+	 * onto a PR branch or a pinned commit still knows the default-branch tip.
+	 */
+	readonly defaultBranch: string;
 	/**
 	 * Detached-HEAD-safe fetch-only mode (warren-232d): when set, fetch the
 	 * given 40-hex commit SHA from origin WITHOUT moving the shared host
@@ -103,6 +114,13 @@ export interface RefreshProjectCloneResult {
 	 * clone.
 	 */
 	readonly features: ProjectFeatureFlags;
+	/**
+	 * The remote tip of the default branch this refresh fetched
+	 * (namphuongtran/warren#165): the commit dispatch reads `.warren/` from.
+	 * `null` when origin does not carry the default branch; dispatch refuses
+	 * to run on config from an unknown commit, a plain refresh does not care.
+	 */
+	readonly configCommit: string | null;
 }
 
 export async function refreshProjectClone(
@@ -133,6 +151,7 @@ export async function refreshProjectClone(
 			config,
 			localPath,
 			sha: input.fetchCommit,
+			defaultBranch: input.defaultBranch,
 			spawn,
 			timeoutMs,
 			netEnv,
@@ -145,6 +164,13 @@ export async function refreshProjectClone(
 		timeoutMs,
 		...netEnv,
 	});
+	const configCommit = await readDefaultBranchTip(
+		spawn,
+		config.gitBinary,
+		localPath,
+		input.defaultBranch,
+		timeoutMs,
+	);
 
 	// `git checkout <ref>` moves HEAD onto the named ref (creating a
 	// tracking branch when ref is a remote branch name). Without
@@ -207,13 +233,14 @@ export async function refreshProjectClone(
 
 	const headSha = await readHead(spawn, config.gitBinary, localPath, timeoutMs);
 	const features = detectProjectFeatures(localPath, exists);
-	return { headSha, ref, features };
+	return { headSha, ref, features, configCommit };
 }
 
 interface FetchCommitOnlyInput {
 	readonly config: ProjectsConfig;
 	readonly localPath: string;
 	readonly sha: string;
+	readonly defaultBranch: string;
 	readonly spawn: SpawnFn;
 	readonly timeoutMs: number;
 	readonly netEnv: Pick<SpawnOptions, "env">;
@@ -226,14 +253,17 @@ interface FetchCommitOnlyInput {
  * `RefreshProjectCloneInput.fetchCommit`.
  */
 async function fetchCommitOnly(input: FetchCommitOnlyInput): Promise<RefreshProjectCloneResult> {
-	const { config, localPath, sha, spawn, timeoutMs } = input;
+	const { config, localPath, sha, defaultBranch, spawn, timeoutMs } = input;
 	// Prefer the O(1) sha fetch; servers without allowReachableSHA1InWant
 	// reject it, so fall back to a full fetch and check the object after.
-	const shaFetch = await trySpawn(spawn, [config.gitBinary, "fetch", "origin", sha], {
-		cwd: localPath,
-		timeoutMs,
-		...input.netEnv,
-	});
+	// The same round trip moves origin/<defaultBranch> to the remote tip
+	// (namphuongtran/warren#165); the fallback full fetch moves it too.
+	const branchRefspec = `+refs/heads/${defaultBranch}:refs/remotes/origin/${defaultBranch}`;
+	const shaFetch = await trySpawn(
+		spawn,
+		[config.gitBinary, "fetch", "origin", sha, branchRefspec],
+		{ cwd: localPath, timeoutMs, ...input.netEnv },
+	);
 	if (shaFetch.exitCode !== 0) {
 		await runGit(spawn, [config.gitBinary, "fetch", "--prune", "origin"], {
 			cwd: localPath,
@@ -253,7 +283,40 @@ async function fetchCommitOnly(input: FetchCommitOnlyInput): Promise<RefreshProj
 	}
 	const headSha = await readHead(spawn, config.gitBinary, localPath, timeoutMs);
 	const features = detectProjectFeatures(localPath, input.exists);
-	return { headSha, ref: sha, features };
+	const configCommit = await readDefaultBranchTip(
+		spawn,
+		config.gitBinary,
+		localPath,
+		defaultBranch,
+		timeoutMs,
+	);
+	return { headSha, ref: sha, features, configCommit };
+}
+
+/**
+ * Resolve `origin/<defaultBranch>` after a fetch (namphuongtran/warren#165).
+ * `null` when origin no longer carries the default branch.
+ */
+async function readDefaultBranchTip(
+	spawn: SpawnFn,
+	gitBinary: string,
+	cwd: string,
+	defaultBranch: string,
+	timeoutMs: number,
+): Promise<string | null> {
+	const result = await trySpawn(
+		spawn,
+		[
+			gitBinary,
+			"rev-parse",
+			"--verify",
+			"--quiet",
+			`refs/remotes/origin/${defaultBranch}^{commit}`,
+		],
+		{ cwd, timeoutMs },
+	);
+	const sha = result.stdout.trim();
+	return result.exitCode === 0 && sha !== "" ? sha : null;
 }
 
 async function readHead(
@@ -270,7 +333,7 @@ async function readHead(
 	return sha;
 }
 
-async function runGit(
+export async function runGit(
 	spawn: SpawnFn,
 	cmd: readonly string[],
 	opts: SpawnOptions & { timeoutMs: number },

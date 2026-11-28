@@ -34,7 +34,12 @@ describe("spawnRun: project refresh (warren-1bb6)", () => {
 					id: input.id,
 					headSha: "feedface".repeat(5),
 				});
-				return { project: updated, headSha: "feedface".repeat(5), ref: input.ref ?? "main" };
+				return {
+					project: updated,
+					headSha: "feedface".repeat(5),
+					ref: input.ref ?? "main",
+					configCommit: "feedface".repeat(5),
+				};
 			},
 		});
 
@@ -65,7 +70,12 @@ describe("spawnRun: project refresh (warren-1bb6)", () => {
 					id: input.id,
 					headSha: "abcd".repeat(10),
 				});
-				return { project: updated, headSha: "abcd".repeat(10), ref: input.ref ?? "" };
+				return {
+					project: updated,
+					headSha: "abcd".repeat(10),
+					ref: input.ref ?? "",
+					configCommit: "abcd".repeat(10),
+				};
 			},
 		});
 		expect(receivedRef).toBe("feature/x");
@@ -107,6 +117,7 @@ describe("spawnRun: project refresh (warren-1bb6)", () => {
 					project: await repos.projects.require("prj_xxxxxxxxxxxx"),
 					headSha: "x",
 					ref: "main",
+					configCommit: "x",
 				};
 			},
 		});
