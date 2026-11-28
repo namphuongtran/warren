@@ -145,7 +145,12 @@ describe("spawnRun: provider-neutral dispatch (k8s-shaped backend)", () => {
 					id: input.id,
 					headSha: "feedface".repeat(5),
 				});
-				return { project: updated, headSha: "feedface".repeat(5), ref: input.ref ?? "main" };
+				return {
+					project: updated,
+					headSha: "feedface".repeat(5),
+					ref: input.ref ?? "main",
+					configCommit: "feedface".repeat(5),
+				};
 			},
 		});
 

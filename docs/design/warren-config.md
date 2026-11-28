@@ -247,6 +247,41 @@ operator fat-fingered, which is the same bug with a smaller blast radius.
 Strict parse plus a dispatch-blocking failure is the only shape where a
 typo cannot widen a guardrail.
 
+**Which config a dispatch reads (namphuongtran/warren#165).** A dispatch
+that refreshes the host clone reads `.warren/` from the default-branch
+tip that refresh fetched, not from the clone's checkout. The checkout
+follows the dispatch: a `--ref` repair run checks out the PR branch, a
+continuation checks out the parent run's branch, and a `baseCommit`
+dispatch moves nothing (warren-232d). Before this change each of those
+runs used whatever `.warren/config.yaml` that checkout held, so a pinned
+run could miss a `repoContext` that the default branch already carried.
+
+`refreshProjectClone` fetches `origin/<defaultBranch>` on both legs and
+returns its tip as `configCommit`. `loadWarrenConfigAtCommit`
+(`src/projects/warren-config-at-commit.ts`) builds the envelope from two
+sources and runs it through the same loader:
+
+- every file the tip carries under `.warren/`, read with `git ls-tree`
+  and `git cat-file`;
+- every file the host clone holds untracked under `.warren/`, at a path
+  the tip does not carry. This keeps the mirror recipe working: `warren
+  init` writes operator-local config that no commit carries.
+
+When both sources hold the same path, the tip wins. That matches what
+the next default-branch refresh leaves on disk. The precedence between
+files (`config.yaml` over `defaults.json`, `preview.yaml` over a nested
+`preview:`) then applies across both sources, as it does on disk, so an
+untracked `config.yaml` still shadows a committed legacy `defaults.json`.
+A refresh reports a missing default branch as a null tip; only dispatch
+refuses it. HEAD, the index, and the
+working tree stay untouched, and the guardrail check above applies to the
+result. A default branch that origin no longer carries fails the dispatch
+with `ProjectUnavailableError`. Each run records the tip in
+`dispatch_context.config_commit`; NULL means the dispatch ran without a
+refresh. A PR that edits a tracked `.warren/` file does not change the
+config of its own runs until it merges. `GET /projects/:id/warren-config`
+and the per-project cache still read the working tree.
+
 **HTTP surface.** `GET /projects/:id/warren-config` returns the
 `LoadedWarrenConfig` envelope verbatim (`mx-adf588`); 404 if the project
 doesn't exist; `WarrenConfigUnavailableError` joins the existing

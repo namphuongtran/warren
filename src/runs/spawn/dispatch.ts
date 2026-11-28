@@ -186,6 +186,7 @@ async function createRunRow(input: SpawnRunInput, prepared: PreparedDispatch): P
 		declaredProvider,
 		declaredModel,
 		projectDefaults,
+		configCommit: prepared.configCommit,
 		network: prepared.burrowConfig.network ?? "none",
 	});
 	return run;

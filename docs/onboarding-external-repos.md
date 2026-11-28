@@ -14,6 +14,11 @@ out, so an **untracked** `.warren/config.yaml` you write into the host
 clone survives every refresh, forever. You get per-project defaults for
 a repo whose upstream will never carry them.
 
+Committed `.warren/` files work differently: dispatch reads them from
+the default-branch tip fetched at dispatch time (namphuongtran/warren#165).
+An untracked file applies wherever that tip carries no file at the same
+path, which is always true for a mirror whose upstream has no `.warren/`.
+
 That path works today and is the blessed way to configure a foreign
 repo. `warren init --project <id>` scaffolds the two files into the
 host clone for you — from any machine: the write goes through

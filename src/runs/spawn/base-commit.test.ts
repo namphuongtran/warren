@@ -129,7 +129,7 @@ describe("spawnRun: baseCommit dispatch is detached-HEAD safe (warren-232d)", ()
 					id: input.id,
 					headSha: SHA,
 				});
-				return { project: updated, headSha: SHA, ref: input.ref ?? "" };
+				return { project: updated, headSha: SHA, ref: input.ref ?? "", configCommit: SHA };
 			},
 		});
 
@@ -156,7 +156,7 @@ describe("spawnRun: baseCommit dispatch is detached-HEAD safe (warren-232d)", ()
 					id: input.id,
 					headSha: SHA,
 				});
-				return { project: updated, headSha: SHA, ref: input.ref ?? "" };
+				return { project: updated, headSha: SHA, ref: input.ref ?? "", configCommit: SHA };
 			},
 			migrationPreflightFn: async () => {
 				detectCalls += 1;
