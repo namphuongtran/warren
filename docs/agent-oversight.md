@@ -58,6 +58,12 @@ The Approach card is the first card.
 Under the note, it tells you if the agent kept to its plan or changed course.
 The Outcome card below it shows the handoff report.
 
+The Summary tab arrived in commit `9691b635` on 2026-11-22.
+A server built before that commit has no Summary tab.
+There, select the System filter of the event stream and open the `approach.recorded` row.
+The `handoff.recorded` row holds the handoff report.
+`GET /runs/:id` returns both fields on either build.
+
 ### The approach note is a record, not a gate
 
 The agent writes the note and then continues to edit in the same session.
@@ -75,18 +81,35 @@ The event log shows the tool call that writes `.warren/approach.md` as it happen
 If the plan is wrong, send a steer (`POST /runs/:id/steer`, or the run page) or cancel the run (`warren cancel <run-id>`).
 A steer reaches a Claude Code run at its next tool result.
 
-### Get an approval step today
+### An optional approval step
 
-Warren has no built-in approval gate between the plan and the code.
-You can build one from two runs:
+Warren core has no approval gate between the plan and the code, and that is by design.
+[PHILOSOPHY.md](PHILOSOPHY.md) keeps organization policy outside core.
+The [campaign controller](design/campaign-controller.md) design gives operator approval to a controller, not to the run kernel.
+
+For one run, you can still choose to approve the plan first.
+The recipe uses only the existing dispatch and continuation surfaces:
 
 1. Dispatch a plan-only run.
    Tell the agent to write the approach note, to change no files, and to end with status `blocked`.
+   Ask it to copy the plan into the handoff `summary` too.
    Ask for one open question: "Approve this approach?"
 2. The run then shows `needsInput`.
-   Read the note, then answer the question on the run Summary.
-3. The answer form dispatches a continuation run with your answer in its prompt.
+   Read the plan, then answer the question on the run Summary.
+3. The answer form dispatches a continuation run.
+   Its prompt holds the original task, the handoff summary, the question, and your answer.
 
+The continuation prompt does not carry the approach note, and git ignores the note file.
+The plan reaches the second run only through the handoff summary.
+That is why step 1 asks for the copy.
+
+On Docker and Local runs, the prompt names the wrong path for both files until namphuongtran/warren#158 lands.
+Until then, tell the plan-only run to write them under `.warren/` at the repository root.
+Without a recorded handoff, the run shows no question to answer.
+
+The recipe is a choice per run, not a project setting.
+If a team needs approval on every run, the design puts that in a controller extension.
+Warren does not ship one.
 The blocked-run answer flow shipped in namphuongtran/warren#155.
 Check that your server runs a build that includes it.
 
@@ -179,7 +202,6 @@ The table puts each control in one of four classes.
 
 ### Gaps today
 
-- No approval gate sits between the plan and the code (namphuongtran/warren#159).
 - On the Local and Docker providers the prompt names `/workspace/.warren/`, which is not the workspace.
   An agent that follows the prompt cannot write the note, and warren records it as missing (namphuongtran/warren#158).
 - "Recorded" does not show if the agent wrote the note before or after its first edit (namphuongtran/warren#159).
