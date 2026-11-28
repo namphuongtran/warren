@@ -119,11 +119,16 @@ describe("route guards and nav filtering (warren-f53e)", () => {
 		expect(nav).not.toMatch(/to: "\/cost-analytics"/);
 	});
 
+	test("the needs-attention page, its nav entry, and its route gate travel together", () => {
+		// GET /attention is readOperator (namphuongtran/warren#26).
+		expect(app).toMatch(/<OperatorRoute capability="readOperator">\s*<AttentionPage \/>/);
+		expect(nav).toMatch(/to: "\/attention", capability: "readOperator"/);
+	});
+
 	test("console nav entries declare capability and the sidebar filters on it", () => {
 		// An entry whose destination is readOperator never shows to a caller
-		// who would only ever see a 403 there. No Direction C entry carries a
-		// capability today — this holds the seam for the page issues that
-		// land gated destinations.
+		// who would only ever see a 403 there. Needs attention
+		// (namphuongtran/warren#26) is the first Direction C entry to carry one.
 		expect(nav).toMatch(/readonly capability\?: CapabilityName/);
 		expect(sidebar).toMatch(/item\.capability === undefined \|\| caps\.can\(item\.capability\)/);
 	});

@@ -56,10 +56,10 @@ export type RunMode = (typeof RUN_MODES)[number];
 
 export * from "./wire-actor.ts"; // GET /whoami actor vocabulary (warren-3754)
 export * from "./wire-approach.ts"; // run approach note (namphuongtran/warren#33)
+export * from "./wire-attention.ts"; // needs-attention list (namphuongtran/warren#26)
 export * from "./wire-cost.ts"; // cost-basis vocabulary (warren-f3c3)
 export * from "./wire-handoff.ts"; // run handoff report (namphuongtran/warren#21)
-// The steering-inbox vocabulary (warren-3d0b) lives in ./wire-inbox.ts.
-export * from "./wire-inbox.ts";
+export * from "./wire-inbox.ts"; // steering-inbox vocabulary (warren-3d0b)
 // The analytics-insight vocabulary (warren-be04) lives in ./wire-insight.ts.
 export * from "./wire-insight.ts";
 export * from "./wire-ops.ts"; // ops-overview window vocabulary (warren-7194)

@@ -4,6 +4,14 @@
  * move without touching call sites.
  */
 
+// The needs-attention list (namphuongtran/warren#26), defined once in the wire kernel.
+export type {
+	RunAttentionCategory,
+	RunAttentionItem,
+	RunAttentionReason,
+	RunAttentionResponse,
+	RunAttentionRun,
+} from "../core/wire.ts";
 export {
 	DEFAULT_POLL_INTERVAL_MS,
 	DEFAULT_POLL_TIMEOUT_MS,
@@ -13,17 +21,14 @@ export {
 	WarrenClient,
 	type WarrenClientOptions,
 } from "./client.ts";
-
 export {
 	DEFAULT_WARREN_BASE_URL,
 	type EnvLike,
 	loadWarrenClientConfigFromEnv,
 	type WarrenClientConfig,
 } from "./config.ts";
-
 export {
 	WarrenClientError,
 	WarrenUnreachableError,
 } from "./errors.ts";
-
 export * from "./types.ts";

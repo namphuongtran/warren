@@ -47,3 +47,8 @@ export interface RunQualityFlags {
 	readonly flags: readonly RunQualityFlag[];
 	readonly omitted: number;
 }
+
+/** How many flags reap found, the omitted ones past the cap included. */
+export function countRunQualityFlags(flags: RunQualityFlags): number {
+	return flags.flags.length + flags.omitted;
+}

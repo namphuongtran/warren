@@ -4,6 +4,7 @@
  * `bun test` loads this module directly.
  */
 
+import { countRunQualityFlags } from "../../../../core/wire.ts";
 import type {
 	PullRequestLifecycle,
 	RunHandoffStatus,
@@ -207,7 +208,7 @@ export function qualityFlagsView(
 					detail: "Warren scans the diff for shortcuts when the run finishes.",
 				};
 	}
-	const total = flags.flags.length + flags.omitted;
+	const total = countRunQualityFlags(flags);
 	const label = plural(total, "flag");
 	if (total === 0) {
 		return {

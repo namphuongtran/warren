@@ -17,14 +17,16 @@ import type { RunRow } from "../db/schema.ts";
 
 const NO_INPUT_NEEDED: RunNeedsInputView = { needsInput: false, answeredByRunId: null };
 
-function isBlocked(run: RunRow): boolean {
+type BlockableRun = Pick<RunRow, "id" | "handoff">;
+
+function isBlocked(run: BlockableRun): boolean {
 	return run.handoff?.state === "recorded" && run.handoff.handoff.status === "blocked";
 }
 
 /** Read the needs-input view for `runs`; the result looks one up by run id. */
 export async function readNeedsInput(
 	repos: Repos,
-	runs: readonly RunRow[],
+	runs: readonly BlockableRun[],
 ): Promise<(runId: string) => RunNeedsInputView> {
 	const blocked = new Set(runs.filter(isBlocked).map((run) => run.id));
 	const links = await repos.runs.listOperatorContinuationsOf([...blocked]);

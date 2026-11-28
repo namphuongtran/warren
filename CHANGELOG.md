@@ -12,6 +12,23 @@ Releases **0.9.10 and earlier** live in
 
 ### Added
 
+- **Needs attention page and `warren attention` (namphuongtran/warren#26).**
+  `GET /attention?window=24h|7d|30d` (operator-only; default `7d`) lists the
+  finished runs that wait on the operator, grouped into four categories:
+  `blocked` (the handoff is blocked and no operator continuation answered
+  it), `review` (an open PR whose `warren/review` status asks for changes or
+  whose fix rounds ran out), `failed` (no retry and no re-run followed it; a
+  CI fix does not count), and `quality` (unmerged work with no valid
+  handoff, a failed or skipped gate, or shortcut flags). Each item lists all
+  of its reasons and appears once, in its first category. The list is
+  derived on every read from stored run facts, with no new table and no new
+  run state. The UI's Needs attention page (sidebar 04; the infrastructure
+  entries move to 05-09) shows the four sections and answers a blocked run
+  inline: "Dispatch continuation" posts `POST /runs` with
+  `continueFromRunId`. `warren attention` prints the list as ndjson, or as a
+  table plus each blocked run's questions with `--output pretty`. The SDK
+  gains `listAttention()`.
+
 - **Blocked runs carry questions; answers dispatch a continuation
   (namphuongtran/warren#25).** A handoff open question is now an object:
   the `question`, the `options` the agent weighed, and its `recommendation`.

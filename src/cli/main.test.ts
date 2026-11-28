@@ -21,6 +21,7 @@ describe("buildProgram", () => {
 		const names = program.commands.map((c) => c.name()).sort();
 		expect(names).toEqual([
 			"add-project",
+			"attention",
 			"cancel",
 			"config",
 			"db",

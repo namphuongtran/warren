@@ -76,6 +76,7 @@ export const PAGES: readonly PageSpec[] = [
 		route: "/plan-runs/:id",
 		path: (ids) => `/plan-runs/${ids.planRun.id}`,
 	},
+	{ id: "attention", route: "/attention", path: at("/attention") },
 	{ id: "projects", route: "/projects", path: at("/projects") },
 	{
 		id: "project-detail",
