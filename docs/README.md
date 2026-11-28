@@ -13,6 +13,7 @@ This directory holds operator, API, architecture, and contributor documentation.
 - [`RUNBOOK-K8S.md`](RUNBOOK-K8S.md) — Kubernetes deployment, secrets, RBAC, garbage collection, admission, and incident response.
 - [`../deploy/k8s/README.md`](../deploy/k8s/README.md) — Kubernetes manifest and overlay commands.
 - [`operations.md`](operations.md) — probes, structured logs, metrics, run events, cost, backups, and common triage.
+- [`agent-oversight.md`](agent-oversight.md): where to read the approach note, how to check agent claims, and which quality controls to add.
 - [`../.env.example`](../.env.example) — annotated deployment environment reference.
 - [`project-setup.md`](project-setup.md) — repository permissions, CI, auto-merge, and branch cleanup.
 - [`onboarding-external-repos.md`](onboarding-external-repos.md) — configure a mirror or repository that you do not control.
