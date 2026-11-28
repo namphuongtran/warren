@@ -333,6 +333,17 @@ Releases **0.9.10 and earlier** live in
   turn was killed. The prompt and pending messages now go as one user
   message, which the CLI runs as one turn.
 
+- **Docker and Local runs record the approach note and the handoff report
+  again (namphuongtran/warren#158).** The built-in prompts named
+  `/workspace/.warren/approach.md` and `/workspace/.warren/handoff.json`.
+  Only K8s and the Linux bwrap sandbox mount the repository at `/workspace`.
+  Docker and the macOS sandbox keep the host path, so an agent that followed
+  the prompt could not write either file, and warren recorded both as
+  missing. The prompts now name every workspace path (the notes,
+  `.warren/agent.json`, `.seeds/`, `.mulch/`) relative to the repository
+  root, where every runtime starts the agent. A test renders each built-in
+  and fails on an absolute `/workspace` path.
+
 ## [0.19.3] — 2026-10-07
 
 The hardening patch. Local runs get a narrowed git-metadata sandbox, the

@@ -54,7 +54,7 @@ ${HANDOFF_FRAGMENT}
 
 const TRACKER_FRAGMENT = `## Issue queue (seeds)
 
-- /workspace/.seeds/issues.jsonl holds the issue queue.
+- .seeds/issues.jsonl holds the issue queue.
 - Your only writes are to .seeds/ via the sd CLI, plus the handoff report described below.
 
 ## Procedure

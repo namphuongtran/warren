@@ -36,7 +36,7 @@
 
 import type { AgentDefinition } from "../schema.ts";
 import { MODEL_TIERS } from "./model-tiers.ts";
-import { HANDOFF_FRAGMENT, MULCH_FRAGMENT } from "./prompt-fragments.ts";
+import { HANDOFF_FRAGMENT, MULCH_FRAGMENT, REPO_ROOT_BULLET } from "./prompt-fragments.ts";
 
 /** Marker lines that fence the spec inside a seeds issue description. */
 const SPEC_BLOCK_START = "<!-- warren:spec:start -->";
@@ -125,15 +125,15 @@ When the dispatch prompt answers questions from an earlier planner run, this run
 
 ## Workspace map
 
-- The project repo is mounted at the workspace root.
-- /workspace/.warren/agent.json is this rendered agent definition.
+${REPO_ROOT_BULLET}
+- .warren/agent.json is this rendered agent definition.
 
 ${HANDOFF_FRAGMENT}
 `;
 
 const PLANNER_TRACKER_FRAGMENT = `## Issue queue (seeds)
 
-- /workspace/.seeds/issues.jsonl holds the project's issue queue. Read the issue with \`sd show <id> --json\`.
+- .seeds/issues.jsonl holds the project's issue queue. Read the issue with \`sd show <id> --json\`.
 - Write the spec into that issue's description, fenced by these two marker lines:
 
   ${SPEC_BLOCK_START}

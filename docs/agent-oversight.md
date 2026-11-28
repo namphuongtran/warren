@@ -103,9 +103,9 @@ The continuation prompt does not carry the approach note, and git ignores the no
 The plan reaches the second run only through the handoff summary.
 That is why step 1 asks for the copy.
 
-On Docker and Local runs, the prompt names the wrong path for both files until namphuongtran/warren#158 lands.
-Until then, tell the plan-only run to write them under `.warren/` at the repository root.
 Without a recorded handoff, the run shows no question to answer.
+Builds before namphuongtran/warren#158 name the wrong path for both files on Docker and Local runs.
+On such a build, tell the plan-only run to write them under `.warren/` at the repository root.
 
 The recipe is a choice per run, not a project setting.
 If a team needs approval on every run, the design puts that in a controller extension.
@@ -202,8 +202,6 @@ The table puts each control in one of four classes.
 
 ### Gaps today
 
-- On the Local and Docker providers the prompt names `/workspace/.warren/`, which is not the workspace.
-  An agent that follows the prompt cannot write the note, and warren records it as missing (namphuongtran/warren#158).
 - "Recorded" does not show if the agent wrote the note before or after its first edit (namphuongtran/warren#159).
 - With no agent git identity configured, agents invent a commit author (namphuongtran/warren#160).
 - `qualityGate` holds one command per project.

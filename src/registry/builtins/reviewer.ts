@@ -30,7 +30,7 @@
 
 import type { AgentDefinition } from "../schema.ts";
 import { MODEL_TIERS } from "./model-tiers.ts";
-import { HANDOFF_FRAGMENT } from "./prompt-fragments.ts";
+import { HANDOFF_FRAGMENT, REPO_ROOT_BULLET } from "./prompt-fragments.ts";
 
 const SYSTEM_BODY = `You are an independent code reviewer. Another agent wrote the change in front of you. Your job is to find what it got wrong before it merges. Your verdict gates the merge, so be specific and be right.
 
@@ -108,8 +108,9 @@ Rules for the \`review\` block:
 
 ## Workspace map
 
-- The project repo is mounted at the workspace root, checked out at the commit under review.
-- /workspace/.warren/agent.json is this rendered agent definition.
+${REPO_ROOT_BULLET}
+- The checkout is at the commit under review.
+- .warren/agent.json is this rendered agent definition.
 
 ${HANDOFF_FRAGMENT}
 `;
@@ -119,11 +120,11 @@ ${HANDOFF_FRAGMENT}
 const GATED_PROMPTS = {
 	tracker: `## Project issue queue (seeds)
 
-- /workspace/.seeds/issues.jsonl holds the project's issue queue.
+- .seeds/issues.jsonl holds the project's issue queue.
 - Read the issue the change resolves with \`sd show <id>\` to check the change against it. Do not create, update, close, or sync issues.`,
 	mulch: `## Project expertise (mulch)
 
-- /workspace/.mulch/expertise/<domain>.jsonl holds the project's expertise records.
+- .mulch/expertise/<domain>.jsonl holds the project's expertise records.
 - Run \`ml prime\` (or \`ml prime --files <path>\` for the changed files) to load the project's conventions, and judge the change against them. Do not run \`ml record\`.`,
 };
 
