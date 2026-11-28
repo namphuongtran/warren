@@ -954,6 +954,11 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
+      description: >-
+        Paged by `?limit`/`?offset`, sorted by `?sort=started|cost` and `?dir`. Filters narrow the
+        page, `total`, and the cost rollup alike: `?project` or `?agent`, `?gate=<outcome>`,
+        `?pr=any|open|merged`, and operator-only `?attention=1`, the runs the Needs attention page
+        lists over 30 days (namphuongtran/warren#39).
     post:
       operationId: createRunHandler
       tags:

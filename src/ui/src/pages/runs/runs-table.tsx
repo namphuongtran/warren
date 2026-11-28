@@ -3,13 +3,7 @@ import { useNavigate } from "react-router-dom";
 import type { RunRow } from "@/api/types.ts";
 import { INVENTORY_TONE_CLASS } from "@/components/ui/inventory-card.tsx";
 import { cn, relativeTime } from "../../lib/utils.ts";
-import {
-	checksCellOf,
-	displayStateOf,
-	gateCellOf,
-	quotaWaitOf,
-	stuckInOf,
-} from "./runs-card.helpers.ts";
+import { checksCellOf, displayStateOf, quotaWaitOf, stuckInOf } from "./runs-card.helpers.ts";
 import {
 	branchLabelOf,
 	formatDuration,
@@ -19,6 +13,8 @@ import {
 	startedAtOf,
 	truncateRuntimeHandle,
 } from "./runs-format.ts";
+import { AttentionGlyph, ChangesCell, JudgeCell, QualityCell } from "./runs-signal-cells.tsx";
+import type { RunJudgeColumn } from "./runs-signals.ts";
 
 /**
  * The Direction C workload-inventory table (warren-9e87 / pl-7e38
@@ -178,11 +174,11 @@ function ChecksWord({ row }: { row: RunRow }) {
 	);
 }
 
-/** DELIVERY column: PR link and its checks when reap opened one, else the commit count. */
+/** DELIVERY column: PR link over its checks when reap opened one, else the commit count. */
 function DeliveryCell({ row }: { row: RunRow }) {
 	if (row.prUrl !== null) {
 		return (
-			<span className="flex items-center gap-2">
+			<span className="flex flex-col items-start gap-0.5">
 				<a
 					href={row.prUrl}
 					target="_blank"
@@ -205,34 +201,18 @@ function DeliveryCell({ row }: { row: RunRow }) {
 	return <span className="font-mono text-[10px] leading-3 text-(--color-text-3)">—</span>;
 }
 
-/**
- * GATE column (namphuongtran/warren#36): the quality-gate outcome reap read
- * from the agent's tool calls, as a toned word; the hover says what it means.
- * No gate set, or no outcome yet, reads as a quiet dash.
- */
-function GateCell({ row }: { row: RunRow }) {
-	const gate = gateCellOf(row);
-	const tone = INVENTORY_TONE_CLASS[gate.tone];
-	return (
-		<span className="flex items-center gap-1.5 whitespace-nowrap" title={gate.title}>
-			{gate.hasOutcome ? (
-				<span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", tone.dot)} aria-hidden />
-			) : null}
-			<span className={cn(STATUS_WORD, tone.text)}>{gate.label}</span>
-		</span>
-	);
-}
-
 function RunsTableRow({
 	row,
 	projectName,
 	now,
 	isOperator,
+	judgeCellFor,
 }: {
 	row: RunRow;
 	projectName: string;
 	now: number;
 	isOperator: boolean;
+	judgeCellFor: RunJudgeColumn;
 }) {
 	const navigate = useNavigate();
 	const runPath = `/runs/${encodeURIComponent(row.id)}`;
@@ -245,9 +225,14 @@ function RunsTableRow({
 		>
 			<td className="w-[78px] px-2.5 py-1.5 align-middle">
 				<span className="flex items-center gap-[7px]" title={stateTitle}>
-					<span
-						className={cn("h-1.5 w-1.5 shrink-0 rounded-full", stateDotColor(state))}
-						aria-hidden
+					<AttentionGlyph
+						row={row}
+						fallback={
+							<span
+								className={cn("h-1.5 w-1.5 shrink-0 rounded-full", stateDotColor(state))}
+								aria-hidden
+							/>
+						}
 					/>
 					<span className={cn(STATUS_WORD, stateColor(state))}>{state}</span>
 				</span>
@@ -265,18 +250,26 @@ function RunsTableRow({
 				</span>
 			</td>
 			<td className="w-[118px] px-2.5 py-1.5 align-middle">
-				<span className="flex min-w-0 flex-col gap-0.5">
+				{/* Capped at the export's 118px column, like Project. */}
+				<span className="flex max-w-24 min-w-0 flex-col gap-0.5">
 					<span className="truncate text-[11px] leading-[14px] text-(--color-text-2)">
 						{row.agentName}
 					</span>
-					<span className="truncate font-mono text-[9px] leading-3 text-(--color-text-3)">
+					<span
+						title={row.model ?? undefined}
+						className="text-3xs truncate font-mono text-(--color-text-3)"
+					>
 						{row.model ?? "—"}
 					</span>
 				</span>
 			</td>
 			<td className="w-[128px] px-2.5 py-1.5 align-middle">
-				<span className="flex min-w-0 flex-col gap-0.5">
-					<span className="truncate text-[11px] leading-[14px] text-(--color-text-2)">
+				{/* Capped at the export's 128px column: a long name truncates, whole on hover. */}
+				<span className="flex max-w-27 min-w-0 flex-col gap-0.5">
+					<span
+						title={projectName}
+						className="truncate text-[11px] leading-[14px] text-(--color-text-2)"
+					>
 						{projectName}
 					</span>
 					<ProjectSubLine row={row} />
@@ -300,8 +293,16 @@ function RunsTableRow({
 				{runCostLabel(row)}
 			</td>
 			<td className="w-20 px-2.5 py-1.5 align-middle">
-				<GateCell row={row} />
+				<ChangesCell row={row} />
 			</td>
+			<td className="w-20 px-2.5 py-1.5 align-middle">
+				<QualityCell row={row} />
+			</td>
+			{judgeCellFor !== null ? (
+				<td className="w-22 max-w-22 px-2.5 py-1.5 align-middle">
+					<JudgeCell cell={judgeCellFor(row.id)} />
+				</td>
+			) : null}
 			<td className="px-2.5 py-1.5 align-middle">
 				<DeliveryCell row={row} />
 			</td>
@@ -332,21 +333,27 @@ function Th({
 	);
 }
 
-/** Column order/widths mirror the runs.jsx export exactly. */
+/**
+ * Column order/widths mirror the runs.jsx export, plus the review signals
+ * (namphuongtran/warren#39): the attention glyph in the State cell, Changes,
+ * Quality, and Judge when the judge extension is deployed.
+ */
 export function RunsTable({
 	rows,
 	projectIndex,
 	now,
 	isOperator,
+	judgeCellFor = null,
 }: {
 	rows: readonly RunRow[];
 	projectIndex: Map<string, string>;
 	now: number;
 	isOperator: boolean;
+	judgeCellFor?: RunJudgeColumn;
 }) {
 	return (
 		<div className="overflow-x-auto">
-			<table className="w-full min-w-[960px] border-collapse">
+			<table className="w-full min-w-[1120px] border-collapse">
 				<thead>
 					<tr className="h-[31px] bg-(--color-thead)">
 						<Th width="78px">State</Th>
@@ -362,7 +369,9 @@ export function RunsTable({
 						<Th width="54px" className="text-right">
 							Cost
 						</Th>
-						<Th width="80px">Gate</Th>
+						<Th width="80px">Changes</Th>
+						<Th width="80px">Quality</Th>
+						{judgeCellFor !== null ? <Th width="88px">Judge</Th> : null}
 						<Th>Delivery</Th>
 					</tr>
 				</thead>
@@ -378,6 +387,7 @@ export function RunsTable({
 									: projectLabel(projectIndex.get(row.projectId), row.projectId)
 							}
 							isOperator={isOperator}
+							judgeCellFor={judgeCellFor}
 						/>
 					))}
 				</tbody>

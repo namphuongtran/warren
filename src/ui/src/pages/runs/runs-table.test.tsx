@@ -136,10 +136,10 @@ describe("RunsTable Project branch sub-line", () => {
 	});
 });
 
-describe("RunsTable Gate column (namphuongtran/warren#36)", () => {
+describe("RunsTable Quality column (namphuongtran/warren#36, #39)", () => {
 	test("shows the gate outcome with its explanation on hover, for every caller", () => {
 		const html = renderTable([run({ state: "succeeded", qualityGateOutcome: "failed" })], false);
-		expect(html).toContain(">Gate<");
+		expect(html).toContain(">Quality<");
 		expect(html).toContain(">failed<");
 		expect(html).toContain('title="The last gate run exited non-zero."');
 	});

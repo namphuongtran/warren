@@ -139,7 +139,7 @@ Total routes: **57**.
 
 | Method | Pattern | Handler | Notes |
 | --- | --- | --- | --- |
-| `GET` | `/runs` | `listRunsHandler` |  |
+| `GET` | `/runs` | `listRunsHandler` | Paged by `?limit`/`?offset`, sorted by `?sort=started\|cost` and `?dir`. Filters narrow the page, `total`, and the cost rollup alike: `?project` or `?agent`, `?gate=<outcome>`, `?pr=any\|open\|merged`, and operator-only `?attention=1`, the runs the Needs attention page lists over 30 days (namphuongtran/warren#39). |
 | `POST` | `/runs` | `createRunHandler` |  |
 | `GET` | `/runs/:id` | `getRunHandler` |  |
 | `GET` | `/runs/:id/events` | `streamRunEventsHandler` | NDJSON event tail. `?follow=1` live-tails (the default while the run is non-terminal); `?limit=N` requests a bounded non-streaming read of at most N events and implies follow=false — the response closes after the page, so agents can poll for liveness without holding a stream open (warren-17c1). `?since=<seq>` pages forward from a prior read. |

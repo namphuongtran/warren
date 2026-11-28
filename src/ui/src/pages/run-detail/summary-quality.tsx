@@ -2,9 +2,9 @@ import { Link } from "react-router-dom";
 import type { RunRow } from "@/api/types.ts";
 import { Spinner } from "@/components/ui/spinner.tsx";
 import {
+	JUDGE_ABSENT_COPY,
 	type JudgeAssignment,
 	type JudgeStoreRow,
-	type JudgeVerdictsAbsent,
 	useJudgeVerdicts,
 } from "@/pages/telemetry/judge-verdicts.ts";
 import { SummaryBlock, SummaryCard, SummaryEmpty, ToneChip } from "./summary-card.tsx";
@@ -19,13 +19,6 @@ import { evidenceHref, findRunJudgeRow, qualityGateView } from "./summary-model.
  * `/extensions/judge/verdicts.jsonl` proxy with the same query the
  * Telemetry → Judge tab uses, so both share one cached page.
  */
-
-const JUDGE_ABSENT_COPY: Record<JudgeVerdictsAbsent["reason"], string> = {
-	absent: "The judge extension is not deployed on this instance.",
-	unauthorized: "Judge verdicts are for operators, and this browser's sign-in was not accepted.",
-	misconfigured: "The judge verdicts could not be read: the proxy answered with a web page.",
-	error: "The judge verdicts could not be loaded. The judge service may be down.",
-};
 
 function EvidenceLinks({ runId, assignment }: { runId: string; assignment: JudgeAssignment }) {
 	const ranges = assignment.evidence ?? [];

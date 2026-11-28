@@ -22,18 +22,18 @@
 	"$comment_blocked_no_question_2026_11_28": "BOUNDED AUTO-RAISE (namphuongtran/warren#25): the next-step field that answers a blocked run with no open question. +1155 B raw js, +250 B gzip js from a laptop --update, inside every AUTO_RAISE_CAP.",
 	"totals": {
 		"raw": {
-			"js": 745965,
-			"css": 55892
+			"js": 750954,
+			"css": 56383
 		},
 		"gzip": {
-			"js": 216850,
-			"css": 11015
+			"js": 218657,
+			"css": 11086
 		}
 	},
 	"largest": {
 		"gzip": {
-			"js": 216850,
-			"css": 11015
+			"js": 218657,
+			"css": 11086
 		}
 	}
 }

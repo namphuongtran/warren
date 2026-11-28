@@ -202,6 +202,15 @@
 	--shadow-lg:
 		0 10px 15px -3px oklch(20% 0.01 264 / 0.1), 0 4px 6px -4px oklch(20% 0.01 264 / 0.06);
 
+	/* The dense inventory sizes from the screen exports
+   * (docs/ui-revamp/screens/runs.jsx): 10px words and 9px sub-lines, both on
+   * the table's 12px line, as named steps below `text-xs` so cells need no
+   * arbitrary `text-[10px]`. */
+	--text-2xs: 0.625rem;
+	--text-2xs--line-height: 0.75rem;
+	--text-3xs: 0.5625rem;
+	--text-3xs--line-height: 0.75rem;
+
 	/* Z-index scale — discrete layers so ad-hoc z-[N] doesn't drift. */
 	--z-sticky: 10;
 	--z-dropdown: 20;

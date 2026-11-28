@@ -266,6 +266,10 @@ const ROUTE_TABLE: readonly RouteEntry[] = [
 		policy: "readOperator",
 		build: listDispatchAnalyticsHandler,
 	},
+	// Paged by `?limit`/`?offset`, sorted by `?sort=started|cost` and `?dir`. Filters narrow
+	// the page, `total`, and the cost rollup alike: `?project` or `?agent`, `?gate=<outcome>`,
+	// `?pr=any|open|merged`, and operator-only `?attention=1`, the runs the Needs attention
+	// page lists over 30 days (namphuongtran/warren#39).
 	{ method: "GET", pattern: "/runs", policy: "readPublic", build: listRunsHandler },
 	// warren-f566: the global lifecycle notification stream (NDJSON, one
 	// `{runId, hook, state, ts}` line per lifecycle transition). The list
@@ -474,11 +478,8 @@ const AUTH_EXEMPT_PATHS: ReadonlySet<string> = new Set(
  *     ServiceMonitor's `authorization` credentials
  *     (deploy/k8s/servicemonitor.yaml). `/readyz` stays gated because its
  *     body reveals which checks failed (sensitive in a misconfigured
- *     deploy). `POST /runs/:id/preview/login` is gated too (warren-e1b0) —
- *     it used to be exempt so a browser could hand the bearer over in a
- *     `?token=` query string; the handshake now carries the bearer in the
- *     `Authorization` header like every other `/runs/*` route, so the
- *     exemption is gone.
+ *     deploy). `POST /runs/:id/preview/login` is gated too (warren-e1b0): its
+ *     handshake carries the bearer in the `Authorization` header, not `?token=`.
  */
 export function isAuthExempt(pathname: string): boolean {
 	if (AUTH_EXEMPT_PATHS.has(pathname)) return true;

@@ -13,6 +13,12 @@ import {
 	sublineOf,
 } from "@/pages/runs/runs-card.helpers.ts";
 import { formatDuration, projectLabel, runCostLabel } from "@/pages/runs/runs-format.ts";
+import { AttentionBadge, cardSignalsOf } from "@/pages/runs/runs-signal-cells.tsx";
+import {
+	attentionCellOf,
+	type RunJudgeColumn,
+	type RunSignalCell,
+} from "@/pages/runs/runs-signals.ts";
 
 /**
  * The mobile arm of the Runs inventory (warren-dea8 / pl-7e38 step 20):
@@ -28,14 +34,28 @@ import { formatDuration, projectLabel, runCostLabel } from "@/pages/runs/runs-fo
  * A reaped run with a recorded gate outcome adds one more figure line,
  * "gate failed" (namphuongtran/warren#36); a run with no gate keeps two. A
  * run whose PR checks were read adds "checks failing" (namphuongtran/warren#41).
+ * A finished run adds a signal line (namphuongtran/warren#39): what changed,
+ * its shortcut flags, the judge's word, and a "needs you" badge.
  */
 
-function RunCard({ row, projectName, now }: { row: RunRow; projectName: string; now: number }) {
+function RunCard({
+	row,
+	projectName,
+	now,
+	judge,
+}: {
+	row: RunRow;
+	projectName: string;
+	now: number;
+	judge: RunSignalCell | null;
+}) {
 	const state = stateCellOf(row);
 	const gate = gateCellOf(row);
 	const checks = checksCellOf(row);
+	const attention = attentionCellOf(row);
 	return (
 		<InventoryRowCard
+			meta={cardSignalsOf(row, judge)}
 			tone={state.tone}
 			stateLabel={state.label}
 			title={row.id}
@@ -53,7 +73,9 @@ function RunCard({ row, projectName, now }: { row: RunRow; projectName: string; 
 					) : null}
 				</>
 			}
-		/>
+		>
+			{attention !== null ? <AttentionBadge cell={attention} /> : undefined}
+		</InventoryRowCard>
 	);
 }
 
@@ -61,10 +83,12 @@ export function RunsCardList({
 	rows,
 	projectIndex,
 	now,
+	judgeCellFor = null,
 }: {
 	rows: readonly RunRow[];
 	projectIndex: Map<string, string>;
 	now: number;
+	judgeCellFor?: RunJudgeColumn;
 }) {
 	return (
 		<InventoryCardList>
@@ -73,6 +97,7 @@ export function RunsCardList({
 					key={row.id}
 					now={now}
 					row={row}
+					judge={judgeCellFor === null ? null : judgeCellFor(row.id)}
 					projectName={
 						row.projectId === null
 							? "deleted project"

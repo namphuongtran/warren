@@ -6,7 +6,6 @@
 // missing two live values and a deleted `interactive` run mode).
 // `src/ui/tsconfig.app.json` lists `../core/wire.ts` in its
 // `include` so the separate `@os-eco/warren-ui` project can see the file.
-//
 // Only the RESPONSE ENVELOPES below are UI-local, and only because the
 // server's row types are drizzle-inferred — importing them would drag
 // drizzle and `bun:sqlite` into the browser bundle.
@@ -62,6 +61,7 @@ import type {
 	PullRequestLifecycle,
 	QuotaHoldView,
 	RunApproachRecord,
+	RunAttentionView,
 	RunCostBasis,
 	RunFailureReason,
 	RunHandoffRecord,
@@ -101,7 +101,7 @@ export interface RefreshProjectResponse {
 	ref: string;
 }
 
-export interface RunRow extends Partial<RunNeedsInputView> {
+export interface RunRow extends Partial<RunNeedsInputView>, Partial<RunAttentionView> {
 	id: string;
 	agentName: string;
 	/**

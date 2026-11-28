@@ -4,7 +4,11 @@
 // router can redirect back to login on the next render pass.
 
 import { readNdjsonStream } from "../../../client/ndjson.ts";
-import type { RunAttentionResponse } from "../../../core/wire.ts";
+import type {
+	RunAttentionResponse,
+	RunListPrFilter,
+	RunQualityGateOutcome,
+} from "../../../core/wire.ts";
 import type { InstanceFactsResponse } from "./instance-types.ts";
 import type { ListProviderQuotaResponse, OpsOverviewResponse } from "./ops-types.ts";
 import type {
@@ -298,6 +302,9 @@ export const eventsApi = {
 export interface ListRunsFilter {
 	project?: string;
 	agent?: string;
+	gate?: RunQualityGateOutcome; // namphuongtran/warren#39: server-side, so they hold across pages
+	pr?: RunListPrFilter;
+	attention?: boolean; // operator-only: the runs the Needs attention page lists over 30 days
 	sort?: "started" | "cost";
 	dir?: "asc" | "desc";
 	limit?: number;
@@ -309,6 +316,9 @@ export const runsApi = {
 		const params = new URLSearchParams();
 		if (filter.project) params.set("project", filter.project);
 		if (filter.agent) params.set("agent", filter.agent);
+		if (filter.gate) params.set("gate", filter.gate);
+		if (filter.pr) params.set("pr", filter.pr);
+		if (filter.attention) params.set("attention", "1");
 		if (filter.sort) params.set("sort", filter.sort);
 		if (filter.dir) params.set("dir", filter.dir);
 		if (filter.limit !== undefined) params.set("limit", String(filter.limit));
