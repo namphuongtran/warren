@@ -13,18 +13,20 @@
  *
  *   1. Signal forwarding. SIGTERM/SIGINT to the container reaches warren
  *      with a 5s grace period, then SIGKILL if needed.
- *   2. Boot-time identity. The agent's git author identity is installed
- *      before warren spawns so the first dispatch can commit.
- *   3. Exit-code passthrough. Warren is the user-facing process; if it
+ *   2. Exit-code passthrough. Warren is the user-facing process; if it
  *      crashes, the supervisor exits with warren's code and hands the
  *      failure to the orchestrator's restart policy — never mask a
  *      warren bug with an in-process restart loop.
  *
+ * The supervisor no longer installs the agent's git identity. It used to
+ * run `git config --global user.name/user.email`, which rewrote the
+ * operator's own `~/.gitconfig` whenever the supervisor ran on a host. The
+ * dispatch path now passes the identity to every run as env
+ * (`src/agent-identity.ts`, namphuongtran/warren#160).
+ *
  * Every external seam is injectable so the orchestrator can be unit-tested
  * without spawning real processes or installing real signal handlers.
  */
-
-import { defaultGitIdentityRun, installGitAuthor } from "./git-identity.ts";
 
 export interface SupervisedChild {
 	readonly name: string;
@@ -202,22 +204,6 @@ if (import.meta.main) {
 		redact: LOG_REDACT_OPTIONS,
 	});
 	const cmd = resolveCommandFromEnv();
-	try {
-		await installGitAuthor(
-			{ run: defaultGitIdentityRun, logger },
-			{
-				authorName: process.env.WARREN_GIT_AUTHOR_NAME,
-				authorEmail: process.env.WARREN_GIT_AUTHOR_EMAIL,
-				gitBinary: process.env.WARREN_GIT_BINARY,
-			},
-		);
-	} catch (err) {
-		logger.error(
-			{ err: err instanceof Error ? err.message : String(err) },
-			"supervisor: failed to install git identity",
-		);
-		process.exit(1);
-	}
 	runSupervisor(productionDeps({ logger }), {
 		warrenCmd: cmd.warrenCmd,
 	})

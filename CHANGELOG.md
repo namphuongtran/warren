@@ -317,6 +317,23 @@ Releases **0.9.10 and earlier** live in
 
 ### Fixed
 
+- **Every run commits under an identity the operator controls
+  (namphuongtran/warren#160).** With `WARREN_GIT_AUTHOR_NAME` and
+  `WARREN_GIT_AUTHOR_EMAIL` unset, a run had no git identity: the agent's
+  first `git commit` failed with `Author identity unknown`, and the agent
+  invented an author (`warren <warren@localhost>` in two pilot runs,
+  `Claude <noreply@anthropic.com>` in a third). Dispatch now passes the
+  identity to every run, on every runtime, as `GIT_AUTHOR_*` and
+  `GIT_COMMITTER_*` env: the operator's pair, or the default
+  `warren-agent <agent@warren.invalid>` when the pair is unset or half-set.
+  The new resolver `src/agent-identity.ts` owns the rule, and it stays
+  distinct from the bookkeeping bot (`warren <bot@warren.invalid>`). The
+  container supervisor no longer runs `git config --global`, so no warren
+  process writes a global gitconfig, and a guard test holds that. A
+  half-set pair logs `spawn.git_identity_half_set` once per dispatch on
+  every runtime; the K8s-only `spawn.git_identity_unconfigured` warning is
+  gone. `warren doctor` names the identity in effect.
+
 - **Usage-limit runs no longer reap as `crashed` (namphuongtran/warren#74).** A
   claude-code run that ends because the subscription usage window is spent now
   reaps `failed` with the new `failureReason` `quota_exhausted`, in place of

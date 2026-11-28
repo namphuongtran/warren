@@ -50,8 +50,8 @@
 #   - CANOPY_REPO_URL is wired from warren-secrets (optional — activates the
 #     canopy prompt-library agents).
 #   - WARREN_GIT_AUTHOR_NAME/EMAIL feed run pods' GIT_AUTHOR_*/GIT_COMMITTER_*
-#     (composeRunEnv, warren-4e36) — without them every in-pod `git commit`
-#     fails with "Author identity unknown".
+#     (composeRunEnv, warren-4e36) — without them agent commits use the
+#     default `warren-agent <agent@warren.invalid>` (namphuongtran/warren#160).
 #   - A PodDisruptionBudget (postgres-pdb.yaml, warren-a5d2) refuses voluntary
 #     evictions of the in-cluster postgres-0 so Autopilot scale-down cannot
 #     take the database down. Inert when the postgres Component is not used.
@@ -189,9 +189,10 @@ patches:
                         optional: true
                   # Agent-commit identity forwarded into run pods as
                   # GIT_AUTHOR_*/GIT_COMMITTER_* (composeRunEnv). Without it
-                  # every in-pod `git commit` fails with "Author identity
-                  # unknown" (warren-4e36). The noreply address keeps agent
-                  # commits attributed to the operator's GitHub account.
+                  # agent commits use the default `warren-agent
+                  # <agent@warren.invalid>` (namphuongtran/warren#160). The
+                  # noreply address keeps agent commits attributed to the
+                  # operator's GitHub account.
                   # GCLB appends `<client-ip>, <lb-ip>` after any client-
                   # supplied X-Forwarded-For, so the per-client event-stream
                   # cap must skip the one right-most infrastructure hop to

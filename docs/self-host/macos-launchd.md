@@ -249,8 +249,9 @@ docker tag <name>-agent:pre-<SHA> <name>-agent:latest
 - **Do not restart while a run is live.** Always pause, then wait for the live runs to stop.
 - **Docker Desktop has one memory limit.** All its containers and other local services use it. Do not
   rebuild an image while a run is live.
-- **Do not set `WARREN_GIT_AUTHOR_NAME` or `WARREN_GIT_AUTHOR_EMAIL`.** Warren then writes over
-  your global `~/.gitconfig`.
+- **`WARREN_GIT_AUTHOR_NAME` and `WARREN_GIT_AUTHOR_EMAIL` are safe to set.** Warren passes them
+  to each run as env and never writes your `~/.gitconfig`. When both are unset, agent commits use
+  `warren-agent <agent@warren.invalid>`.
 - **Do not run `check:all` in a clone whose path has a space.** Seven tests fail there. Commit
   from a worktree with no space in its path.
 - **`bun install` in `server-src` runs the `prepare` script, which arms the git hooks.** The hook

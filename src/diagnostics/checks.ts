@@ -28,6 +28,8 @@
  * `spawn` / `exists` / `sandboxClient` seams — tests can stub all I/O.
  */
 
+import { AGENT_GIT_IDENTITY_DEFAULT, resolveAgentGitIdentity } from "../agent-identity.ts";
+
 export interface DiagnosticCheck {
 	readonly name: string;
 	readonly ok: boolean;
@@ -50,33 +52,42 @@ export interface DiagnosticLogger {
 }
 
 /**
- * Agent git-identity check (warren-e7b7). When both
- * `WARREN_GIT_AUTHOR_NAME` and `WARREN_GIT_AUTHOR_EMAIL` are set, agent
- * commits attribute to the operator's dedicated bot identity. When either
- * is unset, agent commits attribute to whatever identity the sandbox
- * happens to have — the Local supervisor's warn fallback logs it, but the
- * K8s topology has no supervisor, so this check is the operator's signal.
- * Always `ok: true` (a WARNING, not a failure): a warren install works
- * without the vars, the attribution is just wrong. Never echoes the
- * configured values onto the wire (warren-51de precedent).
+ * Agent git-identity check (warren-e7b7, namphuongtran/warren#160). Names
+ * which identity agent commits use: the operator's
+ * `WARREN_GIT_AUTHOR_NAME` / `WARREN_GIT_AUTHOR_EMAIL` pair, or the
+ * documented default from `src/agent-identity.ts`. Always `ok: true`: every
+ * run commits under one of the two. A half-set pair is a warning, because
+ * the operator meant to configure an identity and the default applies
+ * instead. Never echoes the configured values onto the wire (warren-51de
+ * precedent); the default is public, so it is safe to name.
  */
 export function checkGitIdentity(env: EnvLike): DiagnosticCheck {
-	const name = env.WARREN_GIT_AUTHOR_NAME?.trim() ?? "";
-	const email = env.WARREN_GIT_AUTHOR_EMAIL?.trim() ?? "";
-	if (name !== "" && email !== "") {
-		return {
-			name: "git_identity",
-			ok: true,
-			message: "WARREN_GIT_AUTHOR_NAME / WARREN_GIT_AUTHOR_EMAIL configured",
-		};
+	const identity = resolveAgentGitIdentity(env);
+	const fallback = `${AGENT_GIT_IDENTITY_DEFAULT.name} <${AGENT_GIT_IDENTITY_DEFAULT.email}>`;
+	const hint =
+		"set both vars to a dedicated GitHub machine account's noreply address (e.g. warren-bot <12345+warren-bot@users.noreply.github.com>)";
+	switch (identity.source) {
+		case "configured":
+			return {
+				name: "git_identity",
+				ok: true,
+				message: "WARREN_GIT_AUTHOR_NAME / WARREN_GIT_AUTHOR_EMAIL configured",
+			};
+		case "half-set":
+			return {
+				name: "git_identity",
+				ok: true,
+				message: `warning: only one of WARREN_GIT_AUTHOR_NAME / WARREN_GIT_AUTHOR_EMAIL is set — agent commits use the default identity ${fallback}`,
+				hint,
+			};
+		case "default":
+			return {
+				name: "git_identity",
+				ok: true,
+				message: `WARREN_GIT_AUTHOR_NAME / WARREN_GIT_AUTHOR_EMAIL not set — agent commits use the default identity ${fallback}`,
+				hint,
+			};
 	}
-	return {
-		name: "git_identity",
-		ok: true,
-		message:
-			"warning: WARREN_GIT_AUTHOR_NAME / WARREN_GIT_AUTHOR_EMAIL not set — agent commits attribute to the sandbox's fallback git identity",
-		hint: "set both vars to a dedicated GitHub machine account's noreply address (e.g. warren-bot <12345+warren-bot@users.noreply.github.com>)",
-	};
 }
 
 export {

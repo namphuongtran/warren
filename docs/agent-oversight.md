@@ -193,6 +193,7 @@ The table puts each control in one of four classes.
 |---|---|---|
 | Enforced by warren | Sandbox per run | The agent reaches only its workspace and the network that the profile allows |
 | Enforced by warren | Host-side push | Warren pushes a run branch and opens a pull request. Give the agent no forge credential. |
+| Enforced by warren | Commit author | Every run commits as `WARREN_GIT_AUTHOR_NAME`/`_EMAIL`, or as `warren-agent <agent@warren.invalid>` when unset |
 | Enforced by warren | Cost and time limits | `maxCostUsd` and `maxDurationMinutes` stop the run mid-flight |
 | Enforced by warren | Merge policy | Auto-merge is off by default. Article IX paths never auto-merge. |
 | Enforced by warren | Frozen definition | The run row keeps the agent definition and the prompt that it ran with |
@@ -203,7 +204,6 @@ The table puts each control in one of four classes.
 ### Gaps today
 
 - "Recorded" does not show if the agent wrote the note before or after its first edit (namphuongtran/warren#159).
-- With no agent git identity configured, agents invent a commit author (namphuongtran/warren#160).
 - `qualityGate` holds one command per project.
   A repository with several stacks reads `unconfigured`.
 - "The gate is terminal" and "write the note first" are prompt rules, not enforcement.
