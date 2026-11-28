@@ -14,7 +14,11 @@ import type {
 	RunQualityGateOutcome,
 	RunRow,
 } from "../../api/types.ts";
-import type { JudgeEvidenceRange, JudgeStoreRow } from "../telemetry/judge-verdicts.ts";
+import {
+	type JudgeEvidenceRange,
+	type JudgeStoreRow,
+	newestJudgeRowByRun,
+} from "../telemetry/judge-verdicts.ts";
 
 /** The two run detail tabs. Summary is the default view. */
 export const RUN_DETAIL_TABS = ["summary", "activity"] as const;
@@ -71,11 +75,7 @@ export function findRunJudgeRow(
 	rows: readonly JudgeStoreRow[],
 	runId: string,
 ): JudgeStoreRow | null {
-	let newest: JudgeStoreRow | null = null;
-	for (const row of rows) {
-		if (row.runId === runId && (newest === null || row.id > newest.id)) newest = row;
-	}
-	return newest;
+	return newestJudgeRowByRun(rows).get(runId) ?? null;
 }
 
 /** Where the operator reads the run's diff on the forge. */
@@ -185,6 +185,16 @@ export function qualityGateView(
 				detail: "Warren reads the gate outcome when the run finishes.",
 			};
 }
+
+/** Each shortcut flag kind in the operator's words (namphuongtran/warren#37). */
+export const QUALITY_FLAG_LABELS: Readonly<Record<RunQualityFlag["kind"], string>> = {
+	suppression: "Suppression added",
+	skipped_test: "Test skipped or focused",
+	deleted_test: "Test file deleted",
+	assertions_removed: "Assertions removed",
+	protected_file: "Protected file edited",
+	hook_bypass: "Git hooks bypassed",
+};
 
 /**
  * The shortcut-flag fact (namphuongtran/warren#37). Null means reap has not

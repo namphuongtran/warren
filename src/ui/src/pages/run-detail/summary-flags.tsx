@@ -1,6 +1,6 @@
 import type { RunQualityFlag, RunRow } from "@/api/types.ts";
 import { ExternalLink, SummaryEmpty, ToneChip } from "./summary-card.tsx";
-import { plural, qualityFlagHref, qualityFlagsView } from "./summary-model.ts";
+import { plural, QUALITY_FLAG_LABELS, qualityFlagHref, qualityFlagsView } from "./summary-model.ts";
 
 /**
  * The Quality section's shortcut flags (namphuongtran/warren#37, #38): the
@@ -8,15 +8,6 @@ import { plural, qualityFlagHref, qualityFlagsView } from "./summary-model.ts";
  * its file and line on the forge where the remote allows it. Flags are for a
  * reviewer to check; none of them failed the run.
  */
-
-const FLAG_LABELS: Record<RunQualityFlag["kind"], string> = {
-	suppression: "Suppression added",
-	skipped_test: "Test skipped or focused",
-	deleted_test: "Test file deleted",
-	assertions_removed: "Assertions removed",
-	protected_file: "Protected file edited",
-	hook_bypass: "Git hooks bypassed",
-};
 
 function location(flag: RunQualityFlag): string | null {
 	if (flag.path === null) return null;
@@ -60,7 +51,9 @@ export function ShortcutFlags({
 							className="flex flex-col gap-0.5"
 						>
 							<span className="flex flex-wrap items-center gap-x-2">
-								<span className="font-medium text-(--color-text)">{FLAG_LABELS[flag.kind]}</span>
+								<span className="font-medium text-(--color-text)">
+									{QUALITY_FLAG_LABELS[flag.kind]}
+								</span>
 								<span className="font-mono break-all text-(--color-text-3)">{flag.detail}</span>
 							</span>
 							<FlagLocation flag={flag} href={qualityFlagHref(run, gitUrl, flag)} />

@@ -12,6 +12,20 @@ Releases **0.9.10 and earlier** live in
 
 ### Added
 
+- **The runs list shows changes, quality, judge, and attention
+  (namphuongtran/warren#39).** The desktop table gains a Changes column
+  (`+ins −del` over the file count), a Quality column (the gate outcome over
+  the shortcut-flag count, replacing Gate), and a Judge column (the most
+  confident failure class, `clean`, or `not judged`; hidden for spectators
+  and where the judge extension is not deployed). A warning triangle takes
+  the state dot's place on a run the Needs attention page would list over
+  30 days, with the reasons on hover. Phone cards add one signal line and a
+  "needs you" badge. Missing data reads as a quiet placeholder. `GET /runs`
+  gains three server-side filters that narrow the page, `total`, and the
+  cost rollup alike: `?gate=<outcome>`, `?pr=any|open|merged`, and
+  operator-only `?attention=1` (403 for a spectator). Each operator row
+  carries `attentionReasons`, derived with the Needs attention page's rules.
+  The filter bar adds Gate, PR, and Needs attention controls.
 - **Needs attention page and `warren attention` (namphuongtran/warren#26).**
   `GET /attention?window=24h|7d|30d` (operator-only; default `7d`) lists the
   finished runs that wait on the operator, grouped into four categories:

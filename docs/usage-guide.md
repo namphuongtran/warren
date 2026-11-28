@@ -347,6 +347,14 @@ re-run, or a merge lands, or once it ages out of the window. The window covers r
 the last 7 days by default (`?window=24h|7d|30d`, `warren attention --window`). The page and
 the route are for operators only: a `WARREN_AUTH=public` spectator gets 403.
 
+The runs list applies the same rules over the last 30 days. A warning triangle replaces the
+state dot on each run the page would list, with the reasons on hover, and the **Needs
+attention** filter keeps only those runs (`GET /runs?attention=1`, operators only). Beside it,
+the list shows what each run changed (`+ins −del` over the file count), its gate outcome and
+shortcut-flag count, and the judge's verdict when the judge extension is deployed. The Gate
+and PR filters (`?gate=<outcome>`, `?pr=any|open|merged`) filter on the server too, so every
+filter holds across pages and the total counts the filtered runs.
+
 ---
 
 ## 6. Run many tasks in sequence (plan-run)

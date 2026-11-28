@@ -20,7 +20,7 @@ import {
 	type SQL,
 	sql,
 } from "drizzle-orm";
-import type { RunTriggerKind } from "../../core/wire.ts";
+import type { RunListPrFilter, RunQualityGateOutcome, RunTriggerKind } from "../../core/wire.ts";
 import type { SqliteDrizzleDb } from "../client.ts";
 import type { RunFailureReason, RunRow, RunState } from "../schema.ts";
 import type { DrizzleAdapter } from "./drizzle-adapter.ts";
@@ -50,14 +50,51 @@ function orderByClause(
 	return [dir === "asc" ? asc(col) : desc(col), asc(runs.id)];
 }
 
-export async function listAll(
+/** Paging and sort for the run list reads. */
+export type RunListOptions = {
+	limit?: number;
+	offset?: number;
+	sort?: "started" | "cost";
+	dir?: "asc" | "desc";
+};
+
+/** What `GET /runs` filters on (namphuongtran/warren#39). Every set key narrows the list. */
+export interface RunListFilter {
+	readonly projectId?: string;
+	readonly agentName?: string;
+	readonly qualityGateOutcome?: RunQualityGateOutcome;
+	readonly pr?: RunListPrFilter;
+	/** Keep only these runs: the ones the Needs attention rules picked. */
+	readonly ids?: readonly string[];
+}
+
+/** The `?pr=` predicate; `open` is any PR the merge watcher has not settled (warren-3bc6). */
+function prCondition(runs: RunsTable, pr: RunListPrFilter): SQL | undefined {
+	if (pr === "merged") return eq(runs.prState, "merged");
+	if (pr === "any") return isNotNull(runs.prUrl);
+	return and(isNotNull(runs.prUrl), or(isNull(runs.prState), eq(runs.prState, "open")));
+}
+
+/** The WHERE clause for a filter, or undefined for none. An empty `ids` matches nothing. */
+function listWhere(runs: RunsTable, filter: RunListFilter): SQL | undefined {
+	const conds: (SQL | undefined)[] = [];
+	if (filter.projectId !== undefined) conds.push(eq(runs.projectId, filter.projectId));
+	if (filter.agentName !== undefined) conds.push(eq(runs.agentName, filter.agentName));
+	if (filter.qualityGateOutcome !== undefined) {
+		conds.push(eq(runs.qualityGateOutcome, filter.qualityGateOutcome));
+	}
+	if (filter.pr !== undefined) conds.push(prCondition(runs, filter.pr));
+	if (filter.ids !== undefined) {
+		conds.push(filter.ids.length === 0 ? sql`1 = 0` : inArray(runs.id, [...filter.ids]));
+	}
+	return conds.length === 0 ? undefined : and(...conds);
+}
+
+/** One page of runs matching `filter`, in the requested order. */
+export async function listRuns(
 	adapter: DrizzleAdapter,
-	options: {
-		limit?: number;
-		offset?: number;
-		sort?: "started" | "cost";
-		dir?: "asc" | "desc";
-	} = {},
+	filter: RunListFilter = {},
+	options: RunListOptions = {},
 ): Promise<RunRow[]> {
 	const db = adapter.drizzle as SqliteDrizzleDb;
 	const runs = adapter.schema.runs;
@@ -66,64 +103,37 @@ export async function listAll(
 		db
 			.select()
 			.from(runs)
+			.where(listWhere(runs, filter))
 			.orderBy(...orderByClause(runs, sort, dir))
 			.limit(limit)
 			.offset(offset),
 	);
 }
 
-export async function listByProject(
+export function listAll(adapter: DrizzleAdapter, options: RunListOptions = {}): Promise<RunRow[]> {
+	return listRuns(adapter, {}, options);
+}
+
+export function listByProject(
 	adapter: DrizzleAdapter,
 	projectId: string,
-	options: {
-		limit?: number;
-		offset?: number;
-		sort?: "started" | "cost";
-		dir?: "asc" | "desc";
-	} = {},
+	options: RunListOptions = {},
 ): Promise<RunRow[]> {
-	const db = adapter.drizzle as SqliteDrizzleDb;
-	const runs = adapter.schema.runs;
-	const { limit = 100, offset = 0, sort = "started", dir = "desc" } = options;
-	return adapter.pickAll(
-		db
-			.select()
-			.from(runs)
-			.where(eq(runs.projectId, projectId))
-			.orderBy(...orderByClause(runs, sort, dir))
-			.limit(limit)
-			.offset(offset),
-	);
+	return listRuns(adapter, { projectId }, options);
 }
 
-export async function listByAgent(
+export function listByAgent(
 	adapter: DrizzleAdapter,
 	agentName: string,
-	options: {
-		limit?: number;
-		offset?: number;
-		sort?: "started" | "cost";
-		dir?: "asc" | "desc";
-	} = {},
+	options: RunListOptions = {},
 ): Promise<RunRow[]> {
-	const db = adapter.drizzle as SqliteDrizzleDb;
-	const runs = adapter.schema.runs;
-	const { limit = 100, offset = 0, sort = "started", dir = "desc" } = options;
-	return adapter.pickAll(
-		db
-			.select()
-			.from(runs)
-			.where(eq(runs.agentName, agentName))
-			.orderBy(...orderByClause(runs, sort, dir))
-			.limit(limit)
-			.offset(offset),
-	);
+	return listRuns(adapter, { agentName }, options);
 }
 
 /**
  * Filtered-set aggregates for the Runs page header (warren-ee50 /
  * pl-b0c0 step 1). Returns the full `total` count + cost rollup for the
- * same predicate the list*() siblings page over. `costTotalUsd` sums
+ * same filter `listRuns` pages over. `costTotalUsd` sums
  * runs.cost_usd where non-null; `costPricedCount` counts those rows.
  * Ghost runs whose cost is only recoverable via in-stream extraction
  * (hydrateRunsUsage) are NOT folded in — a deliberate trade-off to keep
@@ -131,7 +141,7 @@ export async function listByAgent(
  */
 export async function aggregate(
 	adapter: DrizzleAdapter,
-	filter: { projectId?: string; agentName?: string } = {},
+	filter: RunListFilter = {},
 ): Promise<{
 	total: number;
 	costTotalUsd: number;
@@ -139,14 +149,7 @@ export async function aggregate(
 }> {
 	const db = adapter.drizzle as SqliteDrizzleDb;
 	const runs = adapter.schema.runs;
-	const conds: SQL[] = [];
-	if (filter.projectId !== undefined) {
-		conds.push(eq(runs.projectId, filter.projectId));
-	}
-	if (filter.agentName !== undefined) {
-		conds.push(eq(runs.agentName, filter.agentName));
-	}
-	const where = conds.length === 0 ? undefined : conds.length === 1 ? conds[0] : and(...conds);
+	const where = listWhere(runs, filter);
 	const baseQuery = db
 		.select({
 			total: sql<number>`count(*)`,

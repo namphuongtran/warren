@@ -1,6 +1,5 @@
 /* ----------------------------------------------------------------------- */
 /* Canonical wire vocabulary (warren-b229).                                 */
-/*                                                                          */
 /* Run / preview lifecycle states, the failure-cause discriminator, run     */
 /* mode and the inbox classes are DEFINED ONCE in `src/core/wire.ts` and    */
 /* re-exported here so the SDK's import surface is unchanged. Never         */
@@ -21,6 +20,7 @@ import type {
 	QuotaExhaustedAction,
 	QuotaHoldView,
 	RunApproachRecord,
+	RunAttentionView,
 	RunCostBasis,
 	RunFailureReason,
 	RunHandoffRecord,
@@ -122,7 +122,7 @@ export interface ProjectRow {
 }
 
 /** A run row; `needsInput` / `answeredByRunId` are an operator-only overlay (namphuongtran/warren#25). */
-export interface RunRow extends Partial<RunNeedsInputView> {
+export interface RunRow extends Partial<RunNeedsInputView>, Partial<RunAttentionView> {
 	id: string;
 	agentName: string;
 	projectId: string | null;

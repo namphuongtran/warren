@@ -80,6 +80,14 @@ export type JudgeVerdictsState =
 			readonly reason: "absent" | "unauthorized" | "misconfigured" | "error";
 	  };
 
+/** Why the verdicts are unavailable, in the operator's words: the Summary tab and the runs list. */
+export const JUDGE_ABSENT_COPY: Readonly<Record<JudgeVerdictsAbsent["reason"], string>> = {
+	absent: "The judge extension is not deployed on this instance.",
+	unauthorized: "Judge verdicts are for operators, and this browser's sign-in was not accepted.",
+	misconfigured: "The judge verdicts could not be read: the proxy answered with a web page.",
+	error: "The judge verdicts could not be loaded. The judge service may be down.",
+};
+
 /** Fetch page size: enough for a trend line, bounded on purpose. */
 const VERDICT_PAGE_LIMIT = 500;
 
@@ -155,14 +163,30 @@ export async function fetchJudgeVerdicts(signal: AbortSignal): Promise<JudgeVerd
 	return { available: true, rows };
 }
 
-/** Page the judge extension's verdict export; absent is a normal state. */
-export function useJudgeVerdicts() {
+/**
+ * Page the judge extension's verdict export; absent is a normal state.
+ * `enabled: false` skips the fetch, for a spectator the proxy would refuse.
+ */
+export function useJudgeVerdicts(options: { readonly enabled?: boolean } = {}) {
 	return useQuery({
 		queryKey: JUDGE_VERDICTS_QUERY_KEY,
 		queryFn: ({ signal }) => fetchJudgeVerdicts(signal),
 		staleTime: 60_000,
 		retry: false,
+		enabled: options.enabled ?? true,
 	});
+}
+
+/** Each run's newest row (the highest id), whatever order the page arrived in. */
+export function newestJudgeRowByRun(
+	rows: readonly JudgeStoreRow[],
+): ReadonlyMap<string, JudgeStoreRow> {
+	const newest = new Map<string, JudgeStoreRow>();
+	for (const row of rows) {
+		const seen = newest.get(row.runId);
+		if (seen === undefined || row.id > seen.id) newest.set(row.runId, row);
+	}
+	return newest;
 }
 
 export interface JudgeSummary {

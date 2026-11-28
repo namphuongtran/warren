@@ -239,7 +239,8 @@ describe("GET /runs projections under WARREN_AUTH=public (warren-946f)", () => {
 		// row exists for this run, so both read null, never absent. The same
 		// holds for the stalled tool call (namphuongtran/warren#83) and the
 		// provider quota hold (namphuongtran/warren#30). The run is not blocked,
-		// so the needs-input pair (namphuongtran/warren#25) reads false and null.
+		// so the needs-input pair (namphuongtran/warren#25) reads false and null,
+		// and it needs nothing else either (namphuongtran/warren#39).
 		const overlays = [
 			"maxCostUsd",
 			"runtimeBackend",
@@ -247,6 +248,7 @@ describe("GET /runs projections under WARREN_AUTH=public (warren-946f)", () => {
 			"quotaHold",
 			"needsInput",
 			"answeredByRunId",
+			"attentionReasons",
 		];
 		expect(new Set(Object.keys(list[0] ?? {}))).toEqual(
 			new Set([...Object.keys(stored), ...overlays]),
@@ -257,6 +259,7 @@ describe("GET /runs projections under WARREN_AUTH=public (warren-946f)", () => {
 		expect(list[0]?.runtimeBackend).toBeNull();
 		expect(list[0]?.needsInput).toBe(false);
 		expect(list[0]?.answeredByRunId).toBeNull();
+		expect(list[0]?.attentionReasons).toEqual([]);
 		expect(body.costTotalUsd).toBe(1.25);
 		expect(body.costPricedCount).toBe(1);
 		const detailBody = await get(`/runs/${runId}`, TOKEN);

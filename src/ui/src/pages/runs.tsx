@@ -15,12 +15,15 @@ import { formatError } from "@/lib/format-error.ts";
 import { formatCostUsd } from "@/pages/run-detail-format.ts";
 import { RunsCardList } from "@/pages/runs/runs-cards.tsx";
 import {
+	isAnyFilterActive,
 	matchesStateFilter,
 	NO_FILTERS,
 	type PageFilters,
 	RunsFilterBar,
 } from "@/pages/runs/runs-filter-bar.tsx";
+import { judgeColumnOf } from "@/pages/runs/runs-signals.ts";
 import { RunsTable } from "@/pages/runs/runs-table.tsx";
+import { useJudgeVerdicts } from "@/pages/telemetry/judge-verdicts.ts";
 
 /**
  * Runs — the Direction C workload inventory (warren-9e87 / pl-7e38
@@ -73,16 +76,21 @@ export function RunsPage() {
 		setMobileCount(DEFAULT_MOBILE_COUNT);
 	}, [filters, pageSize]);
 
+	// namphuongtran/warren#39: gate, PR, and attention filter on the server too,
+	// so they hold across pages and the footer total counts the filtered set.
 	const serverFilter = {
 		...(filters.agent !== "all" ? { agent: filters.agent } : {}),
 		...(filters.project !== "all" ? { project: filters.project } : {}),
+		...(filters.gate !== "all" ? { gate: filters.gate } : {}),
+		...(filters.pr !== "all" ? { pr: filters.pr } : {}),
+		...(filters.attention && isOperator ? { attention: true } : {}),
 		sort: "started" as const,
 		dir: "desc" as const,
 		limit: pageSize,
 		offset,
 	};
 	const runs = useQuery({
-		queryKey: ["runs", filters.agent, filters.project, pageSize, offset],
+		queryKey: ["runs", serverFilter],
 		queryFn: ({ signal }) => runsApi.list(serverFilter, signal),
 		// warren-f566: the lifecycle stream drives invalidation; this is
 		// only the slow fallback for public mode / dropped notifications.
@@ -97,6 +105,13 @@ export function RunsPage() {
 		queryKey: ["projects"],
 		queryFn: ({ signal }) => projectsApi.list(signal),
 	});
+	// The Judge column (namphuongtran/warren#39) reads the same cached verdict
+	// page as the Summary tab; the proxy is operator-only, so spectators skip it.
+	const judgeVerdicts = useJudgeVerdicts({ enabled: isOperator });
+	const judgeCellFor = useMemo(
+		() => (isOperator ? judgeColumnOf(judgeVerdicts.data) : null),
+		[isOperator, judgeVerdicts.data],
+	);
 
 	const projectIndex = useMemo(() => {
 		const m = new Map<string, string>();
@@ -158,12 +173,7 @@ export function RunsPage() {
 	// (warren-ffaf). The desktop table keeps the full filtered page.
 	const mobileRows = rows.slice(0, mobileCount);
 	const mobileHasMore = mobileCount < rows.length;
-	const isFiltered =
-		filters.agent !== "all" ||
-		filters.project !== "all" ||
-		filters.state !== "all" ||
-		filters.trigger !== "all" ||
-		filters.search.trim().length > 0;
+	const isFiltered = isAnyFilterActive(filters);
 
 	// Shared loading/error/empty body — rendered inside both the mobile
 	// card and the desktop table container (warren-8258 hoisted the
@@ -218,18 +228,29 @@ export function RunsPage() {
 				agentNames={(agents.data?.agents ?? []).map((a) => a.name)}
 				projects={(projects.data?.projects ?? []).map((p) => ({ id: p.id, gitUrl: p.gitUrl }))}
 				triggerOptions={triggerOptions}
+				isOperator={isOperator}
 			/>
 			{/* Mobile list card (warren-ffaf / pl-4ab6 step 10): its own
 			    fully-rounded bordered surface on the page gutter, aligned with
 			    the filter strip above it (warren-3de0), capped by the
 			    --color-thead column strip (mock :92-103). */}
-			<div className="flex flex-col overflow-clip rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) md:hidden">
+			<div
+				data-testid="runs-mobile-list"
+				className="flex flex-col overflow-clip rounded-(--radius-md) border border-(--color-border) bg-(--color-surface) md:hidden"
+			>
 				<div className="flex shrink-0 items-center gap-2 bg-(--color-thead) px-3 py-2 font-mono text-[9px] leading-[11px] tracking-[0.06em] text-(--color-text-3)">
 					<span className="w-[70px] shrink-0">STATE</span>
 					<span className="grow">RUN</span>
 					<span className="shrink-0">ELAPSED · COST</span>
 				</div>
-				{listState ?? <RunsCardList rows={mobileRows} projectIndex={projectIndex} now={now} />}
+				{listState ?? (
+					<RunsCardList
+						rows={mobileRows}
+						projectIndex={projectIndex}
+						now={now}
+						judgeCellFor={judgeCellFor}
+					/>
+				)}
 			</div>
 			{/* Mobile pagination footer (mock :297-305): outside the card,
 			    count on the left, Load-more on the right. */}
@@ -253,7 +274,13 @@ export function RunsPage() {
 			<div className="hidden min-h-0 flex-1 flex-col overflow-clip rounded-b-(--radius-md) border border-t-0 border-(--color-border) bg-(--color-surface) md:flex">
 				{listState ?? (
 					<div className="hidden md:block">
-						<RunsTable rows={rows} projectIndex={projectIndex} now={now} isOperator={isOperator} />
+						<RunsTable
+							rows={rows}
+							projectIndex={projectIndex}
+							now={now}
+							isOperator={isOperator}
+							judgeCellFor={judgeCellFor}
+						/>
 					</div>
 				)}
 				{totalRuns > 0 ? (

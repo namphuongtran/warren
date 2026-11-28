@@ -1,5 +1,6 @@
 import { ValidationError } from "../../../core/errors.ts";
 import { readProviderFrontmatter } from "../../../registry/index.ts";
+import { readAttentionRunIds, readRunListAttention } from "../../../runs/attention.ts";
 import { currentContextWindow } from "../../../runs/context-window-view.ts";
 import type { RunRow } from "../../../runs/index.ts";
 import {
@@ -11,10 +12,12 @@ import {
 import { readNeedsInput } from "../../../runs/needs-input-view.ts";
 import { currentQuotaHolds } from "../../../runs/quota/hold-view.ts";
 import { currentToolStalls } from "../../../runs/tool-stall-view.ts";
+import { forbidden } from "../../errors.ts";
 import { isPublicOnly, pickFields } from "../../projection.ts";
 import { jsonResponse } from "../../response.ts";
 import type { Actor, RouteHandler, ServerDeps } from "../../types.ts";
 import { requireParam } from "../index.ts";
+import { parseRunsListQuery } from "./list-filter.ts";
 
 /**
  * The run columns a `readPublic`-only spectator sees (warren-946f /
@@ -228,18 +231,24 @@ export function parseRunsPagination(ctx: { url: URL }): { limit: number; offset:
  * `quotaHold` (namphuongtran/warren#30) does too: when a run held on a spent
  * provider quota window starts, else null. So do `needsInput` and
  * `answeredByRunId` (namphuongtran/warren#25), derived from a blocked handoff
- * and its continuations.
+ * and its continuations, and `attentionReasons` (namphuongtran/warren#39), the
+ * Needs attention page's reasons for the run.
  */
 async function projectRunsWithCaps(
 	deps: ServerDeps,
 	runs: readonly RunRow[],
 	actor: Actor | undefined,
+	now: Date,
 ): Promise<unknown[]> {
 	if (isPublicOnly(actor)) return runs.map((run) => projectRun(run, actor));
 	const facts = await deps.repos.dispatchContext.getDispatchFactsByRunIds(runs.map((r) => r.id));
 	const stalls = await currentToolStalls(deps.repos, runs);
 	const holds = await currentQuotaHolds(deps.repos, runs);
 	const needsInputFor = await readNeedsInput(deps.repos, runs);
+	const attentionFor = await readRunListAttention(deps.repos, runs, {
+		needsInput: (runId) => needsInputFor(runId).needsInput,
+		now,
+	});
 	return runs.map((run) => {
 		const fact = facts.get(run.id);
 		return {
@@ -249,42 +258,44 @@ async function projectRunsWithCaps(
 			toolStall: stalls.get(run.id) ?? null,
 			quotaHold: holds.get(run.id) ?? null,
 			...needsInputFor(run.id),
+			attentionReasons: attentionFor(run.id),
 		};
 	});
 }
 
+/** The 403 for a spectator asking for `?attention`: the Needs attention list is operator-only. */
+function attentionForbidden(): Response {
+	const denied = forbidden(
+		"readOperator",
+		"the ?attention filter requires the 'readOperator' capability",
+	);
+	return jsonResponse(denied.status, denied.envelope);
+}
+
 export function listRunsHandler(deps: ServerDeps): RouteHandler {
 	return async (ctx) => {
-		const project = ctx.url.searchParams.get("project");
-		const agent = ctx.url.searchParams.get("agent");
-		if (project !== null && agent !== null) {
-			throw new ValidationError("filter by either ?project=... or ?agent=..., not both");
-		}
+		const query = parseRunsListQuery(ctx);
+		if (query.attention && isPublicOnly(ctx.actor)) return attentionForbidden();
 		const order = parseRunsSort(ctx);
 		const page = parseRunsPagination(ctx);
-		const listOpts = { ...order, ...page };
-		const rows =
-			project !== null
-				? await deps.repos.runs.listByProject(project, listOpts)
-				: agent !== null
-					? await deps.repos.runs.listByAgent(agent, listOpts)
-					: await deps.repos.runs.listAll(listOpts);
+		// deps.now: the frozen-clock seam (ui-visual fixture boot, warren-010b).
+		const now = deps.now?.() ?? new Date();
+		const filter = query.attention
+			? { ...query.filter, ids: await readAttentionRunIds(deps.repos, now) }
+			: query.filter;
+		const rows = await deps.repos.runs.list(filter, { ...order, ...page });
 		// warren-ab18: surface in-events cost for terminal runs whose
 		// bridge died before the final checkpoint landed.
 		const hydrated = await hydrateRunsUsage(rows, deps.repos.events, deps.repos.runs);
 		// warren-ee50 / pl-b0c0 step 1: aggregate the full filtered set so
 		// the Runs page can show all-time totals next to a paginated table.
-		const aggFilter = {
-			...(project !== null ? { projectId: project } : {}),
-			...(agent !== null ? { agentName: agent } : {}),
-		};
-		const agg = await deps.repos.runs.aggregate(aggFilter);
+		const agg = await deps.repos.runs.aggregate(filter);
 		// warren-946f: `costTotalUsd` is an instance-wide all-time number.
 		// Unlabeled on a list endpoint it reads as a headline out of
 		// context, so it belongs in a deliberately framed ledger view
 		// rather than here; per-run `costUsd` survives the projection.
 		const publicOnly = isPublicOnly(ctx.actor);
-		const projectedRuns = await projectRunsWithCaps(deps, hydrated, ctx.actor);
+		const projectedRuns = await projectRunsWithCaps(deps, hydrated, ctx.actor, now);
 		return jsonResponse(200, {
 			runs: projectedRuns,
 			total: agg.total,

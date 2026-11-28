@@ -180,16 +180,17 @@ export function notFound(pathname: string): RenderedError {
  * wants and nothing else — not who the caller is, not why it fell short, not
  * whether the resource exists. 403 rather than 404: the route table is public
  * (`docs/openapi.yaml`), so hiding its existence buys nothing, and a
- * spectator that gets a 403 knows to authenticate rather than to retry.
+ * spectator that gets a 403 knows to authenticate rather than to retry. A
+ * readPublic route that gates one parameter (`GET /runs?attention=1`) names
+ * the parameter in `message` instead.
  */
-export function forbidden(policy: RoutePolicy): RenderedError {
+export function forbidden(
+	policy: RoutePolicy,
+	message = `this route requires the '${policy}' capability`,
+): RenderedError {
 	return {
 		status: 403,
-		envelope: buildEnvelope(
-			"forbidden",
-			`this route requires the '${policy}' capability`,
-			"authenticate with an operator bearer token",
-		),
+		envelope: buildEnvelope("forbidden", message, "authenticate with an operator bearer token"),
 	};
 }
 

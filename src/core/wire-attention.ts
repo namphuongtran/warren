@@ -87,6 +87,21 @@ export interface RunAttentionItem {
 	readonly run: RunAttentionRun;
 }
 
+/**
+ * The operator overlay on each `GET /runs` row (namphuongtran/warren#39): the
+ * reasons the run needs the operator, in `RUN_ATTENTION_REASONS` order. Empty
+ * when the Needs attention page would not list the run over the window below.
+ */
+export interface RunAttentionView {
+	readonly attentionReasons: readonly RunAttentionReason[];
+}
+
+/**
+ * The window the runs list judges attention over (namphuongtran/warren#39):
+ * the page's widest, so every run the page can list is findable from the list.
+ */
+export const RUN_LIST_ATTENTION_WINDOW = "30d" satisfies OpsWindow;
+
 /** The body of `GET /attention`. Items are grouped by category, newest first within each. */
 export interface RunAttentionResponse {
 	/** The trailing window of queued runs the list covers. */

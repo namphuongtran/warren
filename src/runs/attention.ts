@@ -2,7 +2,10 @@
  * The needs-attention list (namphuongtran/warren#26): which finished runs
  * wait on the operator, and why. `deriveRunAttention` is pure and holds the
  * rules; `readRunAttention` reads the facts it needs and builds the
- * `GET /attention` body. Nothing is stored, so the run lifecycle gains no state.
+ * `GET /attention` body. The runs list (namphuongtran/warren#39) applies the
+ * same rules to one page of rows (`readRunListAttention`) and filters on the
+ * page's ids (`readAttentionRunIds`), over the page's widest window. Nothing
+ * is stored, so the run lifecycle gains no state.
  */
 
 import {
@@ -11,6 +14,7 @@ import {
 	type OpsWindow,
 	RUN_ATTENTION_CATEGORIES,
 	RUN_ATTENTION_CATEGORY_OF,
+	RUN_LIST_ATTENTION_WINDOW,
 	type RunAttentionItem,
 	type RunAttentionReason,
 	type RunAttentionResponse,
@@ -40,6 +44,14 @@ function qualityReasons(run: RunAttentionRun): RunAttentionReason[] {
 	return reasons;
 }
 
+/** What the rules read beyond the run row itself. */
+interface AttentionContext {
+	readonly needsInput: (runId: string) => boolean;
+	readonly redispatched: ReadonlySet<string>;
+	/** Each PR's newest finished run: only that run carries the PR's review. */
+	readonly newestOnPr: ReadonlyMap<string, string>;
+}
+
 /** The PR merged or closed: nothing about the delivered work is left to decide. */
 function isPrSettled(run: RunAttentionRun): boolean {
 	return run.prState === "merged" || run.prState === "closed_unmerged";
@@ -50,7 +62,9 @@ function isPrSettled(run: RunAttentionRun): boolean {
  * URL, and the merge watcher writes the same review onto every run on it, so
  * only the newest one carries the PR's review.
  */
-function newestRunPerPr(runs: readonly RunAttentionRun[]): Map<string, string> {
+function newestRunPerPr(
+	runs: readonly { readonly id: string; readonly prUrl: string | null }[],
+): Map<string, string> {
 	const newest = new Map<string, string>();
 	for (const run of runs) {
 		if (run.prUrl !== null && !newest.has(run.prUrl)) newest.set(run.prUrl, run.id);
@@ -58,7 +72,10 @@ function newestRunPerPr(runs: readonly RunAttentionRun[]): Map<string, string> {
 	return newest;
 }
 
-function isChangesRequested(run: RunAttentionRun, newestOnPr: Map<string, string>): boolean {
+function isChangesRequested(
+	run: RunAttentionRun,
+	newestOnPr: ReadonlyMap<string, string>,
+): boolean {
 	return (
 		run.prUrl !== null &&
 		newestOnPr.get(run.prUrl) === run.id &&
@@ -67,16 +84,12 @@ function isChangesRequested(run: RunAttentionRun, newestOnPr: Map<string, string
 	);
 }
 
-function reasonsFor(
-	run: RunAttentionRun,
-	input: DeriveRunAttentionInput,
-	newestOnPr: Map<string, string>,
-): RunAttentionReason[] {
+function reasonsFor(run: RunAttentionRun, context: AttentionContext): RunAttentionReason[] {
 	if (run.state === "cancelled") return [];
 	const reasons: RunAttentionReason[] = [];
-	if (input.needsInput(run.id)) reasons.push("blocked");
-	if (isChangesRequested(run, newestOnPr)) reasons.push("changes_requested");
-	const followedUp = input.redispatched.has(run.id);
+	if (context.needsInput(run.id)) reasons.push("blocked");
+	if (isChangesRequested(run, context.newestOnPr)) reasons.push("changes_requested");
+	const followedUp = context.redispatched.has(run.id);
 	if (run.state === "failed" && !followedUp) reasons.push("failed");
 	if (!followedUp && !isPrSettled(run)) reasons.push(...qualityReasons(run));
 	return reasons;
@@ -87,9 +100,9 @@ function reasonsFor(
  * `RUN_ATTENTION_CATEGORIES` order and newest first within each group.
  */
 export function deriveRunAttention(input: DeriveRunAttentionInput): RunAttentionItem[] {
-	const newestOnPr = newestRunPerPr(input.runs);
+	const context = { ...input, newestOnPr: newestRunPerPr(input.runs) };
 	const items = input.runs.flatMap((run) => {
-		const reasons = reasonsFor(run, input, newestOnPr);
+		const reasons = reasonsFor(run, context);
 		const first = reasons[0];
 		return first === undefined
 			? []
@@ -113,4 +126,51 @@ export async function readRunAttention(
 		needsInput: (runId) => needsInputFor(runId).needsInput,
 	});
 	return { window, items, generatedAt: now.toISOString() };
+}
+
+/** A finished run queued inside the window: the runs the Needs attention page reads. */
+function isInWindow(run: RunAttentionRun, createdSinceMs: number): boolean {
+	return (
+		(run.state === "succeeded" || run.state === "failed") &&
+		run.createdAt !== null &&
+		run.createdAt >= createdSinceMs
+	);
+}
+
+/**
+ * The reasons each row of one runs-list page needs the operator, judged as the
+ * Needs attention page judges its widest window: a row the page would list
+ * gets the page's reasons, every other row none. The links a row's reasons
+ * depend on (its follow-ups, the newest run on its PR) are read for the page's
+ * rows, so they hold however the list is filtered or paged.
+ */
+export async function readRunListAttention(
+	repos: Repos,
+	runs: readonly RunAttentionRun[],
+	options: { readonly needsInput: (runId: string) => boolean; readonly now: Date },
+): Promise<(runId: string) => readonly RunAttentionReason[]> {
+	const createdSinceMs = options.now.getTime() - OPS_WINDOW_MS[RUN_LIST_ATTENTION_WINDOW];
+	const judged = runs.filter((run) => isInWindow(run, createdSinceMs));
+	const reasons = new Map<string, readonly RunAttentionReason[]>();
+	if (judged.length > 0) {
+		const prUrls = judged.flatMap((run) => (run.prUrl === null ? [] : [run.prUrl]));
+		const links = await repos.runs.readAttentionLinks({
+			runIds: judged.map((run) => run.id),
+			prUrls: [...new Set(prUrls)],
+			createdSinceMs,
+		});
+		const context = {
+			redispatched: links.redispatched,
+			newestOnPr: newestRunPerPr(links.runsOnPrs),
+			needsInput: options.needsInput,
+		};
+		for (const run of judged) reasons.set(run.id, reasonsFor(run, context));
+	}
+	return (runId) => reasons.get(runId) ?? [];
+}
+
+/** The ids of the runs the Needs attention page lists over the runs list's window. */
+export async function readAttentionRunIds(repos: Repos, now: Date): Promise<string[]> {
+	const body = await readRunAttention(repos, { window: RUN_LIST_ATTENTION_WINDOW, now });
+	return body.items.map((item) => item.run.id);
 }

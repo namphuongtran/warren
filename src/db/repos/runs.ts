@@ -20,7 +20,7 @@ import type {
 	RunTerminalState,
 } from "../schema.ts";
 import type { DrizzleAdapter } from "./drizzle-adapter.ts";
-import { type RunAttentionInputs, readAttentionInputs } from "./runs-attention.ts";
+import { readAttentionInputs, readAttentionLinks } from "./runs-attention.ts";
 import { fixAttemptHistoryByPrUrl, listPrCandidatesByProject } from "./runs-ci-fixer.ts";
 import { deleteNeverStarted } from "./runs-delete.ts";
 import {
@@ -44,8 +44,11 @@ import {
 	listFailedSince,
 	listForAnalytics,
 	listOperatorContinuationsOf,
+	listRuns,
 	listWithUnresolvedPr,
 	type RunContinuationLink,
+	type RunListFilter,
+	type RunListOptions,
 } from "./runs-queries.ts";
 import { markAgentEnded, markReaped, markWorkspaceReady } from "./runs-stage.ts";
 import { countNonTerminal, countNonTerminalAutomatic } from "./runs-stats.ts";
@@ -101,14 +104,6 @@ export interface CreateRunInput {
 	costBasis?: RunCostBasis; // cost basis (warren-f3c3); defaults to `api`
 	now?: Date; // queued-instant override (warren-0af9); defaults to the wall clock
 }
-
-/** Paging and sort for the run list reads. */
-type RunListOptions = {
-	limit?: number;
-	offset?: number;
-	sort?: "started" | "cost";
-	dir?: "asc" | "desc";
-};
 
 export interface AttachBurrowInput {
 	sandboxId?: string;
@@ -222,6 +217,10 @@ export class RunsRepo {
 	}
 
 	/** Read/query methods (warren-ac7f); bodies live in runs-queries.ts. */
+	list(filter: RunListFilter, options: RunListOptions = {}): Promise<RunRow[]> {
+		return listRuns(this.adapter, filter, options);
+	}
+
 	listAll(options: RunListOptions = {}): Promise<RunRow[]> {
 		return listAll(this.adapter, options);
 	}
@@ -234,7 +233,7 @@ export class RunsRepo {
 		return listByAgent(this.adapter, agentName, options);
 	}
 
-	aggregate(filter: { projectId?: string; agentName?: string } = {}): Promise<{
+	aggregate(filter: RunListFilter = {}): Promise<{
 		total: number;
 		costTotalUsd: number;
 		costPricedCount: number;
@@ -420,9 +419,13 @@ export class RunsRepo {
 		return setPrChecks(this.adapter, id, checks);
 	}
 
-	/** Needs-attention inputs since a queued instant (namphuongtran/warren#26). */
-	readAttentionInputs(createdSinceMs: number): Promise<RunAttentionInputs> {
+	/** Needs-attention reads (namphuongtran/warren#26, #39): a window's inputs, a list page's links. */
+	readAttentionInputs(createdSinceMs: number) {
 		return readAttentionInputs(this.adapter, createdSinceMs);
+	}
+
+	readAttentionLinks(page: Parameters<typeof readAttentionLinks>[1]) {
+		return readAttentionLinks(this.adapter, page);
 	}
 
 	/** PRs the merge watcher still has to settle (warren-3bc6): boot re-adopts these. */
@@ -450,11 +453,7 @@ export class RunsRepo {
 		return setOutcomeFactsBody(this.adapter, id, facts);
 	}
 
-	/**
-	 * Reap-recorded facts, bodies in runs-outcome-facts.ts: the gate outcome
-	 * (namphuongtran/warren#36), the handoff report (#21), the approach note
-	 * (#33), and the shortcut flags (#37).
-	 */
+	/** Reap facts (namphuongtran/warren#36, #21, #33, #37): gate, handoff, approach, flags. */
 	async setQualityGateOutcome(id: string, outcome: RunQualityGateOutcome): Promise<void> {
 		await setQualityGateOutcomeBody(this.adapter, id, outcome);
 	}
