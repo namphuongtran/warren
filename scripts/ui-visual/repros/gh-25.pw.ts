@@ -14,27 +14,35 @@
  * dispatched prompt, never pixels.
  */
 
+import { AxeBuilder } from "@axe-core/playwright";
 import { expect, type Page, test } from "@playwright/test";
-
+import type { RunHandoffRecord } from "../../../src/core/wire.ts";
+import {
+	AXE_TAGS,
+	blockingViolations,
+	formatA11yVerdict,
+	loadAllowlist,
+	reconcileA11y,
+} from "../a11y-checks.ts";
 import { harnessCases, openCase } from "../harness.ts";
-import { expandManifest, PAGES, type PageSpec } from "../pages.ts";
+import { expandManifest, PAGES, type PageCase, type PageSpec } from "../pages.ts";
 
 const SEED = "gh-25";
 const INSTRUCTIONS = "Use the staging credential in the vault and run the migration.";
 const NEXT_STEP = "What should the agent do next?";
 
 const { fixture } = harnessCases();
+const allowlist = loadAllowlist();
 const blockedRunId = fixture.ids.runs.failed;
 
 interface HandoffCarrier {
-	handoff?: { state: string; handoff?: { openQuestions: unknown[] } } | null;
+	handoff?: RunHandoffRecord | null;
 }
 
 /** Drop the open questions from a run's recorded handoff. */
 function withoutQuestions(run: HandoffCarrier): void {
-	if (run.handoff?.state === "recorded" && run.handoff.handoff) {
-		run.handoff.handoff.openQuestions = [];
-	}
+	if (run.handoff?.state !== "recorded") return;
+	run.handoff = { state: "recorded", handoff: { ...run.handoff.handoff, openQuestions: [] } };
 }
 
 /** Serve the blocked run with no open questions on `GET /attention`. */
@@ -58,6 +66,13 @@ async function stripRunQuestions(page: Page): Promise<void> {
 	});
 }
 
+/** The new form passes the same axe rules as every page. */
+async function expectAccessible(page: Page, c: PageCase): Promise<void> {
+	const results = await new AxeBuilder({ page }).withTags([...AXE_TAGS]).analyze();
+	const a11y = reconcileA11y(c, blockingViolations(results.violations), allowlist);
+	expect(formatA11yVerdict(c.name, a11y)).toBe("");
+}
+
 /** The continuation prompt carries the operator's instructions, not answers. */
 function expectInstructionsPrompt(prompt: string): void {
 	expect(prompt).toMatch(/^Migrate the plan-runs table to the card primitive/);
@@ -72,7 +87,7 @@ const SUMMARY: readonly PageSpec[] = [
 	{ id: "run-summary-blocked", route: "/runs/:id", path: (ids) => `/runs/${ids.runs.failed}` },
 ];
 
-for (const c of expandManifest(ATTENTION, fixture.ids).filter((x) => x.theme === "light")) {
+for (const c of expandManifest(ATTENTION, fixture.ids)) {
 	test.describe(`${SEED} ${c.name}`, () => {
 		test.use({ viewport: c.size, colorScheme: c.theme });
 
@@ -96,6 +111,7 @@ for (const c of expandManifest(ATTENTION, fixture.ids).filter((x) => x.theme ===
 			await expect(blocked).toContainText("The card primitive has no slot");
 			await expect(blocked.getByText(/progress slot/)).toHaveCount(0);
 			await expect(field).toBeVisible();
+			await expectAccessible(page, c);
 			await expect(go).toBeDisabled();
 			await field.fill(INSTRUCTIONS);
 			await expect(go).toBeEnabled();
@@ -110,7 +126,7 @@ for (const c of expandManifest(ATTENTION, fixture.ids).filter((x) => x.theme ===
 	});
 }
 
-for (const c of expandManifest(SUMMARY, fixture.ids).filter((x) => x.theme === "light")) {
+for (const c of expandManifest(SUMMARY, fixture.ids)) {
 	test.describe(`${SEED} ${c.name}`, () => {
 		test.use({ viewport: c.size, colorScheme: c.theme });
 
@@ -124,6 +140,7 @@ for (const c of expandManifest(SUMMARY, fixture.ids).filter((x) => x.theme === "
 			await expect(outcome).toContainText("Blocked on");
 			await expect(outcome.getByText(/progress slot/)).toHaveCount(0);
 			await expect(field).toBeVisible();
+			await expectAccessible(page, c);
 			await expect(go).toBeDisabled();
 			await field.fill(INSTRUCTIONS);
 			await expect(go).toBeEnabled();

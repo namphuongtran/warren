@@ -6,9 +6,9 @@ import { Label } from "@/components/ui/label.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
 import type { DispatchRouteState } from "@/pages/dispatch/dispatch-draft.ts";
 import {
-	type AnsweredQuestion,
 	answeredContinuationPrompt,
 	canContinueWithAnswers,
+	type OperatorReply,
 } from "./continuation-prompt.ts";
 import { SummaryBlock, SummaryEmpty } from "./summary-card.tsx";
 
@@ -73,41 +73,86 @@ function AnsweredNote({ runId }: { runId: string | null | undefined }) {
 			>
 				{runId}
 			</Link>
-			. Answer again only if that run did not settle the questions.
+			. Answer again only if that run did not settle what blocked this one.
 		</p>
 	);
 }
 
+/** The operator's draft reply to a blocked handoff. */
+export interface AnswerDraft {
+	readonly questions: readonly RunHandoffQuestion[];
+	/** One draft answer per question, in order. */
+	readonly answers: readonly string[];
+	readonly setAnswer: (index: number, value: string) => void;
+	/** What the agent should do next, asked only when there is no question. */
+	readonly instructions: string;
+	readonly setInstructions: (value: string) => void;
+	/** What the operator gives the agent, for the form's button and caption. */
+	readonly subject: "answers" | "instructions";
+	readonly reply: OperatorReply;
+}
+
 /** The operator's draft answers to `questions`, one per question, in order. */
-export function useAnswers(questions: readonly RunHandoffQuestion[]): {
-	answers: readonly string[];
-	setAnswer: (index: number, value: string) => void;
-	answered: readonly AnsweredQuestion[];
-} {
+export function useAnswers(questions: readonly RunHandoffQuestion[]): AnswerDraft {
 	const [answers, setAnswers] = useState<readonly string[]>(() => questions.map(() => ""));
+	const [instructions, setInstructions] = useState("");
 	const answered = questions.map((question, i) => ({ question, answer: answers[i] ?? "" }));
 	function setAnswer(index: number, value: string) {
 		setAnswers((prev) => prev.map((a, i) => (i === index ? value : a)));
 	}
-	return { answers, setAnswer, answered };
+	const asked = questions.length > 0;
+	return {
+		questions,
+		answers,
+		setAnswer,
+		instructions,
+		setInstructions,
+		subject: asked ? "answers" : "instructions",
+		reply: asked ? { answers: answered } : { answers: [], instructions },
+	};
+}
+
+/**
+ * The one field a blocked handoff with no question gets (namphuongtran/warren#25):
+ * the schema lets an agent stop blocked and say why only in its summary, and
+ * the run still waits on the operator.
+ */
+function NextStepField({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+	const fieldId = useId();
+	return (
+		<div className="flex flex-col gap-1.5">
+			<Label htmlFor={fieldId} className="text-xs leading-relaxed font-normal text-(--color-text)">
+				What should the agent do next?
+			</Label>
+			<p id={`${fieldId}-hint`} className="text-xs text-(--color-text-3)">
+				The agent stopped without asking a question. Its summary says what blocked it.
+			</p>
+			<Textarea
+				id={fieldId}
+				aria-describedby={`${fieldId}-hint`}
+				rows={3}
+				value={value}
+				onChange={(e) => onChange(e.target.value)}
+				placeholder="Tell the agent how to go on."
+				className="text-xs"
+			/>
+		</div>
+	);
 }
 
 /**
  * One answer field per open question, each labelled by its question, with
  * the options the agent weighed and a one-click "Use the recommendation".
- * The run Summary and the Needs attention page (namphuongtran/warren#26)
- * both answer through it.
+ * A handoff with no question gets one field for what to do next. The run
+ * Summary and the Needs attention page (namphuongtran/warren#26) both
+ * answer through it.
  */
-export function AnswerFields({
-	questions,
-	answers,
-	onAnswer,
-}: {
-	questions: readonly RunHandoffQuestion[];
-	answers: readonly string[];
-	onAnswer: (index: number, value: string) => void;
-}) {
+export function AnswerFields({ draft }: { draft: AnswerDraft }) {
 	const idBase = useId();
+	const { questions, answers, setAnswer } = draft;
+	if (questions.length === 0) {
+		return <NextStepField value={draft.instructions} onChange={draft.setInstructions} />;
+	}
 	return (
 		<ol className="flex flex-col gap-3">
 			{questions.map((question, i) => {
@@ -127,7 +172,7 @@ export function AnswerFields({
 							id={fieldId}
 							rows={2}
 							value={answers[i] ?? ""}
-							onChange={(e) => onAnswer(i, e.target.value)}
+							onChange={(e) => setAnswer(i, e.target.value)}
 							placeholder={
 								recommendation === null
 									? "Your answer. Leave it blank to let the agent decide."
@@ -141,7 +186,7 @@ export function AnswerFields({
 								variant="outline"
 								className="w-fit"
 								aria-label={`Use the recommendation for question ${i + 1}`}
-								onClick={() => onAnswer(i, recommendation)}
+								onClick={() => setAnswer(i, recommendation)}
 							>
 								Use the recommendation
 							</Button>
@@ -163,15 +208,14 @@ export function AnswerFields({
  * other dispatch affordance on run detail.
  */
 export function BlockedQuestions({ run, handoff }: { run: RunRow; handoff: RunHandoff }) {
-	const questions = handoff.openQuestions;
 	const navigate = useNavigate();
-	const { answers, setAnswer, answered } = useAnswers(questions);
+	const draft = useAnswers(handoff.openQuestions);
 
 	function continueWithAnswers() {
 		const prompt = answeredContinuationPrompt({
 			task: run.prompt,
 			handoffSummary: handoff.summary,
-			answers: answered,
+			...draft.reply,
 		});
 		navigate("/dispatch", {
 			state: {
@@ -186,17 +230,17 @@ export function BlockedQuestions({ run, handoff }: { run: RunRow; handoff: RunHa
 	return (
 		<SummaryBlock label="Blocked on">
 			<AnsweredNote runId={run.answeredByRunId} />
-			<AnswerFields questions={questions} answers={answers} onAnswer={setAnswer} />
+			<AnswerFields draft={draft} />
 			<div className="flex flex-wrap items-center gap-2 pt-1">
 				<Button
 					size="sm"
 					onClick={continueWithAnswers}
-					disabled={!canContinueWithAnswers(answered)}
+					disabled={!canContinueWithAnswers(draft.reply)}
 				>
-					Continue with answers
+					{`Continue with ${draft.subject}`}
 				</Button>
 				<span className="text-xs text-(--color-text-3)">
-					Opens Dispatch with the answers in a follow-up prompt. Nothing runs until you dispatch.
+					{`Opens Dispatch with the ${draft.subject} in a follow-up prompt. Nothing runs until you dispatch.`}
 				</span>
 			</div>
 		</SummaryBlock>

@@ -135,7 +135,7 @@ function HandoffBody({ run, handoff }: { run: RunRow; handoff: RunHandoff }) {
 	return (
 		<>
 			<AgentText>{handoff.summary}</AgentText>
-			{blocked && handoff.openQuestions.length > 0 ? (
+			{blocked ? (
 				<OperatorOnly fallback={questions}>
 					<BlockedQuestions run={run} handoff={handoff} />
 				</OperatorOnly>
