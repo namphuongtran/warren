@@ -218,7 +218,7 @@ describe("createPlanRun", () => {
 			refreshProjectFn: async (input) => {
 				refreshed.push(input.id);
 				const project = await repos.projects.require(input.id);
-				return { project, headSha: "abc", ref: project.defaultBranch, configCommit: "abc" };
+				return { project, headSha: "abc", ref: project.defaultBranch };
 			},
 		});
 		expect(refreshed).toEqual([seedyProjectId]);
@@ -235,7 +235,7 @@ describe("createPlanRun", () => {
 			refreshProjectFn: async (input) => {
 				refreshed.push(input.id);
 				const project = await repos.projects.require(input.id);
-				return { project, headSha: "abc", ref: project.defaultBranch, configCommit: "abc" };
+				return { project, headSha: "abc", ref: project.defaultBranch };
 			},
 		});
 		expect(refreshed).toEqual([]);

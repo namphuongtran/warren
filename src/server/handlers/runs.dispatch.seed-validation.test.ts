@@ -96,12 +96,7 @@ describe("POST /runs — seedId validation (#1234)", () => {
 			refreshProjectFn: async (input) => {
 				refreshes++;
 				const row = await input.repo.require(input.id);
-				return {
-					project: row,
-					headSha: "deadbeef".repeat(5),
-					ref: input.ref ?? "main",
-					configCommit: "deadbeef".repeat(5),
-				};
+				return { project: row, headSha: "deadbeef".repeat(5), ref: input.ref ?? "main" };
 			},
 		};
 		handle = startServer(deps, {

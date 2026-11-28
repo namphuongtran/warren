@@ -40,12 +40,7 @@ describe("spawnRun: replicate (warren-e96f)", () => {
 				id: input.id,
 				headSha: "feedface".repeat(5),
 			});
-			return {
-				project: updated,
-				headSha: "feedface".repeat(5),
-				ref: input.ref ?? "main",
-				configCommit: "feedface".repeat(5),
-			};
+			return { project: updated, headSha: "feedface".repeat(5), ref: input.ref ?? "main" };
 		};
 	}
 

@@ -191,12 +191,6 @@ export interface RefreshProjectResult {
 	readonly project: ProjectRow;
 	readonly headSha: string;
 	readonly ref: string;
-	/**
-	 * The default-branch tip this refresh fetched (namphuongtran/warren#165).
-	 * Dispatch reads `.warren/` config from this commit. `null` when origin
-	 * does not carry the default branch.
-	 */
-	readonly configCommit: string | null;
 }
 
 export async function refreshProject(input: RefreshProjectInput): Promise<RefreshProjectResult> {
@@ -237,7 +231,6 @@ export async function refreshProject(input: RefreshProjectInput): Promise<Refres
 		config,
 		localPath: row.localPath,
 		ref,
-		defaultBranch: row.defaultBranch,
 		...(input.fetchCommit !== undefined ? { fetchCommit: input.fetchCommit } : {}),
 		gitCredential: input.gitCredential,
 		spawn: input.spawn,
@@ -262,12 +255,7 @@ export async function refreshProject(input: RefreshProjectInput): Promise<Refres
 		hasSeeds: result.features.hasSeeds,
 		now: input.now?.(),
 	});
-	return {
-		project: updated,
-		headSha: result.headSha,
-		ref: result.ref,
-		configCommit: result.configCommit,
-	};
+	return { project: updated, headSha: result.headSha, ref: result.ref };
 }
 
 export interface DeleteProjectInput {

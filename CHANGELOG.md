@@ -317,24 +317,6 @@ Releases **0.9.10 and earlier** live in
 
 ### Fixed
 
-- **Every dispatch reads committed `.warren/` config from the
-  default-branch tip (namphuongtran/warren#165).** A `--base-commit`
-  dispatch refreshed the host clone in fetch-only mode, then read
-  `.warren/config.yaml` from the clone's unchanged checkout. A pinned run
-  therefore got the config from the clone's last unpinned refresh: in the
-  familyroots pilot, two pinned runs missed a `repoContext` that was
-  already merged. `--ref` repair runs and continuations had the same
-  problem, because they read the config of the branch they checked out.
-  Every refresh now fetches `origin/<defaultBranch>`, and dispatch reads
-  the committed `.warren/` files from that tip with `git ls-tree` and
-  `git cat-file`. A pinned dispatch still never moves the clone's HEAD
-  (warren-232d). Untracked operator-local files in the host clone
-  (`warren init` on a mirror, warren-540f) still apply wherever the tip
-  carries no file at the same path. The new `dispatch_context.config_commit`
-  column records the tip each run read (SQLite migration 0065, Postgres
-  0060). Two behaviors change: a PR that edits a tracked `.warren/` file
-  no longer applies that edit to its own repair runs, and a dispatch now
-  fails when origin no longer carries the project's default branch.
 - **Every run commits under an identity the operator controls
   (namphuongtran/warren#160).** With `WARREN_GIT_AUTHOR_NAME` and
   `WARREN_GIT_AUTHOR_EMAIL` unset, a run had no git identity: the agent's

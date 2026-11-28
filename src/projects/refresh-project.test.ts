@@ -42,7 +42,6 @@ describe("refreshProject", () => {
 				receivedPath = input.localPath;
 				return {
 					headSha: "abcd1234abcd1234abcd1234abcd1234abcd1234",
-					configCommit: "abcd1234abcd1234abcd1234abcd1234abcd1234",
 					ref: input.ref,
 					features: { hasSeeds: false, hasMulch: false },
 				};
@@ -81,7 +80,6 @@ describe("refreshProject", () => {
 				receivedRef = input.ref;
 				return {
 					headSha: "deadbeef".repeat(5),
-					configCommit: "deadbeef".repeat(5),
 					ref: input.ref,
 					features: { hasSeeds: false, hasMulch: false },
 				};
@@ -135,7 +133,6 @@ describe("refreshProject", () => {
 				spawn: NOOP_SPAWN,
 				refresh: async () => ({
 					headSha: "x",
-					configCommit: "x",
 					ref: "",
 					features: { hasSeeds: false, hasMulch: false },
 				}),
@@ -152,7 +149,6 @@ describe("refreshProject", () => {
 				spawn: NOOP_SPAWN,
 				refresh: async () => ({
 					headSha: "x",
-					configCommit: "x",
 					ref: "main",
 					features: { hasSeeds: false, hasMulch: false },
 				}),
@@ -178,7 +174,6 @@ describe("refreshProject", () => {
 			spawn: NOOP_SPAWN,
 			refresh: async (input) => ({
 				headSha: "1234".repeat(10),
-				configCommit: "1234".repeat(10),
 				ref: input.ref,
 				features: { hasSeeds: true, hasMulch: false },
 			}),
@@ -207,7 +202,6 @@ describe("refreshProject", () => {
 			spawn: NOOP_SPAWN,
 			refresh: async (input) => ({
 				headSha: "5678".repeat(10),
-				configCommit: "5678".repeat(10),
 				ref: input.ref,
 				features: { hasSeeds: false, hasMulch: false },
 			}),
@@ -243,7 +237,6 @@ describe("refreshProject", () => {
 				order.push("refresh");
 				return {
 					headSha: "deadbeef".repeat(5),
-					configCommit: "deadbeef".repeat(5),
 					ref: input.ref,
 					features: { hasSeeds: false, hasMulch: false },
 				};
@@ -316,7 +309,6 @@ describe("refreshProject git-hooks knob (warren-8f4c)", () => {
 				receivedArmHooks = input.armHooks;
 				return {
 					headSha: "a".repeat(40),
-					configCommit: "a".repeat(40),
 					ref: input.ref,
 					features: { hasSeeds: false, hasMulch: false },
 				};
@@ -360,7 +352,6 @@ describe("refreshProject git-hooks knob (warren-8f4c)", () => {
 				receivedArmHooks = input.armHooks;
 				return {
 					headSha: "b".repeat(40),
-					configCommit: "b".repeat(40),
 					ref: input.ref,
 					features: { hasSeeds: false, hasMulch: false },
 				};
