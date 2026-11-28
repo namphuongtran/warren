@@ -92,13 +92,24 @@ The recipe uses only the existing dispatch and continuation surfaces:
 
 1. Dispatch a plan-only run.
    Tell the agent to write the approach note, to change no files, and to end with status `blocked`.
+   Ask it to copy the plan into the handoff `summary` too.
    Ask for one open question: "Approve this approach?"
 2. The run then shows `needsInput`.
-   Read the note, then answer the question on the run Summary.
-3. The answer form dispatches a continuation run with your answer in its prompt.
+   Read the plan, then answer the question on the run Summary.
+3. The answer form dispatches a continuation run.
+   Its prompt holds the original task, the handoff summary, the question, and your answer.
+
+The continuation prompt does not carry the approach note, and git ignores the note file.
+The plan reaches the second run only through the handoff summary.
+That is why step 1 asks for the copy.
+
+On Docker and Local runs, the prompt names the wrong path for both files until namphuongtran/warren#158 lands.
+Until then, tell the plan-only run to write them under `.warren/` at the repository root.
+Without a recorded handoff, the run shows no question to answer.
 
 The recipe is a choice per run, not a project setting.
-A team that needs approval enforced on every run should build it as a controller extension.
+If a team needs approval on every run, the design puts that in a controller extension.
+Warren does not ship one.
 The blocked-run answer flow shipped in namphuongtran/warren#155.
 Check that your server runs a build that includes it.
 
