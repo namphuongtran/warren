@@ -15,7 +15,7 @@
  *
  * This is distinct from the agent identity in `src/agent-identity.ts`,
  * which controls the *agent's* own commits (via `WARREN_GIT_AUTHOR_NAME` /
- * `WARREN_GIT_AUTHOR_EMAIL`, default `warren-agent <agent@warren.ai>`).
+ * `WARREN_GIT_AUTHOR_EMAIL`, default `warren-agent <agent@warren.invalid>`).
  * The identity below is warren's own bookkeeping bot, not the agent's author.
  *
  * The spelling is operator-configurable (warren-02cd): `WARREN_BOT_NAME` +

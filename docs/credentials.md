@@ -61,7 +61,7 @@ WARREN_GIT_AUTHOR_NAME=your-bot-login
 WARREN_GIT_AUTHOR_EMAIL=1234567+your-bot-login@users.noreply.github.com
 ```
 
-Use a dedicated GitHub machine account and its noreply address. The two values are not secrets. Warren passes them to every run as `GIT_AUTHOR_*` and `GIT_COMMITTER_*` env and never writes a gitconfig. When both are absent, or only one is set, agent commits use the default label `warren-agent <agent@warren.ai>`. `warren doctor` names the identity in effect. The `warren up` wizard derives both from your token's GitHub login when it collects a token interactively.
+Use a dedicated GitHub machine account and its noreply address. The two values are not secrets. Warren passes them to every run as `GIT_AUTHOR_*` and `GIT_COMMITTER_*` env and never writes a gitconfig. When both are absent, or only one is set, agent commits use the default `warren-agent <agent@warren.invalid>`, which attributes to nobody. `warren doctor` names the identity in effect. The `warren up` wizard derives both from your token's GitHub login when it collects a token interactively.
 
 ## GitLab credentials
 

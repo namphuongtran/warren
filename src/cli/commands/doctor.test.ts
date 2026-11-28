@@ -401,7 +401,7 @@ describe("runDoctor", () => {
 			const check = result.checks.find((c: DoctorCheck) => c.name === "git_identity");
 			expect(check?.ok).toBe(true);
 			expect(check?.message).not.toContain("warning");
-			expect(check?.message).toContain("warren-agent <agent@warren.ai>");
+			expect(check?.message).toContain("warren-agent <agent@warren.invalid>");
 			expect(check?.hint).toContain("machine account");
 			expect(result.exitCode).toBe(0);
 		});
@@ -419,7 +419,7 @@ describe("runDoctor", () => {
 			const check = result.checks.find((c: DoctorCheck) => c.name === "git_identity");
 			expect(check?.ok).toBe(true);
 			expect(check?.message).toContain("warning");
-			expect(check?.message).toContain("warren-agent <agent@warren.ai>");
+			expect(check?.message).toContain("warren-agent <agent@warren.invalid>");
 			expect(check?.message).not.toContain("warren-bot");
 			expect(result.exitCode).toBe(0);
 		});

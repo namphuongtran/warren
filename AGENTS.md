@@ -749,7 +749,7 @@ identities exist. Do not conflate them.
   `src/agent-identity.ts` (namphuongtran/warren#160).
   - It is `WARREN_GIT_AUTHOR_NAME` with `WARREN_GIT_AUTHOR_EMAIL`. When
     the pair is unset or half-set, it is
-    `warren-agent <agent@warren.ai>`.
+    `warren-agent <agent@warren.invalid>`.
   - Dispatch passes it to every run as `GIT_AUTHOR_*` and
     `GIT_COMMITTER_*` env, so the model never picks an author. Warren
     never writes a gitconfig for it.

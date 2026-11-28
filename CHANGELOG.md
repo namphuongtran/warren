@@ -325,7 +325,7 @@ Releases **0.9.10 and earlier** live in
   `Claude <noreply@anthropic.com>` in a third). Dispatch now passes the
   identity to every run, on every runtime, as `GIT_AUTHOR_*` and
   `GIT_COMMITTER_*` env: the operator's pair, or the default
-  `warren-agent <agent@warren.ai>` when the pair is unset or half-set.
+  `warren-agent <agent@warren.invalid>` when the pair is unset or half-set.
   The new resolver `src/agent-identity.ts` owns the rule, and it stays
   distinct from the bookkeeping bot (`warren <bot@warren.invalid>`). The
   container supervisor no longer runs `git config --global`, so no warren
