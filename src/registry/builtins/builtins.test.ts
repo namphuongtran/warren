@@ -26,6 +26,7 @@ import {
 import {
 	APPROACH_FRAGMENT,
 	GATE_FINAL_RUN_RULE,
+	HANDOFF_FRAGMENT,
 	VALIDATION_DISCIPLINE_BULLETS,
 } from "./prompt-fragments.ts";
 
@@ -100,6 +101,24 @@ describe("BUILTIN_AGENTS", () => {
 			for (const field of ["status", "summary", "verification", "howToTry", "openQuestions"]) {
 				expect(system).toContain(`"${field}"`);
 			}
+		}
+	});
+
+	// namphuongtran/warren#25: the example question must validate the way reap
+	// validates it, with the options and recommendation the operator answers from.
+	test("shows a handoff example whose question carries options and a recommendation", () => {
+		const example = HANDOFF_FRAGMENT.match(/```json\n([\s\S]*?)\n```/)?.[1] ?? "";
+		const filled = { ...(JSON.parse(example) as Record<string, unknown>), status: "blocked" };
+		const record = parseRunHandoff(JSON.stringify(filled));
+		if (record.state !== "recorded") throw new Error(`example must validate: ${record.reason}`);
+		const [question] = record.handoff.openQuestions;
+		expect(question?.options.length).toBeGreaterThan(1);
+		expect(question?.recommendation).not.toBeNull();
+	});
+
+	test("tells every builtin when to stop and ask instead of deciding (namphuongtran/warren#25)", () => {
+		for (const builtin of BUILTIN_AGENTS) {
+			expect(builtin.sections.system ?? "").toContain("### When to stop and ask");
 		}
 	});
 

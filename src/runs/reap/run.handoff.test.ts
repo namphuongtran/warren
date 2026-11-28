@@ -28,7 +28,13 @@ const VALID = JSON.stringify({
 	summary: "Added the retry loop; the backoff cap is still hard-coded.",
 	verification: [{ command: "bun test src/retry.test.ts", outcome: "8 pass" }],
 	howToTry: ["Run `warren run --prompt retry`"],
-	openQuestions: ["Should the cap move to config?"],
+	openQuestions: [
+		{
+			question: "Should the cap move to config?",
+			options: ["Keep it in code", "Move it to config"],
+			recommendation: "Move it to config, so operators can tune it.",
+		},
+	],
 });
 
 describe("reapRun handoff report (namphuongtran/warren#21)", () => {
@@ -91,8 +97,28 @@ describe("reapRun handoff report (namphuongtran/warren#21)", () => {
 		expect(prBody).toContain("**Status:** partial");
 		expect(prBody).toContain("Added the retry loop; the backoff cap is still hard-coded.");
 		expect(prBody).toContain("`bun test src/retry.test.ts`: 8 pass");
-		expect(prBody).toContain("Should the cap move to config?");
+		expect(prBody).toContain(
+			[
+				"- Should the cap move to config?",
+				"  - Option: Keep it in code",
+				"  - Option: Move it to config",
+				"  - Recommended: Move it to config, so operators can tune it.",
+			].join("\n"),
+		);
 		expect(run.state).toBe("succeeded");
+	});
+
+	// namphuongtran/warren#25: a bare-string question keeps its one-line bullet.
+	test("renders a question with no options or recommendation as one bullet", async () => {
+		const bare = JSON.stringify({
+			status: "blocked",
+			summary: "Needs a decision.",
+			openQuestions: ["Keep the column nullable?\n## Fake section"],
+		});
+		const { prBody } = await reap({ [HANDOFF_PATH]: bare });
+
+		expect(prBody).toContain("**Open questions**\n\n- Keep the column nullable? ## Fake section");
+		expect(prBody).not.toContain("Recommended:");
 	});
 
 	test("fences a summary that would open its own PR-body section", async () => {

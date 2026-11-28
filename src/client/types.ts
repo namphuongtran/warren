@@ -25,6 +25,7 @@ import type {
 	RunFailureReason,
 	RunHandoffRecord,
 	RunMode,
+	RunNeedsInputView,
 	RunPrChecks,
 	RunQualityFlags,
 	RunQualityGateOutcome,
@@ -66,6 +67,7 @@ export {
 	type RunFailureReason,
 	type RunHandoff,
 	type RunHandoffApproach,
+	type RunHandoffQuestion,
 	type RunHandoffRecord,
 	type RunHandoffReview,
 	type RunHandoffReviewFinding,
@@ -73,6 +75,7 @@ export {
 	type RunHandoffState,
 	type RunHandoffStatus,
 	type RunMode,
+	type RunNeedsInputView,
 	type RunPrCheckState,
 	type RunPrChecks,
 	type RunQualityFlag,
@@ -118,7 +121,8 @@ export interface ProjectRow {
 	hasSeeds: boolean;
 }
 
-export interface RunRow {
+/** A run row; `needsInput` / `answeredByRunId` are an operator-only overlay (namphuongtran/warren#25). */
+export interface RunRow extends Partial<RunNeedsInputView> {
 	id: string;
 	agentName: string;
 	projectId: string | null;
@@ -134,11 +138,7 @@ export interface RunRow {
 	renderedAgentJson: unknown;
 	state: RunState;
 	failureReason: RunFailureReason | null;
-	/**
-	 * The queued instant as epoch ms (warren-0af9 / pl-103e step 1), stamped
-	 * by RunsRepo.create at insert. Null on rows written before the column
-	 * existed — read as "unknown", never as zero queue wait.
-	 */
+	/** Queued instant as epoch ms (warren-0af9), stamped at insert. Null = pre-column row: "unknown", never zero wait. */
 	createdAt: number | null;
 	startedAt: string | null;
 	endedAt: string | null;

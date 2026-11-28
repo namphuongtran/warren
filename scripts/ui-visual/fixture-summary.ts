@@ -90,8 +90,18 @@ const BLOCKED_HANDOFF: RunHandoffRecord = {
 		verification: [{ command: "bun run typecheck", outcome: "passed before the stop" }],
 		howToTry: [],
 		openQuestions: [
-			"Should the card primitive grow a progress slot, or should the progress bar move under the card?",
-			"Can the sort header stay a table header above a card list?",
+			{
+				question:
+					"Should the card primitive grow a progress slot, or should the progress bar move under the card?",
+				options: ["Grow a footer slot on the card", "Move the progress bar under the card"],
+				recommendation:
+					"Grow a footer slot. Other inventory lists need the same slot for their own progress.",
+			},
+			{
+				question: "Can the sort header stay a table header above a card list?",
+				options: [],
+				recommendation: null,
+			},
 		],
 	},
 };

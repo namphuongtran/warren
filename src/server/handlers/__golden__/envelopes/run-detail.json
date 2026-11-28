@@ -67,7 +67,9 @@
 			"maxCostUsd": null,
 			"toolStall": null,
 			"contextTokens": null,
-			"contextWindowTokens": null
+			"contextWindowTokens": null,
+			"needsInput": false,
+			"answeredByRunId": null
 		}
 	}
 }

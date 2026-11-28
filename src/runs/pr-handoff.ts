@@ -8,8 +8,14 @@
  * so the report cannot break the PR body's section structure.
  */
 
-import type { RunHandoff, RunHandoffApproach, RunHandoffRecord } from "../core/wire.ts";
-import { fenceFor, longestBacktickRun, neutralizePreviewMarkers } from "./pr-agent-report.ts";
+import { fencedBlock, longestBacktickRun } from "../core/markdown-fence.ts";
+import type {
+	RunHandoff,
+	RunHandoffApproach,
+	RunHandoffQuestion,
+	RunHandoffRecord,
+} from "../core/wire.ts";
+import { neutralizePreviewMarkers } from "./pr-agent-report.ts";
 
 /** One line, safe as a markdown list item. */
 function oneLine(text: string): string {
@@ -28,8 +34,7 @@ function codeSpan(text: string): string {
 function renderSummary(summary: string): string {
 	const text = neutralizePreviewMarkers(summary.trim());
 	if (!text.split("\n").some((line) => line.trimStart().startsWith("#"))) return text;
-	const fence = fenceFor(text);
-	return `${fence}text\n${text}\n${fence}`;
+	return fencedBlock(text, "text");
 }
 
 function bulletSection(title: string, items: readonly string[]): string[] {
@@ -47,6 +52,20 @@ function approachLine(approach: RunHandoffApproach | undefined): string[] {
 	return ["", `**Approach:** ${verdict}${why}`];
 }
 
+/**
+ * One open question (namphuongtran/warren#25): the question as the bullet,
+ * then the options the agent weighed and its recommendation nested under it.
+ */
+function questionItem(question: RunHandoffQuestion): string {
+	const details = [
+		...question.options.map((option) => `Option: ${oneLine(option)}`),
+		...(question.recommendation === null
+			? []
+			: [`Recommended: ${oneLine(question.recommendation)}`]),
+	];
+	return [oneLine(question.question), ...details.map((line) => `  - ${line}`)].join("\n");
+}
+
 function renderRecorded(handoff: RunHandoff): string {
 	const verification = handoff.verification.map(
 		(step) => `${codeSpan(step.command)}: ${oneLine(step.outcome)}`,
@@ -60,7 +79,7 @@ function renderRecorded(handoff: RunHandoff): string {
 		...approachLine(handoff.approach),
 		...bulletSection("Verification", verification),
 		...bulletSection("How to try", handoff.howToTry.map(oneLine)),
-		...bulletSection("Open questions", handoff.openQuestions.map(oneLine)),
+		...bulletSection("Open questions", handoff.openQuestions.map(questionItem)),
 	].join("\n");
 }
 

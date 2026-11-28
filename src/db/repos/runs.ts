@@ -42,7 +42,9 @@ import {
 	listByState,
 	listFailedSince,
 	listForAnalytics,
+	listOperatorContinuationsOf,
 	listWithUnresolvedPr,
+	type RunContinuationLink,
 } from "./runs-queries.ts";
 import { markAgentEnded, markReaped, markWorkspaceReady } from "./runs-stage.ts";
 import { countNonTerminal, countNonTerminalAutomatic } from "./runs-stats.ts";
@@ -266,6 +268,11 @@ export class RunsRepo {
 	/** Failed runs with `failureReason` that ended since an ISO instant (namphuongtran/warren#30). */
 	listFailedSince(failureReason: RunFailureReason, endedSince: string): Promise<RunRow[]> {
 		return listFailedSince(this.adapter, failureReason, endedSince);
+	}
+
+	/** Operator-dispatched continuations of these runs, newest first (namphuongtran/warren#25). */
+	listOperatorContinuationsOf(parentIds: readonly string[]): Promise<RunContinuationLink[]> {
+		return listOperatorContinuationsOf(this.adapter, parentIds);
 	}
 
 	/** The retry a `sandbox_run_lost` original spawned (warren-4af7); body in runs-queries.ts. */

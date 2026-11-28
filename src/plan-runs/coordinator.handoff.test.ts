@@ -58,7 +58,9 @@ describe("advancePlanRun — handoff chaining", () => {
 				summary: "Added the schema; the ```migration``` is left for the next step.",
 				verification: [],
 				howToTry: [],
-				openQuestions: ["Keep the column nullable?"],
+				openQuestions: [
+					{ question: "Keep the column nullable?", options: [], recommendation: null },
+				],
 			},
 		});
 

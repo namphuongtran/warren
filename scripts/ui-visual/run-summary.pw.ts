@@ -84,22 +84,33 @@ const ASSERTIONS: Record<string, (page: Page) => Promise<void>> = {
 		await expect(section(page, "Quality")).toContainText("The judge has not scored this run");
 		await expect(section(page, "Quality")).toContainText("None found");
 
-		// The answer controls: each open question labels its own answer field,
-		// and answering opens Dispatch as a continuation with the answers.
+		// namphuongtran/warren#25: a question shows the options the agent weighed
+		// and the answer it recommends.
 		const outcome = section(page, "Outcome");
+		await expect(outcome.getByRole("list", { name: "Options" })).toContainText(
+			"Move the progress bar under the card",
+		);
+		await expect(outcome).toContainText("Recommended: Grow a footer slot.");
+
+		// The answer controls: each open question labels its own answer field,
+		// the recommendation fills it in one click, and answering opens Dispatch
+		// as a continuation with the answers. A blank answer takes the
+		// recommendation, so question 1's lets the operator continue at once.
 		const go = outcome.getByRole("button", { name: "Continue with answers" });
-		await expect(go).toBeDisabled();
-		await outcome.getByLabel(/progress slot/).fill("Grow a footer slot on the card.");
+		await expect(go).toBeEnabled();
+		await outcome.getByRole("button", { name: /Use the recommendation for question 1/ }).click();
+		await expect(outcome.getByLabel(/progress slot/)).toHaveValue(/^Grow a footer slot\./);
 		await go.click();
 		await expect(page).toHaveURL(/\/dispatch$/);
 		await expect(page.getByText(/CONTINUATION FROM/)).toBeVisible();
 		const prompt = page.getByPlaceholder("What should the agent do?");
 		await expect(prompt).toHaveValue(
-			/## The previous run's handoff summary\n\nThe card primitive has no slot/,
+			/## The previous run's handoff\n[\s\S]*```text\nThe card primitive has no slot/,
 		);
-		await expect(prompt).toHaveValue(/## Answers to your open questions/);
-		await expect(prompt).toHaveValue(/Answer: Grow a footer slot on the card\./);
-		await expect(prompt).toHaveValue(/Answer: none given/);
+		await expect(prompt).toHaveValue(/"recommendation": "Grow a footer slot\./);
+		await expect(prompt).toHaveValue(/## The operator's answers/);
+		await expect(prompt).toHaveValue(/1\. Grow a footer slot\. Other inventory lists/);
+		await expect(prompt).toHaveValue(/2\. None given\. Decide/);
 	},
 	"run-summary-bare": async (page) => {
 		await expect(section(page, "Approach")).toContainText("The agent wrote no approach note");

@@ -44,6 +44,7 @@
 		"../core/wire-provider-quota.ts",
 		"../core/wire-quality-gate.ts",
 		"../core/wire-handoff.ts",
+		"../core/markdown-fence.ts",
 		"../core/wire-approach.ts",
 		"../core/wire-pr-checks.ts",
 		"../core/wire-quality-flags.ts",

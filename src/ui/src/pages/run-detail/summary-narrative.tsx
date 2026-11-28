@@ -1,7 +1,6 @@
 import type { RunHandoff, RunRow } from "@/api/types.ts";
 import { OperatorOnly } from "@/components/operator-only.tsx";
 import { cn } from "@/lib/utils.ts";
-import { BlockedQuestions } from "./summary-blocked-questions.tsx";
 import {
 	AgentText,
 	pendingCopy,
@@ -11,6 +10,7 @@ import {
 	ToneChip,
 } from "./summary-card.tsx";
 import { handoffStatusView } from "./summary-model.ts";
+import { BlockedQuestions, QuestionList } from "./summary-questions.tsx";
 
 /**
  * The Summary tab's narrative sections (namphuongtran/warren#38): what the
@@ -129,7 +129,7 @@ function HandoffBody({ run, handoff }: { run: RunRow; handoff: RunHandoff }) {
 	const blocked = handoff.status === "blocked";
 	const questions = (
 		<SummaryBlock label={blocked ? "Blocked on" : "Open questions"}>
-			<TextList items={handoff.openQuestions} empty="The agent left no open questions." />
+			<QuestionList questions={handoff.openQuestions} />
 		</SummaryBlock>
 	);
 	return (
