@@ -264,9 +264,10 @@ Releases **0.9.10 and earlier** live in
   three runs claim by claim and counts 27 earlier ones: warren recorded an
   approach note for 59% of them while the agents wrote one for 89%, because
   the prompt names `/workspace/.warren/` on Docker and Local runs
-  (namphuongtran/warren#158). It also filed namphuongtran/warren#159 (an
-  approval gate and a note-order signal) and namphuongtran/warren#160 (agents
-  invent a commit author when none is configured).
+  (namphuongtran/warren#158). It also filed namphuongtran/warren#159 (a
+  note-order signal; an approval step stays an operator recipe outside core)
+  and namphuongtran/warren#160 (agents invent a commit author when none is
+  configured).
 - **Both images pin claude-code 2.1.332 (namphuongtran/warren#150).** The
   server image (`Dockerfile`), which the local runtime spawns from, was on
   2.1.150. The agent image (`deploy/docker/Dockerfile.agent`), which the
