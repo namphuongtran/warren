@@ -459,7 +459,6 @@ describe("writeDispatchContext fire-and-log (unit)", () => {
 				declaredProvider: undefined,
 				declaredModel: undefined,
 				projectDefaults: null,
-				configCommit: undefined,
 				network: "none",
 			}),
 		).resolves.toBeUndefined();

@@ -10,9 +10,7 @@
 
 import { NotFoundError } from "../../core/errors.ts";
 import type { ProjectRow } from "../../db/schema.ts";
-import { ProjectUnavailableError } from "../../projects/errors.ts";
-import { type RefreshProjectResult, refreshProject } from "../../projects/manage.ts";
-import { loadWarrenConfigAtCommit } from "../../projects/warren-config-at-commit.ts";
+import { refreshProject } from "../../projects/manage.ts";
 import {
 	type AgentDefinition,
 	readProviderFrontmatter,
@@ -25,12 +23,7 @@ import { resolveCapOverride } from "../cost-cap.ts";
 import { withDurationLimit } from "../duration-limit.ts";
 import { buildSeedFiles, type SeedFile } from "../seed.ts";
 import { validateTargetBranch } from "../target-branch.ts";
-import {
-	assertGuardrailConfigUsable,
-	readCachedAgent,
-	readProjectDefaults,
-	resolveOverride,
-} from "./agent-cache.ts";
+import { readCachedAgent, readProjectDefaults, resolveOverride } from "./agent-cache.ts";
 import { resolveContinuationRef, resolveDispatchBranches } from "./continuation.ts";
 import { gateAgentPrompts, withMulchArm } from "./prompt-capabilities.ts";
 import {
@@ -52,11 +45,6 @@ export interface PreparedDispatch {
 	readonly refreshed: boolean;
 	readonly project: ProjectRow;
 	readonly projectDefaults: DefaultsConfig | null;
-	/**
-	 * The commit `projectDefaults` came from (namphuongtran/warren#165): the
-	 * default-branch tip the refresh fetched. Undefined without a refresh.
-	 */
-	readonly configCommit: string | undefined;
 	readonly providerChoice: DispatchProviderChoice;
 	/** The cached agent before any fold, for the dispatch-context cap source. */
 	readonly baseAgent: AgentDefinition;
@@ -110,10 +98,10 @@ export async function prepareDispatch(input: SpawnRunInput): Promise<PreparedDis
 	// frontmatter, operator per-run override winning. Order: operator
 	// override > .warren/defaults.json > agent frontmatter, all riding the
 	// same `withProviderOverrides` path onto frozen `rendered_agent_json`.
-	const { projectDefaults, configCommit } = await readDispatchConfig(
-		input,
-		projectAfterRefresh,
-		refreshed,
+	const projectDefaults = await readProjectDefaults(
+		input.warrenConfigs,
+		projectAfterRefresh.id,
+		projectAfterRefresh.localPath,
 	);
 	// namphuongtran/warren#43: a model-only override drops an incompatible inherited provider.
 	const providerChoice = resolveDispatchProvider(input, projectDefaults?.defaultProvider);
@@ -137,7 +125,6 @@ export async function prepareDispatch(input: SpawnRunInput): Promise<PreparedDis
 		refreshed: refreshed !== null,
 		project: projectAfterRefresh,
 		projectDefaults,
-		configCommit,
 		providerChoice,
 		baseAgent,
 		burrowConfig,
@@ -162,7 +149,7 @@ async function refreshDispatchClone(
 	input: SpawnRunInput,
 	project: ProjectRow,
 	baseRef: string | undefined,
-): Promise<RefreshProjectResult | null> {
+): Promise<{ project: ProjectRow } | null> {
 	if (input.projectsConfig === undefined || input.projectSpawn === undefined) return null;
 	const target =
 		input.baseCommit !== undefined
@@ -180,51 +167,6 @@ async function refreshDispatchClone(
 		...(input.now !== undefined ? { now: input.now } : {}),
 		...(input.warrenConfigs !== undefined ? { warrenConfigs: input.warrenConfigs } : {}),
 	});
-}
-
-/**
- * namphuongtran/warren#165: read the project defaults a dispatch folds in.
- * After a refresh they come from the default-branch tip it fetched, whatever
- * the clone has checked out: a pinned commit, a PR branch, or a parent run's
- * branch. Without a refresh seam there is no fetched tip, so the cached
- * working-tree view stands and the source commit is unknown.
- */
-async function readDispatchConfig(
-	input: SpawnRunInput,
-	project: ProjectRow,
-	refreshed: RefreshProjectResult | null,
-): Promise<{ projectDefaults: DefaultsConfig | null; configCommit: string | undefined }> {
-	if (
-		refreshed === null ||
-		input.projectsConfig === undefined ||
-		input.projectSpawn === undefined
-	) {
-		const projectDefaults = await readProjectDefaults(
-			input.warrenConfigs,
-			project.id,
-			project.localPath,
-		);
-		return { projectDefaults, configCommit: undefined };
-	}
-	const { configCommit } = refreshed;
-	if (configCommit === null) {
-		throw new ProjectUnavailableError(
-			`default branch ${project.defaultBranch} is not on origin, so the project config cannot be read`,
-			{
-				recoveryHint:
-					"if the default branch was renamed upstream, DELETE /projects/:id and POST /projects to track the new name",
-			},
-		);
-	}
-	const envelope = await loadWarrenConfigAtCommit({
-		config: input.projectsConfig,
-		localPath: project.localPath,
-		commit: configCommit,
-		spawn: input.projectSpawn,
-	});
-	// warren-02aa: an unreadable guardrail file still refuses the dispatch.
-	assertGuardrailConfigUsable(envelope.errors, project.id);
-	return { projectDefaults: envelope.defaults, configCommit };
 }
 
 interface ComposeAgentSources {

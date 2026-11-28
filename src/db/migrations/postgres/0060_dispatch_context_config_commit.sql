@@ -1,1 +1,0 @@
-ALTER TABLE "dispatch_context" ADD COLUMN "config_commit" text;

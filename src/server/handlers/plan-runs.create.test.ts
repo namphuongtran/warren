@@ -251,12 +251,7 @@ describe("POST /plan-runs", () => {
 				order.push("refresh");
 				refreshedIds.push(input.id);
 				const project = await repos.projects.require(input.id);
-				return {
-					project,
-					headSha: "deadbeef",
-					ref: input.ref ?? project.defaultBranch,
-					configCommit: "deadbeef",
-				};
+				return { project, headSha: "deadbeef", ref: input.ref ?? project.defaultBranch };
 			},
 		});
 		handle = startServer(deps, {
@@ -305,12 +300,7 @@ describe("POST /plan-runs", () => {
 			refreshProjectFn: async (input) => {
 				refreshCalled = true;
 				const project = await repos.projects.require(input.id);
-				return {
-					project,
-					headSha: "deadbeef",
-					ref: project.defaultBranch,
-					configCommit: "deadbeef",
-				};
+				return { project, headSha: "deadbeef", ref: project.defaultBranch };
 			},
 		});
 		handle = startServer(deps, {
